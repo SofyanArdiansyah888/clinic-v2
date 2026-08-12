@@ -43,8 +43,10 @@ type PaketPerawatan struct {
 	TanggalBeli time.Time          `gorm:"type:date;not null" json:"tanggal_beli"`
 	TotalSesi   int                `gorm:"not null" json:"total_sesi"`
 	SisaSesi    int                `gorm:"not null" json:"sisa_sesi"`
-	HargaTotal  float64            `gorm:"type:decimal(12,2);default:0" json:"harga_total"`
-	Status      string             `gorm:"size:50;default:aktif" json:"status"`
+	HargaTotal       float64            `gorm:"type:decimal(12,2);default:0" json:"harga_total"`
+	Status           string             `gorm:"size:50;default:aktif" json:"status"`
+	KeteranganBatal  string             `gorm:"type:text" json:"keterangan_batal"`
+	Refund           float64            `gorm:"type:decimal(12,2);default:0" json:"refund"`
 	IsActive    bool               `gorm:"default:true" json:"is_active"`
 	CreatedAt   time.Time          `json:"created_at"`
 	UpdatedAt   time.Time          `json:"updated_at"`

@@ -17,12 +17,13 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { apiGet, apiPatch, apiPost } from '@/shared/api/client'
 import { Dialog } from '@/shared/components/Dialog'
 import { DokterSelect } from '@/shared/components/DokterSelect'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
+import { KpiCard } from '@/shared/components/KpiCard'
 import { cn } from '@/shared/lib/cn'
 import { Button } from '@/shared/ui/button'
 
@@ -276,15 +277,13 @@ export function AppointmentPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Total Janji Temu"
-          value={`${stats.total} Booking`}
-          hint={formatDayLabel(selectedDate)}
+          value={`${stats.total} Janji`}
           icon={<CalendarDays className="h-5 w-5" />}
           iconClass="bg-rose-50 text-rose-600"
         />
         <KpiCard
           label="Sudah Check-In"
           value={`${stats.checked} Pasien`}
-          hint="Sudah masuk layanan / antrian"
           valueClass="text-emerald-600"
           icon={<UserCheck className="h-5 w-5" />}
           iconClass="bg-emerald-50 text-emerald-600"
@@ -292,15 +291,13 @@ export function AppointmentPage() {
         <KpiCard
           label="Belum Tiba"
           value={`${stats.pending} Pasien`}
-          hint="Masih terjadwal"
           valueClass="text-amber-600"
           icon={<Hourglass className="h-5 w-5" />}
           iconClass="bg-amber-50 text-amber-600"
         />
         <KpiCard
-          label="Dibatalkan"
-          value={`${stats.cancelled} Booking`}
-          hint="Status cancelled"
+          label="Batal"
+          value={`${stats.cancelled} Janji`}
           valueClass="text-slate-600"
           icon={<XCircle className="h-5 w-5" />}
           iconClass="bg-slate-100 text-slate-600"
@@ -523,33 +520,6 @@ export function AppointmentPage() {
           </div>
         </form>
       </Dialog>
-    </div>
-  )
-}
-
-function KpiCard({
-  label,
-  value,
-  hint,
-  icon,
-  iconClass,
-  valueClass,
-}: {
-  label: string
-  value: string
-  hint: string
-  icon: ReactNode
-  iconClass: string
-  valueClass?: string
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-      <div>
-        <p className="text-xs font-medium text-slate-500">{label}</p>
-        <h3 className={cn('mt-1 text-xl font-extrabold text-slate-900', valueClass)}>{value}</h3>
-        <p className="mt-1 line-clamp-1 text-[11px] font-bold text-slate-500">{hint}</p>
-      </div>
-      <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl text-lg', iconClass)}>{icon}</div>
     </div>
   )
 }

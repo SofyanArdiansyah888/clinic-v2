@@ -24,7 +24,7 @@ export function PembayaranProdukPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'langsung' | 'online'>('langsung')
   const [search, setSearch] = useState('')
-  const [staffId, setStaffId] = useState('1')
+  const [staffId, setStaffId] = useState('')
   const [payTarget, setPayTarget] = useState<PaymentTarget | null>(null)
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
@@ -65,17 +65,8 @@ export function PembayaranProdukPage() {
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kasir — Pembayaran Produk</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Tagihan penjualan obat/produk dari depo langsung dan pemesanan online.
+            Tagihan penjualan obat/produk dari depo langsung dan pemesanan online. Staff kasir dipilih saat bayar.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-bold text-slate-500">Staff Kasir ID</label>
-          <input
-            type="number"
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            className="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-xs font-bold"
-          />
         </div>
       </div>
 
@@ -215,6 +206,7 @@ export function PembayaranProdukPage() {
         onClose={() => setPayTarget(null)}
         target={payTarget}
         staffId={staffId}
+        onStaffIdChange={setStaffId}
         onSuccess={() => {
           void queryClient.invalidateQueries({ queryKey: ['pembayaran-produk'] })
           showToast('Pembayaran produk berhasil!', 'success')

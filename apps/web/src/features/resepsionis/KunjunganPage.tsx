@@ -15,7 +15,7 @@ import {
   Volume2,
   X,
 } from 'lucide-react'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { apiGet, apiPost, apiPut } from '@/shared/api/client'
 import { uploadImage } from '@/shared/api/upload'
 import { Dialog } from '@/shared/components/Dialog'
@@ -23,6 +23,7 @@ import { DokterSelect } from '@/shared/components/DokterSelect'
 import { FotoSebelumDialog, type PendingPhoto } from '@/shared/components/FotoSebelumDialog'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
+import { KpiCard } from '@/shared/components/KpiCard'
 import { cn } from '@/shared/lib/cn'
 import { Button } from '@/shared/ui/button'
 
@@ -464,32 +465,28 @@ export function KunjunganPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Total Kunjungan Hari Ini"
+          label="Total Kunjungan"
           value={`${stats.total} Pasien`}
-          hint="Data antrian aktif"
           icon={<Users className="h-5 w-5" />}
           iconClass="bg-rose-50 text-rose-600"
         />
         <KpiCard
-          label="Menunggu di Lounge"
+          label="Menunggu"
           value={`${stats.menunggu} Pasien`}
-          hint="Siap dipanggil"
           valueClass="text-amber-600"
           icon={<Clock3 className="h-5 w-5" />}
           iconClass="bg-amber-50 text-amber-600"
         />
         <KpiCard
           label="Sedang Dilayani"
-          value={`${stats.aktif} Antrian`}
-          hint="Dipanggil / diproses"
+          value={`${stats.aktif} Pasien`}
           valueClass="text-indigo-600"
           icon={<Stethoscope className="h-5 w-5" />}
           iconClass="bg-indigo-50 text-indigo-600"
         />
         <KpiCard
-          label="Selesai / Kasir"
+          label="Selesai"
           value={`${stats.selesai} Pasien`}
-          hint="Sudah dilayani hari ini"
           valueClass="text-emerald-700"
           icon={<CheckCircle2 className="h-5 w-5" />}
           iconClass="bg-emerald-50 text-emerald-600"
@@ -864,33 +861,6 @@ function QueueActions({
         <Printer className="h-3 w-3" />
         Cetak
       </button>
-    </div>
-  )
-}
-
-function KpiCard({
-  label,
-  value,
-  hint,
-  icon,
-  iconClass,
-  valueClass,
-}: {
-  label: string
-  value: string
-  hint: string
-  icon: ReactNode
-  iconClass: string
-  valueClass?: string
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-      <div>
-        <p className="text-xs font-medium text-slate-500">{label}</p>
-        <h3 className={cn('mt-1 text-xl font-extrabold text-slate-900', valueClass)}>{value}</h3>
-        <p className="mt-1 text-[11px] font-bold text-slate-500">{hint}</p>
-      </div>
-      <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl text-lg', iconClass)}>{icon}</div>
     </div>
   )
 }

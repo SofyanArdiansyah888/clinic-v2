@@ -22,6 +22,7 @@ type TreatmentSelectProps = {
   className?: string
   id?: string
   placeholder?: string
+  kategoriFilter?: string
 }
 
 export function TreatmentSelect({
@@ -32,6 +33,7 @@ export function TreatmentSelect({
   className,
   id,
   placeholder = 'Cari & pilih treatment...',
+  kategoriFilter,
 }: TreatmentSelectProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['treatment', 'select'],
@@ -50,6 +52,10 @@ export function TreatmentSelect({
     () =>
       (data?.data ?? [])
         .filter((t) => t.is_active !== false)
+        .filter((t) => {
+          if (!kategoriFilter) return true
+          return (t.kategori ?? '').toLowerCase().includes(kategoriFilter.toLowerCase())
+        })
         .map((t) => ({
           value: String(t.id),
           label: t.nama || `Treatment #${t.id}`,
@@ -57,7 +63,7 @@ export function TreatmentSelect({
             [t.kode, t.kategori, formatCurrency(t.harga ?? 0)].filter(Boolean).join(' · ') || undefined,
           keywords: `${t.nama ?? ''} ${t.kode ?? ''} ${t.kategori ?? ''}`,
         })),
-    [data?.data],
+    [data?.data, kategoriFilter],
   )
 
   function handleChange(val: string) {

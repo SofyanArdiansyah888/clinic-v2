@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  ArrowRight,
   CreditCard,
   Gift,
   HandCoins,
+  Info,
   Printer,
   Search,
   Send,
@@ -10,6 +12,7 @@ import {
   Users,
   Wrench,
 } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { StatusBadge } from '@/shared/components/StatusBadge'
@@ -18,6 +21,13 @@ import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 import { PaymentModal, type PaymentTarget } from '@/features/pembayaran/components/PaymentModal'
 import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
+
+type TindakanRow = {
+  treatment_id?: number
+  jumlah?: number
+  total?: number
+  catatan?: string
+}
 
 type QueueRow = {
   id: number
@@ -29,7 +39,7 @@ type QueueRow = {
   antrian_jam?: string
   pasien?: { id: number; nama?: string; kode?: string }
   staff?: { id: number; nama?: string }
-  tindakans?: Array<{ total?: number }>
+  tindakans?: TindakanRow[]
 }
 
 const today = new Date().toISOString().slice(0, 10)
@@ -39,11 +49,31 @@ function rowTotal(row: QueueRow): number {
   return (row.tindakans ?? []).reduce((sum, t) => sum + (t.total ?? 0), 0)
 }
 
+function tindakanSummary(row: QueueRow): string {
+  const items = row.tindakans ?? []
+  if (items.length === 0) return row.diagnosa || 'Perawatan'
+  return items
+    .map((t) => `Treatment #${t.treatment_id ?? '-'} (${t.jumlah ?? 1}x)`)
+    .join(', ')
+}
+
+function buildLineItems(row: QueueRow) {
+  const items = row.tindakans ?? []
+  if (items.length > 0) {
+    return items.map((t) => ({
+      nama: `Treatment #${t.treatment_id ?? '-'}`,
+      qty: t.jumlah ?? 1,
+      subtotal: t.total ?? 0,
+    }))
+  }
+  return [{ nama: row.diagnosa || 'Tagihan perawatan', qty: 1, subtotal: row.biaya ?? 0 }]
+}
+
 export function PembayaranPerawatanPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'reguler' | 'paket'>('reguler')
   const [search, setSearch] = useState('')
-  const [staffId, setStaffId] = useState('1')
+  const [staffId, setStaffId] = useState('')
   const [payTarget, setPayTarget] = useState<PaymentTarget | null>(null)
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
@@ -55,7 +85,7 @@ export function PembayaranPerawatanPage() {
   const endpoint =
     activeTab === 'reguler' ? '/pembayaran/perawatan/reguler' : '/pembayaran/perawatan/paket'
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['pembayaran-perawatan', activeTab, search],
     queryFn: () => apiGet<QueueRow[]>(endpoint, { per_page: 200, page: 1, search: search || undefined }),
   })
@@ -68,34 +98,50 @@ export function PembayaranPerawatanPage() {
   }, [rows])
 
   function openPay(row: QueueRow) {
+    const total = rowTotal(row)
+    if (total <= 0) {
+      showToast('Total tagihan Rp 0 — pastikan perawatan memiliki tindakan/biaya', 'error')
+      return
+    }
     setPayTarget({
       sourceType: 'perawatan',
       sourceId: row.id,
       label: row.kode,
       pasienNama: row.pasien?.nama,
-      total: rowTotal(row),
+      total,
+      lineItems: buildLineItems(row),
     })
   }
+
+  const infoText =
+    activeTab === 'reguler'
+      ? 'Pasien dari Perawatan (Treatment Reguler atau EMR Kirim ke Kasir) akan muncul di sini. Setelah bayar, status menjadi selesai dan tercatat di penjualan.'
+      : 'Tagihan pembelian paket treatment (multi-sesi). Setelah dibayar, paket aktif tercatat dan bisa dibatalkan di menu Batal Paket jika ada sisa sesi.'
 
   return (
     <div className="space-y-6">
       {toast ? <PembayaranToast message={toast.message} tone={toast.tone} /> : null}
 
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kasir — Pembayaran Perawatan</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Antrian pasien menunggu pembayaran treatment reguler dan paket setelah proses perawatan.
+            Terima pembayaran treatment pasien setelah proses dari modul Perawatan.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-bold text-slate-500">Staff Kasir ID</label>
-          <input
-            type="number"
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            className="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-xs font-bold"
-          />
+      </div>
+
+      <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+        <div className="text-xs text-blue-900">
+          <p className="font-bold">Alur: Perawatan → Kasir → Lunas</p>
+          <p className="mt-1 text-blue-800">{infoText}</p>
+          <Link
+            to="/perawatan"
+            className="mt-2 inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
+          >
+            Buka modul Perawatan <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
       </div>
 
@@ -182,17 +228,31 @@ export function PembayaranPerawatanPage() {
 
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Memuat antrian kasir...</div>
+        ) : isError ? (
+          <div className="p-12 text-center text-xs text-rose-600">Gagal memuat data. Pastikan API server berjalan.</div>
         ) : rows.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400">Tidak ada tagihan perawatan menunggu bayar.</div>
+          <div className="space-y-3 p-12 text-center">
+            <p className="text-sm font-bold text-slate-700">Belum ada tagihan menunggu bayar</p>
+            <ol className="mx-auto max-w-md list-decimal space-y-1 text-left text-xs text-slate-500">
+              <li>Buka menu <strong>Perawatan</strong></li>
+              <li>
+                {activeTab === 'reguler'
+                  ? 'Tab Treatment Reguler → isi pasien & treatment → klik Proses Ke Kasir'
+                  : 'Tab Treatment Paket → pilih paket → klik Proses Ke Kasir'}
+              </li>
+              <li>Kembali ke halaman ini — pasien akan muncul di tabel</li>
+            </ol>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <tr>
-                  <th className="px-4 py-3">No / Kode</th>
+                  <th className="px-4 py-3">Kode</th>
                   <th className="px-4 py-3">Masuk</th>
                   <th className="px-4 py-3">Pasien</th>
                   <th className="px-4 py-3">Dokter</th>
+                  <th className="px-4 py-3">Rincian</th>
                   <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
@@ -207,6 +267,9 @@ export function PembayaranPerawatanPage() {
                     </td>
                     <td className="px-4 py-3 text-xs font-semibold text-slate-800">{row.pasien?.nama || '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{row.staff?.nama || '-'}</td>
+                    <td className="max-w-[200px] truncate px-4 py-3 text-xs text-slate-500" title={tindakanSummary(row)}>
+                      {tindakanSummary(row)}
+                    </td>
                     <td className="px-4 py-3 text-xs font-bold text-slate-900">{formatCurrency(rowTotal(row))}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.status} />
@@ -254,10 +317,12 @@ export function PembayaranPerawatanPage() {
         onClose={() => setPayTarget(null)}
         target={payTarget}
         staffId={staffId}
+        onStaffIdChange={setStaffId}
         onSuccess={() => {
           void queryClient.invalidateQueries({ queryKey: ['pembayaran-perawatan'] })
           void queryClient.invalidateQueries({ queryKey: ['perawatan'] })
           void queryClient.invalidateQueries({ queryKey: ['antrian'] })
+          void queryClient.invalidateQueries({ queryKey: ['pembayaran-paket-sisa'] })
           showToast('Pembayaran berhasil diproses!', 'success')
         }}
         onError={(msg) => showToast(msg, 'error')}

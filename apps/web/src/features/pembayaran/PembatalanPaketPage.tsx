@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, FileText, Pencil, Search } from 'lucide-react'
+import { AlertTriangle, FileText, Info, Pencil, Search } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { apiGet, apiPost } from '@/shared/api/client'
 import { Dialog } from '@/shared/components/Dialog'
@@ -26,6 +27,7 @@ export function PembatalanPaketPage() {
   const [search, setSearch] = useState('')
   const [cancelTarget, setCancelTarget] = useState<PaketRow | null>(null)
   const [keterangan, setKeterangan] = useState('')
+  const [refund, setRefund] = useState('')
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
@@ -41,14 +43,19 @@ export function PembatalanPaketPage() {
   const rows = data?.data ?? []
 
   const cancelMutation = useMutation({
-    mutationFn: (id: number) => apiPost(`/pembayaran/paket/${id}/batal`, { keterangan }),
+    mutationFn: (payload: { id: number; keterangan: string; refund: number }) =>
+      apiPost(`/pembayaran/paket/${payload.id}/batal`, {
+        keterangan: payload.keterangan,
+        refund: payload.refund,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['pembayaran-paket-sisa'] })
       setCancelTarget(null)
       setKeterangan('')
+      setRefund('')
       showToast('Paket perawatan berhasil dibatalkan', 'success')
     },
-    onError: () => showToast('Gagal membatalkan paket', 'error'),
+    onError: (err) => showToast(err instanceof Error ? err.message : 'Gagal membatalkan paket', 'error'),
   })
 
   return (
@@ -58,8 +65,26 @@ export function PembatalanPaketPage() {
       <div>
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Batal Paket Perawatan</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Daftar paket perawatan yang masih memiliki sisa sesi dan dapat dibatalkan.
+          Pembatalan paket treatment yang masih memiliki sisa sesi belum terpakai.
         </p>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
+        <div className="text-xs text-orange-900">
+          <p className="font-bold">Alur: Beli Paket → Bayar di Kasir → Batal jika perlu refund</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-4 text-orange-800">
+            <li>Pasien beli paket di Perawatan → tab Treatment Paket → Proses Ke Kasir</li>
+            <li>Bayar di Kasir → tab Perawatan Paket — sistem membuat record paket aktif dengan total sesi</li>
+            <li>Jika pasien ingin batalkan sisa sesi, daftar muncul di halaman ini untuk refund/kompensasi</li>
+          </ol>
+          <Link
+            to="/pembayaran/perawatan"
+            className="mt-2 inline-block font-bold text-orange-700 hover:underline"
+          >
+            Ke Kasir Perawatan Paket →
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
@@ -83,13 +108,19 @@ export function PembatalanPaketPage() {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Memuat data paket...</div>
         ) : rows.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400">Belum ada paket dengan sisa sesi perawatan.</div>
+          <div className="space-y-2 p-12 text-center">
+            <p className="text-sm font-bold text-slate-700">Belum ada paket dengan sisa sesi</p>
+            <p className="text-xs text-slate-500">
+              Paket muncul setelah pembayaran paket treatment di kasir. Pastikan treatment master memiliki kategori
+              &quot;paket&quot;.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <tr>
-                  <th className="px-4 py-3">Tanggal</th>
+                  <th className="px-4 py-3">Tanggal Beli</th>
                   <th className="px-4 py-3">Pasien</th>
                   <th className="px-4 py-3">Dokter</th>
                   <th className="px-4 py-3">Paket Perawatan</th>
@@ -117,7 +148,11 @@ export function PembatalanPaketPage() {
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => setCancelTarget(row)}
+                        onClick={() => {
+                          setCancelTarget(row)
+                          setRefund('')
+                          setKeterangan('')
+                        }}
                         className="h-8 rounded-lg bg-orange-500 text-[11px] font-bold text-white hover:bg-orange-600"
                       >
                         <Pencil className="mr-1 h-3 w-3" />
@@ -142,9 +177,21 @@ export function PembatalanPaketPage() {
           <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
             <p className="text-xs text-amber-900">
-              Paket dengan <strong>{cancelTarget?.sisa_sesi}</strong> sisa sesi akan ditandai dibatalkan. Pastikan
-              refund/kompensasi sudah disepakati dengan pasien.
+              Paket dengan <strong>{cancelTarget?.sisa_sesi}</strong> sisa sesi dari{' '}
+              <strong>{cancelTarget?.total_sesi}</strong> akan ditandai dibatalkan. Catat nilai refund jika ada
+              pengembalian dana ke pasien.
             </p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nilai Refund (Rp)</label>
+            <input
+              type="number"
+              min={0}
+              value={refund}
+              onChange={(e) => setRefund(e.target.value)}
+              placeholder="0 jika tanpa refund"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-orange-400 focus:outline-none"
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Keterangan</label>
@@ -163,7 +210,14 @@ export function PembatalanPaketPage() {
             <Button
               type="button"
               disabled={cancelMutation.isPending}
-              onClick={() => cancelTarget && cancelMutation.mutate(cancelTarget.id)}
+              onClick={() =>
+                cancelTarget &&
+                cancelMutation.mutate({
+                  id: cancelTarget.id,
+                  keterangan,
+                  refund: Number(refund) || 0,
+                })
+              }
               className="flex-1 rounded-xl bg-orange-500 text-xs font-bold text-white hover:bg-orange-600"
             >
               Konfirmasi Pembatalan

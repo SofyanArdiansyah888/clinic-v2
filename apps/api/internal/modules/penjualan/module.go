@@ -200,6 +200,10 @@ func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
 				}
 				tid := d.TreatmentID
 				detail.TreatmentID = &tid
+			} else if jenis == "layanan" {
+				if harga == 0 {
+					return fmt.Errorf("harga_jual required for layanan detail")
+				}
 			} else {
 				if d.BarangID == 0 {
 					return fmt.Errorf("barang_id required for barang detail")

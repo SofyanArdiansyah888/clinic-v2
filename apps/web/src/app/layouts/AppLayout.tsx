@@ -21,6 +21,7 @@ const BREADCRUMB: Record<string, string> = {
   '/warehouse/konversi': 'Konversi Stok',
   '/data-transaksi/penjualan': 'Data Penjualan',
   '/data-transaksi/pembelian': 'Data Pembelian',
+  '/data-transaksi/deposit': 'Riwayat Deposit & Member',
   '/administrasi/pasien': 'Data Master Pasien',
   '/administrasi/staff': 'Data Staff',
   '/administrasi/treatment': 'Data Treatment',

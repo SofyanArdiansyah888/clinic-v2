@@ -86,6 +86,7 @@ const NAV: NavSection[] = [
         children: [
           { label: 'Penjualan', to: '/data-transaksi/penjualan' },
           { label: 'Pembelian', to: '/data-transaksi/pembelian' },
+          { label: 'Deposit & Member', to: '/data-transaksi/deposit' },
         ],
       },
     ],

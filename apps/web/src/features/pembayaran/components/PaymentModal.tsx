@@ -5,8 +5,15 @@ import { apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
 import { Dialog } from '@/shared/components/Dialog'
 import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
+import { StaffSelect } from '@/shared/components/StaffSelect'
 import { Button } from '@/shared/ui/button'
 import { formatCurrency } from '@/shared/lib/formatters'
+
+export type PaymentLineItem = {
+  nama: string
+  qty: number
+  subtotal: number
+}
 
 export type PaymentTarget = {
   sourceType: 'perawatan' | 'penjualan'
@@ -14,6 +21,7 @@ export type PaymentTarget = {
   label: string
   pasienNama?: string
   total: number
+  lineItems?: PaymentLineItem[]
 }
 
 type PaymentModalProps = {
@@ -21,13 +29,22 @@ type PaymentModalProps = {
   onClose: () => void
   target: PaymentTarget | null
   staffId: string
+  onStaffIdChange: (value: string) => void
   onSuccess: () => void
   onError: (message: string) => void
 }
 
 const today = new Date().toISOString().slice(0, 10)
 
-export function PaymentModal({ open, onClose, target, staffId, onSuccess, onError }: PaymentModalProps) {
+export function PaymentModal({
+  open,
+  onClose,
+  target,
+  staffId,
+  onStaffIdChange,
+  onSuccess,
+  onError,
+}: PaymentModalProps) {
   const [jenisPembayaran, setJenisPembayaran] = useState('')
   const [bankId, setBankId] = useState('')
   const [jumlahBayar, setJumlahBayar] = useState('')
@@ -44,11 +61,11 @@ export function PaymentModal({ open, onClose, target, staffId, onSuccess, onErro
     mutationFn: async () => {
       if (!target) throw new Error('Data tagihan tidak valid')
       if (!jenisPembayaran) throw new Error('Jenis pembayaran wajib dipilih')
-      if (!staffId) throw new Error('Staff kasir wajib diisi')
+      if (!staffId) throw new Error('Staff kasir wajib dipilih')
       const jumlah = Number(jumlahBayar)
       if (!jumlah || jumlah <= 0) throw new Error('Jumlah bayar tidak valid')
 
-      return apiPost('/pembayaran/bayar', {
+      const res = await apiPost('/pembayaran/bayar', {
         source_type: target.sourceType,
         source_id: target.sourceId,
         staff_id: Number(staffId),
@@ -57,6 +74,10 @@ export function PaymentModal({ open, onClose, target, staffId, onSuccess, onErro
         jumlah_bayar: jumlah,
         tanggal: today,
       })
+      if (!res.success) {
+        throw new Error(res.message || 'Gagal memproses pembayaran')
+      }
+      return res
     },
     onSuccess: () => {
       onSuccess()
@@ -68,6 +89,7 @@ export function PaymentModal({ open, onClose, target, staffId, onSuccess, onErro
   })
 
   const needsBank = jenisPembayaran === 'transfer' || jenisPembayaran === 'e_money'
+  const lineItems = target?.lineItems ?? []
 
   return (
     <Dialog
@@ -78,9 +100,30 @@ export function PaymentModal({ open, onClose, target, staffId, onSuccess, onErro
       className="max-w-md"
     >
       <div className="space-y-4 p-5">
+        {lineItems.length > 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Rincian Tagihan</p>
+            <ul className="space-y-1.5">
+              {lineItems.map((item, idx) => (
+                <li key={idx} className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-slate-700">
+                    {item.nama} <span className="text-slate-400">×{item.qty}</span>
+                  </span>
+                  <span className="font-bold text-slate-900">{formatCurrency(item.subtotal)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Total Tagihan</p>
           <p className="mt-1 text-2xl font-extrabold text-slate-900">{formatCurrency(target?.total ?? 0)}</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Staff Kasir</label>
+          <StaffSelect value={staffId} onChange={onStaffIdChange} required />
         </div>
 
         <div className="space-y-1.5">

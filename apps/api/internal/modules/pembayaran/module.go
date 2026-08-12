@@ -10,6 +10,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
+	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -85,7 +86,13 @@ func parseDate(s string) (time.Time, error) {
 func (s *Service) ListPerawatanReguler(p pagination.Params) ([]PerawatanQueueItem, pagination.Meta, error) {
 	q := s.repo.db.Model(&perawatan.Perawatan{}).
 		Where("status = ?", "bayar").
-		Where("(diagnosa NOT ILIKE ? OR diagnosa = '' OR diagnosa IS NULL)", "%paket%").
+		Where(`NOT (
+			diagnosa ILIKE '%paket%' OR id IN (
+				SELECT DISTINCT pt.perawatan_id FROM perawatan_tindakan pt
+				INNER JOIN treatments t ON t.id = pt.treatment_id
+				WHERE t.kategori ILIKE '%paket%'
+			)
+		)`).
 		Preload("Pasien").Preload("Staff").Preload("Tindakans")
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
@@ -116,7 +123,13 @@ func (s *Service) ListPerawatanReguler(p pagination.Params) ([]PerawatanQueueIte
 func (s *Service) ListPerawatanPaket(p pagination.Params) ([]PerawatanQueueItem, pagination.Meta, error) {
 	q := s.repo.db.Model(&perawatan.Perawatan{}).
 		Where("status = ?", "bayar").
-		Where("diagnosa ILIKE ?", "%paket%").
+		Where(`(
+			diagnosa ILIKE '%paket%' OR id IN (
+				SELECT DISTINCT pt.perawatan_id FROM perawatan_tindakan pt
+				INNER JOIN treatments t ON t.id = pt.treatment_id
+				WHERE t.kategori ILIKE '%paket%'
+			)
+		)`).
 		Preload("Pasien").Preload("Staff").Preload("Tindakans")
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
@@ -219,28 +232,16 @@ func (s *Service) bayarPerawatan(req BayarRequest, tanggal string) (*penjualan.P
 		if err := s.finalizePerawatan(&pw); err != nil {
 			return nil, err
 		}
+		if err := s.createPaketRecords(&pw, req.StaffID, tanggal); err != nil {
+			return nil, err
+		}
 		var result penjualan.Penjualan
 		s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").
 			First(&result, existing.ID)
 		return &result, nil
 	}
 
-	details := make([]penjualan.DetailInput, 0, len(pw.Tindakans))
-	for _, t := range pw.Tindakans {
-		details = append(details, penjualan.DetailInput{
-			TreatmentID:    t.TreatmentID,
-			JenisPenjualan: "treatment",
-			Qty:            t.Jumlah,
-			HargaJual:      t.Total / float64(max(t.Jumlah, 1)),
-		})
-	}
-	if len(details) == 0 && pw.Biaya > 0 {
-		details = append(details, penjualan.DetailInput{
-			JenisPenjualan: "treatment",
-			Qty:            1,
-			HargaJual:      pw.Biaya,
-		})
-	}
+	details := buildPenjualanDetails(pw)
 	if len(details) == 0 {
 		return nil, fmt.Errorf("perawatan has no billable items")
 	}
@@ -267,7 +268,98 @@ func (s *Service) bayarPerawatan(req BayarRequest, tanggal string) (*penjualan.P
 	if err := s.finalizePerawatan(&pw); err != nil {
 		return nil, err
 	}
+	if err := s.createPaketRecords(&pw, req.StaffID, tanggal); err != nil {
+		return nil, err
+	}
 	return created, nil
+}
+
+func buildPenjualanDetails(pw perawatan.Perawatan) []penjualan.DetailInput {
+	details := make([]penjualan.DetailInput, 0, len(pw.Tindakans))
+	for _, t := range pw.Tindakans {
+		qty := t.Jumlah
+		if qty <= 0 {
+			qty = 1
+		}
+		if t.TreatmentID > 0 {
+			harga := t.Total / float64(qty)
+			if harga == 0 {
+				harga = t.Harga
+			}
+			details = append(details, penjualan.DetailInput{
+				TreatmentID:    t.TreatmentID,
+				JenisPenjualan: "treatment",
+				Qty:            qty,
+				HargaJual:      harga,
+			})
+		} else if t.Total > 0 {
+			details = append(details, penjualan.DetailInput{
+				JenisPenjualan: "layanan",
+				Qty:            qty,
+				HargaJual:      t.Total,
+			})
+		}
+	}
+	if len(details) == 0 && pw.Biaya > 0 {
+		if pw.TreatmentID != nil && *pw.TreatmentID > 0 {
+			details = append(details, penjualan.DetailInput{
+				TreatmentID:    *pw.TreatmentID,
+				JenisPenjualan: "treatment",
+				Qty:            1,
+				HargaJual:      pw.Biaya,
+			})
+		} else {
+			details = append(details, penjualan.DetailInput{
+				JenisPenjualan: "layanan",
+				Qty:            1,
+				HargaJual:      pw.Biaya,
+			})
+		}
+	}
+	return details
+}
+
+func (s *Service) createPaketRecords(pw *perawatan.Perawatan, staffID uint, tanggal string) error {
+	tgl, err := parseDate(tanggal)
+	if err != nil {
+		return err
+	}
+	for _, t := range pw.Tindakans {
+		if t.TreatmentID == 0 {
+			continue
+		}
+		var tr treatment.Treatment
+		if err := s.repo.db.First(&tr, t.TreatmentID).Error; err != nil {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(tr.Kategori), "paket") {
+			continue
+		}
+		sesi := tr.SesiPaket
+		if sesi <= 0 {
+			sesi = tr.Durasi
+		}
+		if sesi <= 0 {
+			sesi = 1
+		}
+		kode, err := s.gen.Generate("PKT")
+		if err != nil {
+			return err
+		}
+		harga := t.Total
+		if harga == 0 {
+			harga = tr.Harga
+		}
+		paket := PaketPerawatan{
+			Kode: kode, PasienID: pw.PasienID, TreatmentID: tr.ID, StaffID: staffID,
+			TanggalBeli: tgl, TotalSesi: sesi, SisaSesi: sesi, HargaTotal: harga,
+			Status: "aktif", IsActive: true,
+		}
+		if err := s.repo.db.Create(&paket).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) finalizePerawatan(pw *perawatan.Perawatan) error {
@@ -313,6 +405,20 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 
 		jenis := strings.ToLower(req.Jenis)
 		if strings.Contains(jenis, "member") {
+			if strings.Contains(jenis, "perpanjangan") {
+				var mem membership.Membership
+				if err := tx.Where("pasien_id = ? AND is_active = ?", req.PasienID, true).
+					Order("id DESC").First(&mem).Error; err == nil {
+					mem.Tipe = req.Jenis
+					mem.Points += int(req.Jumlah)
+					if err := tx.Save(&mem).Error; err != nil {
+						return err
+					}
+					mid := mem.ID
+					item.MembershipID = &mid
+					return tx.Save(item).Error
+				}
+			}
 			memKode, err := s.gen.Generate("MEM")
 			if err != nil {
 				return err
@@ -334,6 +440,27 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 		return nil, err
 	}
 	return s.GetDeposit(createdID)
+}
+
+func (s *Service) ListDeposit(p pagination.Params, jenis, tanggal string, pasienID uint) ([]DepositTransaksi, pagination.Meta, error) {
+	q := s.repo.db.Model(&DepositTransaksi{}).
+		Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Treatment")
+	if jenis != "" {
+		q = q.Where("jenis = ?", jenis)
+	}
+	if tanggal != "" {
+		q = q.Where("tanggal = ?", tanggal)
+	}
+	if pasienID > 0 {
+		q = q.Where("pasien_id = ?", pasienID)
+	}
+	if p.Search != "" {
+		like := "%" + p.Search + "%"
+		q = q.Where("kode ILIKE ? OR kwitansi ILIKE ?", like, like)
+	}
+	var items []DepositTransaksi
+	meta, err := pagination.Paginate(q, p, &items)
+	return items, meta, err
 }
 
 func (s *Service) GetDeposit(id uint) (*DepositTransaksi, error) {
@@ -364,6 +491,10 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 		return nil, err
 	}
 	item.Status = "dibatalkan"
+	item.KeteranganBatal = req.Keterangan
+	if req.Refund > 0 {
+		item.Refund = req.Refund
+	}
 	if err := s.repo.db.Save(&item).Error; err != nil {
 		return nil, err
 	}
@@ -371,12 +502,6 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 	return &item, nil
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 func (h *Handler) PerawatanReguler(c *gin.Context) {
 	items, meta, err := h.svc.ListPerawatanReguler(pagination.FromContext(c))
@@ -428,6 +553,21 @@ func (h *Handler) Bayar(c *gin.Context) {
 	response.OK(c, item, "payment completed")
 }
 
+func (h *Handler) ListDeposit(c *gin.Context) {
+	var pasienID uint
+	if v := c.Query("pasien_id"); v != "" {
+		if id, err := strconv.ParseUint(v, 10, 64); err == nil {
+			pasienID = uint(id)
+		}
+	}
+	items, meta, err := h.svc.ListDeposit(pagination.FromContext(c), c.Query("jenis"), c.Query("tanggal"), pasienID)
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OKWithMeta(c, items, meta, "ok")
+}
+
 func (h *Handler) Deposit(c *gin.Context) {
 	var req DepositRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -472,6 +612,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.GET("/produk/langsung", h.ProdukLangsung)
 		g.GET("/produk/online", h.ProdukOnline)
 		g.POST("/bayar", h.Bayar)
+		g.GET("/deposit", h.ListDeposit)
 		g.POST("/deposit", h.Deposit)
 		g.GET("/paket/sisa", h.PaketSisa)
 		g.POST("/paket/:id/batal", h.BatalPaket)

@@ -18,6 +18,7 @@ import { PembayaranPerawatanPage } from '@/features/pembayaran/PembayaranPerawat
 import { PembayaranProdukPage } from '@/features/pembayaran/PembayaranProdukPage'
 import { PembayaranDepositPage } from '@/features/pembayaran/PembayaranDepositPage'
 import { PembatalanPaketPage } from '@/features/pembayaran/PembatalanPaketPage'
+import { DepositPage } from '@/features/data-transaksi/DepositPage'
 import { PenjualanLangsungPage } from '@/features/depo/PenjualanLangsungPage'
 import { ResepPage } from '@/features/depo/ResepPage'
 import { BarangPage } from '@/features/warehouse/BarangPage'
@@ -188,6 +189,12 @@ const pembelianRoute = createRoute({
   component: PembelianPage,
 })
 
+const depositRiwayatRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/data-transaksi/deposit',
+  component: DepositPage,
+})
+
 const pasienRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/administrasi/pasien',
@@ -299,6 +306,7 @@ const routeTree = rootRoute.addChildren([
     konversiRoute,
     penjualanRoute,
     pembelianRoute,
+    depositRiwayatRoute,
     pasienRoute,
     staffRoute,
     treatmentRoute,

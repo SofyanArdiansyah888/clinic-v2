@@ -9,6 +9,7 @@ type Treatment struct {
 	Kategori  string  `gorm:"size:100" json:"kategori"`
 	Harga     float64 `gorm:"type:decimal(12,2);default:0" json:"harga"`
 	Durasi    int     `gorm:"default:0" json:"durasi"`
+	SesiPaket int     `gorm:"default:0" json:"sesi_paket"`
 	Deskripsi string  `gorm:"type:text" json:"deskripsi"`
 	IsActive  bool      `gorm:"default:true" json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`

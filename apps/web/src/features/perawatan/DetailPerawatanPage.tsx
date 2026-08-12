@@ -1,14 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   ArrowLeft,
   Calendar,
-  CreditCard,
-  FileCheck,
   FileText,
   Image as ImageIcon,
   Plus,
-  RotateCcw,
   Save,
   Sparkles,
   Stethoscope,
