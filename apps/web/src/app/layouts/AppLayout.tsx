@@ -11,6 +11,8 @@ const BREADCRUMB: Record<string, string> = {
   '/perawatan/riwayat': 'Riwayat Pasien',
   '/pembayaran/perawatan': 'Kasir & Pembayaran',
   '/pembayaran/produk': 'Pembayaran Produk',
+  '/pembayaran/deposit': 'Deposit & Member',
+  '/pembayaran/pembatalan': 'Batal Paket Perawatan',
   '/depo/penjualan-langsung': 'Depo — Penjualan Langsung',
   '/depo/resep': 'Depo — Resep',
   '/warehouse/barang': 'Warehouse & Stok',

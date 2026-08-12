@@ -237,7 +237,7 @@ export function PerawatanListPage() {
         tanggal: regulerForm.tanggal || today,
         diagnosa: 'Treatment Reguler',
         biaya: totalBiaya,
-        status: 'diproses',
+        status: 'bayar',
         tindakans: formattedTindakans,
       })
     },

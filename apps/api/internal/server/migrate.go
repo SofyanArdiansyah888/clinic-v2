@@ -8,6 +8,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/cabang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
+	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembelian"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
@@ -43,6 +44,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&perawatan.PerawatanResepBarang{},
 		&penjualan.Penjualan{},
 		&penjualan.PenjualanDetail{},
+		&pembayaran.DepositTransaksi{},
+		&pembayaran.PaketPerawatan{},
 		&pembelian.Pembelian{},
 		&pembelian.PembelianDetail{},
 		&warehouse.KartuStok{},

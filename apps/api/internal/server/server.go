@@ -16,6 +16,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/generate"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
+	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembelian"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
@@ -103,6 +104,7 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 		appointment.RegisterRoutes(protected, db, gen)
 		perawatan.RegisterRoutes(protected, db, gen)
 		penjualan.RegisterRoutes(protected, db, gen)
+		pembayaran.RegisterRoutes(protected, db, gen)
 		pembelian.RegisterRoutes(protected, db, gen)
 		warehouse.RegisterRoutes(protected, db, gen)
 

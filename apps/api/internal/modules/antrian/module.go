@@ -60,8 +60,31 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
-func (s *Service) List(p pagination.Params) ([]Antrian, pagination.Meta, error) {
+type ListFilters struct {
+	Status  string
+	Tanggal string
+}
+
+func filtersFromContext(c *gin.Context) ListFilters {
+	return ListFilters{
+		Status:  c.Query("status"),
+		Tanggal: c.Query("tanggal"),
+	}
+}
+
+func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
+	if f.Status != "" {
+		q = q.Where("status = ?", f.Status)
+	}
+	if f.Tanggal != "" {
+		q = q.Where("tanggal = ?", f.Tanggal)
+	}
+	return q
+}
+
+func (s *Service) List(p pagination.Params, f ListFilters) ([]Antrian, pagination.Meta, error) {
 	q := s.repo.db.Model(&Antrian{}).Preload("Pasien").Preload("Staff")
+	q = applyListFilters(q, f)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR status ILIKE ? OR keterangan ILIKE ?", like, like, like)
@@ -223,7 +246,7 @@ func (s *Service) CreatePasienAntrian(req CreatePasienAntrianRequest) (map[strin
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

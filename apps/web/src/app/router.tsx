@@ -16,6 +16,8 @@ import { DetailPerawatanPage } from '@/features/perawatan/DetailPerawatanPage'
 import { RiwayatPage } from '@/features/perawatan/RiwayatPage'
 import { PembayaranPerawatanPage } from '@/features/pembayaran/PembayaranPerawatanPage'
 import { PembayaranProdukPage } from '@/features/pembayaran/PembayaranProdukPage'
+import { PembayaranDepositPage } from '@/features/pembayaran/PembayaranDepositPage'
+import { PembatalanPaketPage } from '@/features/pembayaran/PembatalanPaketPage'
 import { PenjualanLangsungPage } from '@/features/depo/PenjualanLangsungPage'
 import { ResepPage } from '@/features/depo/ResepPage'
 import { BarangPage } from '@/features/warehouse/BarangPage'
@@ -124,6 +126,18 @@ const bayarProdukRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/pembayaran/produk',
   component: PembayaranProdukPage,
+})
+
+const bayarDepositRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/pembayaran/deposit',
+  component: PembayaranDepositPage,
+})
+
+const batalPaketRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/pembayaran/pembatalan',
+  component: PembatalanPaketPage,
 })
 
 const depoPenjualanRoute = createRoute({
@@ -275,6 +289,8 @@ const routeTree = rootRoute.addChildren([
     perawatanRiwayatRoute,
     bayarPerawatanRoute,
     bayarProdukRoute,
+    bayarDepositRoute,
+    batalPaketRoute,
     depoPenjualanRoute,
     depoResepRoute,
     barangRoute,

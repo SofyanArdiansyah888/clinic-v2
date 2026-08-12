@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -29,24 +30,41 @@ func NewService(repo *Repository, gen *generator.Service) *Service {
 }
 
 type DetailInput struct {
-	BarangID  uint    `json:"barang_id" binding:"required"`
-	Qty       int     `json:"qty" binding:"required"`
-	HargaJual float64 `json:"harga_jual"`
+	BarangID       uint    `json:"barang_id"`
+	TreatmentID    uint    `json:"treatment_id"`
+	JenisPenjualan string  `json:"jenis_penjualan"`
+	Qty            int     `json:"qty" binding:"required"`
+	HargaJual      float64 `json:"harga_jual"`
 }
 
 type UpsertRequest struct {
-	PasienID   uint          `json:"pasien_id" binding:"required"`
-	StaffID    uint          `json:"staff_id" binding:"required"`
-	Tanggal    string        `json:"tanggal" binding:"required"`
-	NoInvoice  string        `json:"no_invoice"`
-	Status     string        `json:"status"`
-	Keterangan string        `json:"keterangan"`
-	IsActive   *bool         `json:"is_active"`
-	Details    []DetailInput `json:"details" binding:"required,min=1"`
+	PasienID        uint          `json:"pasien_id" binding:"required"`
+	StaffID         uint          `json:"staff_id" binding:"required"`
+	PerawatanID     *uint         `json:"perawatan_id"`
+	AntrianID       *uint         `json:"antrian_id"`
+	Tanggal         string        `json:"tanggal" binding:"required"`
+	NoInvoice       string        `json:"no_invoice"`
+	Status          string        `json:"status"`
+	Keterangan      string        `json:"keterangan"`
+	JenisPembayaran string        `json:"jenis_pembayaran"`
+	BankID          *uint         `json:"bank_id"`
+	JumlahBayar     float64       `json:"jumlah_bayar"`
+	IsActive        *bool         `json:"is_active"`
+	Details         []DetailInput `json:"details" binding:"required,min=1"`
 }
 
 type StatusRequest struct {
-	Status string `json:"status" binding:"required"`
+	Status          string  `json:"status" binding:"required"`
+	JenisPembayaran string  `json:"jenis_pembayaran"`
+	BankID          *uint   `json:"bank_id"`
+	JumlahBayar     float64 `json:"jumlah_bayar"`
+}
+
+type ListFilters struct {
+	Status     string
+	Tanggal    string
+	PasienID   uint
+	Keterangan string
 }
 
 type Handler struct{ svc *Service }
@@ -60,8 +78,40 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
-func (s *Service) List(p pagination.Params) ([]Penjualan, pagination.Meta, error) {
-	q := s.repo.db.Model(&Penjualan{}).Preload("Pasien").Preload("Staff").Preload("Details")
+func filtersFromContext(c *gin.Context) ListFilters {
+	var pasienID uint
+	if v := c.Query("pasien_id"); v != "" {
+		if id, err := strconv.ParseUint(v, 10, 64); err == nil {
+			pasienID = uint(id)
+		}
+	}
+	return ListFilters{
+		Status:     c.Query("status"),
+		Tanggal:    c.Query("tanggal"),
+		PasienID:   pasienID,
+		Keterangan: c.Query("keterangan"),
+	}
+}
+
+func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
+	if f.Status != "" {
+		q = q.Where("status = ?", f.Status)
+	}
+	if f.Tanggal != "" {
+		q = q.Where("tanggal = ?", f.Tanggal)
+	}
+	if f.PasienID > 0 {
+		q = q.Where("pasien_id = ?", f.PasienID)
+	}
+	if f.Keterangan != "" {
+		q = q.Where("keterangan ILIKE ?", "%"+f.Keterangan+"%")
+	}
+	return q
+}
+
+func (s *Service) List(p pagination.Params, f ListFilters) ([]Penjualan, pagination.Meta, error) {
+	q := s.repo.db.Model(&Penjualan{}).Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment")
+	q = applyListFilters(q, f)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR no_invoice ILIKE ? OR status ILIKE ?", like, like, like)
@@ -73,7 +123,8 @@ func (s *Service) List(p pagination.Params) ([]Penjualan, pagination.Meta, error
 
 func (s *Service) Get(id uint) (*Penjualan, error) {
 	var item Penjualan
-	if err := s.repo.db.Preload("Pasien").Preload("Staff").Preload("Details").First(&item, id).Error; err != nil {
+	if err := s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").
+		Preload("Details.Treatment").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -101,8 +152,11 @@ func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var total float64
 		item := &Penjualan{
-			Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID, Tanggal: tanggal,
-			NoInvoice: noInvoice, Status: status, Keterangan: req.Keterangan, IsActive: true,
+			Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
+			PerawatanID: req.PerawatanID, AntrianID: req.AntrianID,
+			Tanggal: tanggal, NoInvoice: noInvoice, Status: status,
+			Keterangan: req.Keterangan, JenisPembayaran: req.JenisPembayaran,
+			BankID: req.BankID, JumlahBayar: req.JumlahBayar, IsActive: true,
 		}
 		if req.IsActive != nil {
 			item.IsActive = *req.IsActive
@@ -113,41 +167,78 @@ func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
 		createdID = item.ID
 
 		for i, d := range req.Details {
-			var b barang.Barang
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
-				return err
+			jenis := d.JenisPenjualan
+			if jenis == "" {
+				if d.TreatmentID > 0 {
+					jenis = "treatment"
+				} else {
+					jenis = "barang"
+				}
 			}
-			if b.StokAktual < d.Qty {
-				return fmt.Errorf("insufficient stock for barang %s", b.Kode)
-			}
+
 			harga := d.HargaJual
-			if harga == 0 {
-				harga = b.HargaJual
-			}
 			subtotal := harga * float64(d.Qty)
-			total += subtotal
 			detailKode := fmt.Sprintf("%s-D%03d", kode, i+1)
 			detail := PenjualanDetail{
-				Kode: detailKode, PenjualanID: item.ID, BarangID: d.BarangID,
-				Qty: d.Qty, HargaJual: harga, Subtotal: subtotal, IsActive: true,
+				Kode: detailKode, PenjualanID: item.ID,
+				JenisPenjualan: jenis, Qty: d.Qty, HargaJual: harga, Subtotal: subtotal, IsActive: true,
 			}
+
+			if jenis == "treatment" {
+				if d.TreatmentID == 0 {
+					return fmt.Errorf("treatment_id required for treatment detail")
+				}
+				var tr treatment.Treatment
+				if err := tx.First(&tr, d.TreatmentID).Error; err != nil {
+					return err
+				}
+				if harga == 0 {
+					harga = tr.Harga
+					subtotal = harga * float64(d.Qty)
+					detail.HargaJual = harga
+					detail.Subtotal = subtotal
+				}
+				tid := d.TreatmentID
+				detail.TreatmentID = &tid
+			} else {
+				if d.BarangID == 0 {
+					return fmt.Errorf("barang_id required for barang detail")
+				}
+				var b barang.Barang
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
+					return err
+				}
+				if b.StokAktual < d.Qty {
+					return fmt.Errorf("insufficient stock for barang %s", b.Kode)
+				}
+				if harga == 0 {
+					harga = b.HargaJual
+					subtotal = harga * float64(d.Qty)
+					detail.HargaJual = harga
+					detail.Subtotal = subtotal
+				}
+				bid := d.BarangID
+				detail.BarangID = &bid
+				newStok := b.StokAktual - d.Qty
+				if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
+					return err
+				}
+				kstKode, err := s.gen.Generate("KST")
+				if err != nil {
+					return err
+				}
+				ks := warehouse.KartuStok{
+					Kode: kstKode, BarangID: b.ID, Tanggal: tanggal,
+					Keterangan: "Penjualan " + kode, QtyMasuk: 0, QtyKeluar: d.Qty,
+					Saldo: newStok, Referensi: kode, IsActive: true,
+				}
+				if err := tx.Create(&ks).Error; err != nil {
+					return err
+				}
+			}
+
+			total += subtotal
 			if err := tx.Create(&detail).Error; err != nil {
-				return err
-			}
-			newStok := b.StokAktual - d.Qty
-			if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
-				return err
-			}
-			kstKode, err := s.gen.Generate("KST")
-			if err != nil {
-				return err
-			}
-			ks := warehouse.KartuStok{
-				Kode: kstKode, BarangID: b.ID, Tanggal: tanggal,
-				Keterangan: "Penjualan " + kode, QtyMasuk: 0, QtyKeluar: d.Qty,
-				Saldo: newStok, Referensi: kode, IsActive: true,
-			}
-			if err := tx.Create(&ks).Error; err != nil {
 				return err
 			}
 		}
@@ -159,12 +250,21 @@ func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
 	return s.Get(createdID)
 }
 
-func (s *Service) UpdateStatus(id uint, status string) (*Penjualan, error) {
+func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	item, err := s.Get(id)
 	if err != nil {
 		return nil, err
 	}
-	item.Status = status
+	item.Status = req.Status
+	if req.JenisPembayaran != "" {
+		item.JenisPembayaran = req.JenisPembayaran
+	}
+	if req.BankID != nil {
+		item.BankID = req.BankID
+	}
+	if req.JumlahBayar > 0 {
+		item.JumlahBayar = req.JumlahBayar
+	}
 	if err := s.repo.db.Save(item).Error; err != nil {
 		return nil, err
 	}
@@ -179,7 +279,7 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -227,7 +327,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStatus(uint(id), req.Status)
+	item, err := h.svc.UpdateStatus(uint(id), req)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

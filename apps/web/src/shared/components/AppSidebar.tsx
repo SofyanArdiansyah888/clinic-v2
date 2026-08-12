@@ -53,6 +53,8 @@ const NAV: NavSection[] = [
         children: [
           { label: 'Perawatan', to: '/pembayaran/perawatan' },
           { label: 'Produk', to: '/pembayaran/produk' },
+          { label: 'Deposit & Member', to: '/pembayaran/deposit' },
+          { label: 'Batal Paket Perawatan', to: '/pembayaran/pembatalan' },
         ],
       },
     ],

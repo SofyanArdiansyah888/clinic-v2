@@ -10,6 +10,7 @@ const STATUS_CLASS: Record<string, { label: string; className: string }> = {
   bayar: { label: 'Ke Kasir', className: 'status-badge-bayar' },
   unpaid: { label: 'Belum Lunas', className: 'status-badge-bayar' },
   draft: { label: 'Draft', className: 'status-badge-bayar' },
+  confirmed: { label: 'Menunggu Bayar', className: 'status-badge-bayar' },
   selesai: { label: 'Selesai', className: 'status-badge-selesai' },
   paid: { label: 'Lunas', className: 'status-badge-selesai' },
   completed: { label: 'Selesai', className: 'status-badge-selesai' },

@@ -100,13 +100,36 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
+type ListFilters struct {
+	Status  string
+	Tanggal string
+}
+
+func filtersFromContext(c *gin.Context) ListFilters {
+	return ListFilters{
+		Status:  c.Query("status"),
+		Tanggal: c.Query("tanggal"),
+	}
+}
+
+func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
+	if f.Status != "" {
+		q = q.Where("status = ?", f.Status)
+	}
+	if f.Tanggal != "" {
+		q = q.Where("tanggal = ?", f.Tanggal)
+	}
+	return q
+}
+
 func (s *Service) preload(q *gorm.DB) *gorm.DB {
 	return q.Preload("Pasien").Preload("Staff").Preload("Treatment").
 		Preload("Tindakans").Preload("Reseps.Barangs")
 }
 
-func (s *Service) List(p pagination.Params) ([]Perawatan, pagination.Meta, error) {
+func (s *Service) List(p pagination.Params, f ListFilters) ([]Perawatan, pagination.Meta, error) {
 	q := s.preload(s.repo.db.Model(&Perawatan{}))
+	q = applyListFilters(q, f)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR status ILIKE ? OR diagnosa ILIKE ?", like, like, like)
@@ -319,7 +342,7 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
