@@ -543,7 +543,7 @@ export function PerawatanListPage() {
           )}
         >
           <Stethoscope className="h-4 w-4" />
-          <span>Treatment Reguler (Fast-Track Kasir)</span>
+          <span>Treatment Reguler</span>
         </button>
 
         <button
@@ -557,7 +557,7 @@ export function PerawatanListPage() {
           )}
         >
           <Gift className="h-4 w-4" />
-          <span>Treatment Paket (Multi-Sesi)</span>
+          <span>Treatment Paket</span>
         </button>
 
         <button
