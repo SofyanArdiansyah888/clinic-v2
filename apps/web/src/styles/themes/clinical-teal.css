@@ -1,0 +1,53 @@
+:root,
+[data-theme="clinical-teal"],
+[data-theme="clinic-rose"] {
+  /* Clinic OS — Rose brand shell (adapted from frontdesk template) */
+  --background: 210 40% 98%; /* slate-50 */
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  --primary: 347 77% 50%; /* rose-600 #e11d48 */
+  --primary-foreground: 0 0% 100%;
+  --primary-strong: 347 83% 41%; /* rose-700 */
+
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 215 25% 27%;
+
+  --muted: 210 40% 98%;
+  --muted-foreground: 215 16% 47%;
+
+  --accent: 355 100% 97%; /* rose-50 */
+  --accent-foreground: 347 83% 41%;
+
+  --destructive: 347 77% 50%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 347 77% 50%;
+
+  --success: 161 94% 30%;
+  --warning: 32 95% 44%;
+  --danger: 347 77% 50%;
+
+  --sidebar: 222 47% 7%; /* slate-950 */
+  --sidebar-foreground: 215 20% 65%;
+  --sidebar-muted: 222 47% 11%;
+  --sidebar-accent: 347 77% 50%;
+  --sidebar-border: 217 33% 17%;
+  --sidebar-header: 222 47% 7%;
+
+  --radius: 0.75rem;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow: 0 4px 16px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 20px 40px rgb(15 23 42 / 0.12);
+  --shadow-brand: 0 10px 24px rgb(225 29 72 / 0.25);
+}

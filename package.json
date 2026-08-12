@@ -1,0 +1,15 @@
+{
+  "name": "clinic-v2",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "dev:web": "turbo run dev --filter=@clinic/web",
+    "dev:api": "turbo run dev --filter=@clinic/api"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}
