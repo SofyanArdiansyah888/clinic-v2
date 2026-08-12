@@ -1,20 +1,25 @@
 package warehouse
 
-import "time"
+import (
+	"time"
+
+	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+)
 
 type KartuStok struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	Kode       string    `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	BarangID   uint      `gorm:"not null;index" json:"barang_id"`
-	Tanggal    time.Time `gorm:"type:date;not null" json:"tanggal"`
-	Keterangan string    `gorm:"type:text" json:"keterangan"`
-	QtyMasuk   int       `gorm:"default:0" json:"qty_masuk"`
-	QtyKeluar  int       `gorm:"default:0" json:"qty_keluar"`
-	Saldo      int       `gorm:"not null" json:"saldo"`
-	Referensi  string    `gorm:"size:100" json:"referensi"`
-	IsActive   bool      `gorm:"default:true" json:"is_active"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID         uint           `gorm:"primaryKey" json:"id"`
+	Kode       string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	BarangID   uint           `gorm:"not null;index" json:"barang_id"`
+	Tanggal    time.Time      `gorm:"type:date;not null" json:"tanggal"`
+	Keterangan string         `gorm:"type:text" json:"keterangan"`
+	QtyMasuk   int            `gorm:"default:0" json:"qty_masuk"`
+	QtyKeluar  int            `gorm:"default:0" json:"qty_keluar"`
+	Saldo      int            `gorm:"not null" json:"saldo"`
+	Referensi  string         `gorm:"size:100" json:"referensi"`
+	IsActive   bool           `gorm:"default:true" json:"is_active"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	Barang     *barang.Barang `gorm:"foreignKey:BarangID" json:"barang,omitempty"`
 }
 
 func (KartuStok) TableName() string { return "kartu_stoks" }
@@ -33,15 +38,16 @@ type KonversiStok struct {
 func (KonversiStok) TableName() string { return "konversi_stoks" }
 
 type KonversiStokDetail struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	Kode           string    `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	KonversiStokID uint      `gorm:"not null;index" json:"konversi_stok_id"`
-	BarangID       uint      `gorm:"not null;index" json:"barang_id"`
-	Qty            int       `gorm:"not null" json:"qty"`
-	Tipe           string    `gorm:"size:20;not null" json:"tipe"`
-	IsActive       bool      `gorm:"default:true" json:"is_active"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uint           `gorm:"primaryKey" json:"id"`
+	Kode           string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	KonversiStokID uint           `gorm:"not null;index" json:"konversi_stok_id"`
+	BarangID       uint           `gorm:"not null;index" json:"barang_id"`
+	Qty            int            `gorm:"not null" json:"qty"`
+	Tipe           string         `gorm:"size:20;not null" json:"tipe"`
+	IsActive       bool           `gorm:"default:true" json:"is_active"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	Barang         *barang.Barang `gorm:"foreignKey:BarangID" json:"barang,omitempty"`
 }
 
 func (KonversiStokDetail) TableName() string { return "konversi_stok_details" }
@@ -60,15 +66,16 @@ type ProduksiBarang struct {
 func (ProduksiBarang) TableName() string { return "produksi_barangs" }
 
 type ProduksiBarangDetail struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	Kode             string    `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	ProduksiBarangID uint      `gorm:"not null;index" json:"produksi_barang_id"`
-	BarangID         uint      `gorm:"not null;index" json:"barang_id"`
-	Qty              int       `gorm:"not null" json:"qty"`
-	Tipe             string    `gorm:"size:20;not null" json:"tipe"`
-	IsActive         bool      `gorm:"default:true" json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	Kode             string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	ProduksiBarangID uint           `gorm:"not null;index" json:"produksi_barang_id"`
+	BarangID         uint           `gorm:"not null;index" json:"barang_id"`
+	Qty              int            `gorm:"not null" json:"qty"`
+	Tipe             string         `gorm:"size:20;not null" json:"tipe"`
+	IsActive         bool           `gorm:"default:true" json:"is_active"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	Barang           *barang.Barang `gorm:"foreignKey:BarangID" json:"barang,omitempty"`
 }
 
 func (ProduksiBarangDetail) TableName() string { return "produksi_barang_details" }
@@ -87,17 +94,18 @@ type StokOpname struct {
 func (StokOpname) TableName() string { return "stok_opnames" }
 
 type StokOpnameDetail struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	Kode         string    `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	StokOpnameID uint      `gorm:"not null;index" json:"stok_opname_id"`
-	BarangID     uint      `gorm:"not null;index" json:"barang_id"`
-	StokSistem   int       `gorm:"not null" json:"stok_sistem"`
-	StokFisik    int       `gorm:"not null" json:"stok_fisik"`
-	Selisih      int       `gorm:"not null" json:"selisih"`
-	Keterangan   string    `gorm:"type:text" json:"keterangan"`
-	IsActive     bool      `gorm:"default:true" json:"is_active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	Kode         string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	StokOpnameID uint           `gorm:"not null;index" json:"stok_opname_id"`
+	BarangID     uint           `gorm:"not null;index" json:"barang_id"`
+	StokSistem   int            `gorm:"not null" json:"stok_sistem"`
+	StokFisik    int            `gorm:"not null" json:"stok_fisik"`
+	Selisih      int            `gorm:"not null" json:"selisih"`
+	Keterangan   string         `gorm:"type:text" json:"keterangan"`
+	IsActive     bool           `gorm:"default:true" json:"is_active"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	Barang       *barang.Barang `gorm:"foreignKey:BarangID" json:"barang,omitempty"`
 }
 
 func (StokOpnameDetail) TableName() string { return "stok_opname_details" }
