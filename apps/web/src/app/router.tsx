@@ -12,6 +12,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { KunjunganPage } from '@/features/resepsionis/KunjunganPage'
 import { AppointmentPage } from '@/features/resepsionis/AppointmentPage'
 import { PerawatanListPage } from '@/features/perawatan/PerawatanListPage'
+import { DetailPerawatanPage } from '@/features/perawatan/DetailPerawatanPage'
 import { RiwayatPage } from '@/features/perawatan/RiwayatPage'
 import { PembayaranPerawatanPage } from '@/features/pembayaran/PembayaranPerawatanPage'
 import { PembayaranProdukPage } from '@/features/pembayaran/PembayaranProdukPage'
@@ -99,6 +100,12 @@ const perawatanRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/perawatan',
   component: PerawatanListPage,
+})
+
+const perawatanDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/perawatan/detail',
+  component: DetailPerawatanPage,
 })
 
 const perawatanRiwayatRoute = createRoute({
@@ -264,6 +271,7 @@ const routeTree = rootRoute.addChildren([
     kunjunganRoute,
     appointmentRoute,
     perawatanRoute,
+    perawatanDetailRoute,
     perawatanRiwayatRoute,
     bayarPerawatanRoute,
     bayarProdukRoute,

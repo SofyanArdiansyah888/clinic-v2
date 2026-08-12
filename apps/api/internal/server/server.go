@@ -24,6 +24,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/staff"
 	"github.com/scaleup/clinic-v2/api/internal/modules/supplier"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
+	"github.com/scaleup/clinic-v2/api/internal/modules/upload"
 	"github.com/scaleup/clinic-v2/api/internal/modules/user"
 	"github.com/scaleup/clinic-v2/api/internal/modules/voucher"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
@@ -31,6 +32,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/platform/jwt"
 	"github.com/scaleup/clinic-v2/api/internal/platform/middleware"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
+	"github.com/scaleup/clinic-v2/api/internal/platform/storage"
 	"gorm.io/gorm"
 )
 
@@ -39,7 +41,15 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	store, err := storage.NewLocalStore(cfg.StorageLocalDir, cfg.StoragePublicBase)
+	if err != nil {
+		panic("storage: " + err.Error())
+	}
+	// STORAGE_DRIVER=minio can be wired later against the same storage.Store interface.
+	_ = cfg.StorageDriver
+
 	r := gin.Default()
+	r.MaxMultipartMemory = 12 << 20
 	r.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
 			if origin == cfg.CORSOrigin {
@@ -64,6 +74,12 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 
 	api := r.Group("/api")
 	auth.RegisterPublicRoutes(api, db, jm)
+	// Public file serve so <img src> works without Authorization header.
+	// Upload remains protected.
+	{
+		uh := upload.NewHandler(store)
+		api.GET("/uploads/files/*key", uh.Serve)
+	}
 
 	protected := api.Group("")
 	protected.Use(middleware.Auth(jm))
@@ -71,6 +87,7 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 		auth.RegisterProtectedRoutes(protected, db, jm)
 		generate.RegisterRoutes(protected, gen)
 		dashboard.RegisterRoutes(protected, db)
+		upload.RegisterRoutes(protected, store)
 
 		user.RegisterRoutes(protected, db, gen)
 		pasien.RegisterRoutes(protected, db, gen)

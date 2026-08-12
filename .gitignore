@@ -6,6 +6,7 @@ dist
 *.log
 apps/api/tmp
 apps/api/bin
+apps/api/storage
 .DS_Store
 coverage
 playwright-report

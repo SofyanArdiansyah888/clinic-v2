@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   CheckCircle2,
   Clock3,
@@ -16,8 +17,10 @@ import {
 } from 'lucide-react'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { apiGet, apiPost, apiPut } from '@/shared/api/client'
+import { uploadImage } from '@/shared/api/upload'
 import { Dialog } from '@/shared/components/Dialog'
 import { DokterSelect } from '@/shared/components/DokterSelect'
+import { FotoSebelumDialog, type PendingPhoto } from '@/shared/components/FotoSebelumDialog'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { cn } from '@/shared/lib/cn'
@@ -194,12 +197,15 @@ function printAntrianTicket(row: AntrianRow) {
 }
 
 export function KunjunganPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [printAfterCreate, setPrintAfterCreate] = useState(true)
+  const [layaniRow, setLayaniRow] = useState<AntrianRow | null>(null)
+  const [layaniSubmitting, setLayaniSubmitting] = useState(false)
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
   const [form, setForm] = useState({
     mode: 'existing' as 'existing' | 'new',
@@ -320,7 +326,54 @@ export function KunjunganPage() {
   })
 
   function setStatus(row: AntrianRow, nextStatus: string) {
+    if (nextStatus === 'diproses') {
+      setLayaniRow(row)
+      return
+    }
     updateMutation.mutate({ ...row, nextStatus })
+  }
+
+  async function confirmLayani(photos: PendingPhoto[]) {
+    if (!layaniRow) return
+    setLayaniSubmitting(true)
+    try {
+      const uploaded = []
+      for (const photo of photos) {
+        uploaded.push(await uploadImage(photo.file, 'foto-sebelum'))
+      }
+      const urls = uploaded.map((u) => u.url)
+      const antrianId = layaniRow.id
+
+      await apiPost('/perawatan', {
+        pasien_id: layaniRow.pasien_id,
+        staff_id: layaniRow.staff_id,
+        antrian_id: antrianId,
+        tanggal: today,
+        jam_mulai: nowTime(),
+        status: 'proses',
+        foto_sebelum: urls,
+        catatan: layaniRow.keterangan || '',
+      })
+
+      await apiPut(`/antrian/${antrianId}`, {
+        pasien_id: layaniRow.pasien_id,
+        staff_id: layaniRow.staff_id,
+        tanggal: toDateInput(layaniRow.tanggal),
+        jam: layaniRow.jam || '',
+        status: 'diproses',
+        keterangan: layaniRow.keterangan || '',
+      })
+
+      void queryClient.invalidateQueries({ queryKey: ['antrian'] })
+      void queryClient.invalidateQueries({ queryKey: ['perawatan'] })
+      setLayaniRow(null)
+      showToast('Foto tersimpan. Membuka perawatan...', 'success')
+      void navigate({ to: '/perawatan' })
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal menyimpan foto / perawatan', 'error')
+    } finally {
+      setLayaniSubmitting(false)
+    }
   }
 
   function resetFilters() {
@@ -753,6 +806,17 @@ export function KunjunganPage() {
           </div>
         </form>
       </Dialog>
+
+      <FotoSebelumDialog
+        open={Boolean(layaniRow)}
+        onClose={() => {
+          if (!layaniSubmitting) setLayaniRow(null)
+        }}
+        patientName={layaniRow?.pasien?.nama}
+        queueCode={layaniRow?.kode}
+        submitting={layaniSubmitting}
+        onConfirm={confirmLayani}
+      />
     </div>
   )
 }
