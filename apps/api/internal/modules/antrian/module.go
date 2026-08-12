@@ -137,6 +137,22 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Antrian, error) {
 	return s.Get(id)
 }
 
+type StatusRequest struct {
+	Status string `json:"status" binding:"required"`
+}
+
+func (s *Service) UpdateStatus(id uint, status string) (*Antrian, error) {
+	item, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	item.Status = status
+	if err := s.repo.db.Save(item).Error; err != nil {
+		return nil, err
+	}
+	return s.Get(id)
+}
+
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Delete(&Antrian{}, id).Error
 }
@@ -254,6 +270,21 @@ func (h *Handler) Update(c *gin.Context) {
 	response.OK(c, item, "updated")
 }
 
+func (h *Handler) UpdateStatus(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var req StatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "validation failed", err.Error())
+		return
+	}
+	item, err := h.svc.UpdateStatus(uint(id), req.Status)
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, item, "status updated")
+}
+
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.svc.Delete(uint(id)); err != nil {
@@ -286,6 +317,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.POST("/create-pasien-antrian", h.CreatePasienAntrian)
 		g.GET("/:id", h.Show)
 		g.PUT("/:id", h.Update)
+		g.PATCH("/:id/status", h.UpdateStatus)
 		g.DELETE("/:id", h.Destroy)
 	}
 }

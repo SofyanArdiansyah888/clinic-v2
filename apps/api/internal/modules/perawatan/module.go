@@ -222,6 +222,30 @@ func (s *Service) syncNested(tx *gorm.DB, perawatanID uint, req UpsertRequest) e
 	return nil
 }
 
+func antrianStatusForPerawatan(status string) string {
+	switch status {
+	case "proses", "diproses":
+		return "diproses"
+	case "selesai", "bayar":
+		return "bayar"
+	case "batal", "dibatalkan":
+		return "batal"
+	default:
+		return ""
+	}
+}
+
+func (s *Service) syncLinkedAntrian(tx *gorm.DB, antrianID *uint, perawatanStatus string) error {
+	if antrianID == nil || *antrianID == 0 {
+		return nil
+	}
+	next := antrianStatusForPerawatan(perawatanStatus)
+	if next == "" {
+		return nil
+	}
+	return tx.Table("antrians").Where("id = ?", *antrianID).Update("status", next).Error
+}
+
 func (s *Service) Create(req UpsertRequest) (*Perawatan, error) {
 	kode, err := s.gen.Generate("PRW")
 	if err != nil {
@@ -235,7 +259,10 @@ func (s *Service) Create(req UpsertRequest) (*Perawatan, error) {
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
-		return s.syncNested(tx, item.ID, req)
+		if err := s.syncNested(tx, item.ID, req); err != nil {
+			return err
+		}
+		return s.syncLinkedAntrian(tx, item.AntrianID, item.Status)
 	})
 	if err != nil {
 		return nil, err
@@ -255,7 +282,10 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Perawatan, error) {
 		if err := tx.Save(item).Error; err != nil {
 			return err
 		}
-		return s.syncNested(tx, item.ID, req)
+		if err := s.syncNested(tx, item.ID, req); err != nil {
+			return err
+		}
+		return s.syncLinkedAntrian(tx, item.AntrianID, item.Status)
 	})
 	if err != nil {
 		return nil, err

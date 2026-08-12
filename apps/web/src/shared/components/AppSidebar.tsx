@@ -46,14 +46,7 @@ const NAV: NavSection[] = [
           { label: 'Appointment', to: '/resepsionis/appointment' },
         ],
       },
-      {
-        label: 'Perawatan',
-        icon: Stethoscope,
-        children: [
-          { label: 'List Perawatan', to: '/perawatan' },
-          { label: 'Riwayat', to: '/perawatan/riwayat' },
-        ],
-      },
+      { label: 'Perawatan', icon: Stethoscope, to: '/perawatan' },
       {
         label: 'Kasir & Pembayaran',
         icon: CreditCard,
