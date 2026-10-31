@@ -7,7 +7,7 @@ import { DokterSelect } from '@/shared/components/DokterSelect'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
 
@@ -21,7 +21,7 @@ type PenjualanRow = {
   pasien?: { nama?: string }
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 export function PenjualanLangsungPage() {
   const queryClient = useQueryClient()

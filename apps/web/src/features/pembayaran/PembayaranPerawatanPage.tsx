@@ -17,7 +17,7 @@ import { useMemo, useState } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 import { PaymentModal, type PaymentTarget } from '@/features/pembayaran/components/PaymentModal'
 import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
@@ -42,7 +42,7 @@ type QueueRow = {
   tindakans?: TindakanRow[]
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function rowTotal(row: QueueRow): number {
   if (row.biaya && row.biaya > 0) return row.biaya

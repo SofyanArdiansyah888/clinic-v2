@@ -26,6 +26,7 @@ import { StatusBadge } from '@/shared/components/StatusBadge'
 import { KpiCard } from '@/shared/components/KpiCard'
 import { cn } from '@/shared/lib/cn'
 import { Button } from '@/shared/ui/button'
+import { todayISO } from '@/shared/lib/formatters'
 
 type PasienLite = { id: number; kode?: string; nama?: string; no_telp?: string }
 type StaffLite = { id: number; nama?: string; jabatan?: string }
@@ -43,7 +44,7 @@ type AntrianRow = {
   staff?: StaffLite
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function nowTime() {
   return new Date().toTimeString().slice(0, 5)

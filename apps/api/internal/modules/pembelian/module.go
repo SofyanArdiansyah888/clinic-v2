@@ -30,7 +30,7 @@ func NewService(repo *Repository, gen *generator.Service) *Service {
 
 type DetailInput struct {
 	BarangID  uint    `json:"barang_id" binding:"required"`
-	Qty       int     `json:"qty" binding:"required"`
+	Qty       int     `json:"qty" binding:"required,gt=0"`
 	HargaBeli float64 `json:"harga_beli"`
 }
 
@@ -42,7 +42,7 @@ type UpsertRequest struct {
 	Status     string        `json:"status"`
 	Keterangan string        `json:"keterangan"`
 	IsActive   *bool         `json:"is_active"`
-	Details    []DetailInput `json:"details" binding:"required,min=1"`
+	Details    []DetailInput `json:"details" binding:"required,min=1,dive"`
 }
 
 type StatusRequest struct {
@@ -61,7 +61,7 @@ func parseDate(s string) (time.Time, error) {
 }
 
 func (s *Service) List(p pagination.Params) ([]Pembelian, pagination.Meta, error) {
-	q := s.repo.db.Model(&Pembelian{}).Preload("Supplier").Preload("Staff").Preload("Details")
+	q := s.repo.db.Model(&Pembelian{}).Preload("Supplier").Preload("Staff").Preload("Details.Barang")
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR no_invoice ILIKE ? OR status ILIKE ?", like, like, like)
@@ -73,7 +73,7 @@ func (s *Service) List(p pagination.Params) ([]Pembelian, pagination.Meta, error
 
 func (s *Service) Get(id uint) (*Pembelian, error) {
 	var item Pembelian
-	if err := s.repo.db.Preload("Supplier").Preload("Staff").Preload("Details").First(&item, id).Error; err != nil {
+	if err := s.repo.db.Preload("Supplier").Preload("Staff").Preload("Details.Barang").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -164,10 +164,23 @@ func (s *Service) UpdateStatus(id uint, status string) (*Pembelian, error) {
 	return s.Get(id)
 }
 
+// Delete removes the pembelian and takes its received stock back out. It fails
+// when part of that stock has already been used.
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
-		tx.Where("pembelian_id = ?", id).Delete(&PembelianDetail{})
-		return tx.Delete(&Pembelian{}, id).Error
+		var item Pembelian
+		if err := tx.Preload("Details").First(&item, id).Error; err != nil {
+			return err
+		}
+		for _, d := range item.Details {
+			if err := warehouse.ApplyStockMove(tx, s.gen, d.BarangID, d.Qty, "keluar", item.Kode, "Hapus pembelian "+item.Kode, time.Now()); err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("pembelian_id = ?", id).Delete(&PembelianDetail{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&item).Error
 	})
 }
 
@@ -198,7 +211,7 @@ func (h *Handler) Store(c *gin.Context) {
 	}
 	item, err := h.svc.Create(req)
 	if err != nil {
-		response.BadRequest(c, "failed to create pembelian", err.Error())
+		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 	response.Created(c, item, "created")
@@ -207,7 +220,7 @@ func (h *Handler) Store(c *gin.Context) {
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.svc.Delete(uint(id)); err != nil {
-		response.Internal(c, err.Error())
+		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 	response.OK(c, nil, "deleted")

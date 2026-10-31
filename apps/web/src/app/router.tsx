@@ -25,6 +25,7 @@ import { BarangPage } from '@/features/warehouse/BarangPage'
 import { StokOpnamePage } from '@/features/warehouse/StokOpnamePage'
 import { ProduksiPage } from '@/features/warehouse/ProduksiPage'
 import { KonversiPage } from '@/features/warehouse/KonversiPage'
+import { KartuStokPage } from '@/features/warehouse/KartuStokPage'
 import { PenjualanPage } from '@/features/data-transaksi/PenjualanPage'
 import { PembelianPage } from '@/features/data-transaksi/PembelianPage'
 import { PengaturanUmumPage } from '@/features/administrasi/pengaturan-umum'
@@ -180,6 +181,12 @@ const konversiRoute = createRoute({
   component: KonversiPage,
 })
 
+const kartuStokRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/warehouse/kartu-stok',
+  component: KartuStokPage,
+})
+
 const penjualanRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/data-transaksi/penjualan',
@@ -320,6 +327,7 @@ const routeTree = rootRoute.addChildren([
     stokOpnameRoute,
     produksiRoute,
     konversiRoute,
+    kartuStokRoute,
     penjualanRoute,
     pembelianRoute,
     depositRiwayatRoute,

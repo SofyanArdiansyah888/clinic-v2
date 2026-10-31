@@ -22,7 +22,7 @@ import { FotoUploadField } from '@/shared/components/FotoUploadField'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { TreatmentSelect, type TreatmentLite } from '@/shared/components/TreatmentSelect'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 import { ResepModal, type ResepItem } from './ResepModal'
 import { ConsentDocumentModal } from './ConsentDocumentModal'
@@ -82,7 +82,7 @@ type PerawatanDetailResponse = {
   reseps?: PerawatanResepItem[]
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function calculateTindakanTotal(t: PerawatanTindakanItem): number {
   const jumlah = Number(t.jumlah) || 0

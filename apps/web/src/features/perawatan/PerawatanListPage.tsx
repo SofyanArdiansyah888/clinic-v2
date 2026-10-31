@@ -26,7 +26,7 @@ import { StatusBadge } from '@/shared/components/StatusBadge'
 import { TreatmentSelect, type TreatmentLite } from '@/shared/components/TreatmentSelect'
 import { KpiCard } from '@/shared/components/KpiCard'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 
 type AntrianRow = {
@@ -65,7 +65,7 @@ type TreatmentRegulerRow = {
   total: number
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function calculateRegulerTotal(r: TreatmentRegulerRow): number {
   const jumlah = Number(r.jumlah) || 0

@@ -10,6 +10,7 @@ export type BarangLite = {
   nama?: string
   kategori?: string
   satuan?: string
+  harga_beli?: number
   harga_jual?: number
   stok_aktual?: number
   is_active?: boolean

@@ -9,7 +9,7 @@ import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StaffSelect } from '@/shared/components/StaffSelect'
 import { TreatmentSelect } from '@/shared/components/TreatmentSelect'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency } from '@/shared/lib/formatters'
+import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
 
 const JENIS_OPTIONS = [
@@ -42,7 +42,7 @@ const JENIS_INFO: Record<string, { title: string; desc: string; output: string }
   },
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 export function PembayaranDepositPage() {
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)

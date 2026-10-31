@@ -78,6 +78,7 @@ const NAV: NavSection[] = [
           { label: 'Stok Opname', to: '/warehouse/stok-opname' },
           { label: 'Produksi', to: '/warehouse/produksi' },
           { label: 'Konversi', to: '/warehouse/konversi' },
+          { label: 'Kartu Stok', to: '/warehouse/kartu-stok' },
         ],
       },
       {

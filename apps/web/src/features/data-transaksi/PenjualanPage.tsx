@@ -1,7 +1,7 @@
 import { ResourceListPage } from '@/shared/components/ResourceListPage'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 
 type Row = {
   id: number
@@ -12,7 +12,7 @@ type Row = {
   pasien?: { nama?: string }
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 const columns: Column<Row>[] = [
   { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FileUp, Trash2, FileText } from 'lucide-react'
 import { Dialog } from '@/shared/components/Dialog'
 import { Button } from '@/shared/ui/button'
+import { todayISO } from '@/shared/lib/formatters'
 
 type DocumentItem = {
   name: string
@@ -25,7 +26,7 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
     const newDoc: DocumentItem = {
       name: docName.trim(),
       url: docUrl.trim() || '#',
-      date: new Date().toISOString().slice(0, 10),
+      date: todayISO(),
     }
     setDocs((prev) => [...prev, newDoc])
     setDocName('')

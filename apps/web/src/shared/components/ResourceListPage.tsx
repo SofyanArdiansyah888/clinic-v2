@@ -11,6 +11,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { todayISO } from '@/shared/lib/formatters'
 
 export type FormField = {
   name: string
@@ -167,7 +168,7 @@ export function ResourceListPage<T extends { id: number | string }>({
     const initial: Record<string, string> = {}
     for (const field of createFields) {
       if (field.type === 'date' && !field.placeholder) {
-        initial[field.name] = new Date().toISOString().slice(0, 10)
+        initial[field.name] = todayISO()
       } else {
         initial[field.name] = field.options?.[0]?.value ?? ''
       }

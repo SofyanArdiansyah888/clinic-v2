@@ -7,7 +7,7 @@ import { Dialog } from '@/shared/components/Dialog'
 import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
 import { StaffSelect } from '@/shared/components/StaffSelect'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency } from '@/shared/lib/formatters'
+import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 
 export type PaymentLineItem = {
   nama: string
@@ -45,7 +45,7 @@ type PaymentModalProps = {
   onError: (message: string) => void
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function errorMessage(err: unknown, fallback: string) {
   const data = (err as { response?: { data?: { message?: string } } })?.response?.data
