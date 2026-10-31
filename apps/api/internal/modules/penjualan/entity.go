@@ -24,6 +24,13 @@ type Penjualan struct {
 	JenisPembayaran string               `gorm:"size:50" json:"jenis_pembayaran"`
 	BankID          *uint                `gorm:"index" json:"bank_id"`
 	JumlahBayar     float64              `gorm:"type:decimal(12,2);default:0" json:"jumlah_bayar"`
+	PromoID         *uint                `gorm:"index" json:"promo_id"`
+	VoucherID       *uint                `gorm:"index" json:"voucher_id"`
+	DiskonPromo     float64              `gorm:"type:decimal(12,2);default:0" json:"diskon_promo"`
+	DiskonVoucher   float64              `gorm:"type:decimal(12,2);default:0" json:"diskon_voucher"`
+	PoinDipakai     int                  `gorm:"default:0" json:"poin_dipakai"`
+	DepositDipakai  float64              `gorm:"type:decimal(12,2);default:0" json:"deposit_dipakai"`
+	Kembalian       float64              `gorm:"type:decimal(12,2);default:0" json:"kembalian"`
 	Status          string               `gorm:"size:50;default:draft" json:"status"`
 	Keterangan      string               `gorm:"type:text" json:"keterangan"`
 	IsActive        bool                 `gorm:"default:true" json:"is_active"`

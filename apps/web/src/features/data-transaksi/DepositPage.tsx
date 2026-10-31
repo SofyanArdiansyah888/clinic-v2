@@ -24,6 +24,7 @@ const JENIS_LABELS: Record<string, string> = {
   pembayaran_deposit_treatment: 'Deposit Treatment',
   pendaftaran_member: 'Pendaftaran Member',
   perpanjangan_member: 'Perpanjangan Member',
+  pemakaian_deposit: 'Pemakaian Deposit',
 }
 
 const JENIS_OPTIONS = [
@@ -32,6 +33,7 @@ const JENIS_OPTIONS = [
   { value: 'pembayaran_deposit_treatment', label: 'Deposit Treatment' },
   { value: 'pendaftaran_member', label: 'Pendaftaran Member' },
   { value: 'perpanjangan_member', label: 'Perpanjangan Member' },
+  { value: 'pemakaian_deposit', label: 'Pemakaian Deposit' },
 ]
 
 export function DepositPage() {

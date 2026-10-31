@@ -13,6 +13,8 @@ const STATUS_CLASS: Record<string, { label: string; className: string }> = {
   confirmed: { label: 'Menunggu Bayar', className: 'status-badge-bayar' },
   selesai: { label: 'Selesai', className: 'status-badge-selesai' },
   paid: { label: 'Lunas', className: 'status-badge-selesai' },
+  dibayar: { label: 'Siap Diserahkan', className: 'status-badge-dipanggil' },
+  diserahkan: { label: 'Diserahkan', className: 'status-badge-selesai' },
   completed: { label: 'Selesai', className: 'status-badge-selesai' },
   scheduled: { label: 'Terjadwal', className: 'status-badge-menunggu' },
   arrived: { label: 'Check-In', className: 'status-badge-selesai' },

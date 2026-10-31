@@ -28,7 +28,7 @@ import (
 )
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&generator.MonthlySequence{},
 		&user.User{},
 		&pasien.Pasien{},
@@ -64,5 +64,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&jadwaldokter.JadwalDokter{},
 		&informedconsent.Template{},
 		&pengaturan.Klinik{},
-	)
+	); err != nil {
+		return err
+	}
+	// AutoMigrate never relaxes NOT NULL. barang_id became optional when treatment
+	// lines were added to penjualan_details, so older databases need it altered.
+	return db.Migrator().AlterColumn(&penjualan.PenjualanDetail{}, "BarangID")
 }

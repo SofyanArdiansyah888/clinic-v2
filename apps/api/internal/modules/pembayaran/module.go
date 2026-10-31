@@ -1,7 +1,8 @@
 package pembayaran
 
 import (
-	"fmt"
+	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
-	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -34,16 +34,6 @@ type Handler struct{ svc *Service }
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
-type BayarRequest struct {
-	SourceType      string  `json:"source_type" binding:"required"`
-	SourceID        uint    `json:"source_id" binding:"required"`
-	StaffID         uint    `json:"staff_id" binding:"required"`
-	JenisPembayaran string  `json:"jenis_pembayaran" binding:"required"`
-	BankID          *uint   `json:"bank_id"`
-	JumlahBayar     float64 `json:"jumlah_bayar" binding:"required"`
-	Tanggal         string  `json:"tanggal"`
-}
-
 type DepositRequest struct {
 	PasienID        uint    `json:"pasien_id" binding:"required"`
 	StaffID         uint    `json:"staff_id" binding:"required"`
@@ -63,17 +53,17 @@ type BatalPaketRequest struct {
 }
 
 type PerawatanQueueItem struct {
-	ID         uint                   `json:"id"`
-	Kode       string                 `json:"kode"`
-	Tanggal    time.Time              `json:"tanggal"`
-	Status     string                 `json:"status"`
-	Biaya      float64                `json:"biaya"`
-	Diagnosa   string                 `json:"diagnosa"`
-	AntrianID  *uint                  `json:"antrian_id"`
-	Pasien     interface{}            `json:"pasien,omitempty"`
-	Staff      interface{}            `json:"staff,omitempty"`
+	ID         uint                          `json:"id"`
+	Kode       string                        `json:"kode"`
+	Tanggal    time.Time                     `json:"tanggal"`
+	Status     string                        `json:"status"`
+	Biaya      float64                       `json:"biaya"`
+	Diagnosa   string                        `json:"diagnosa"`
+	AntrianID  *uint                         `json:"antrian_id"`
+	Pasien     interface{}                   `json:"pasien,omitempty"`
+	Staff      interface{}                   `json:"staff,omitempty"`
 	Tindakans  []perawatan.PerawatanTindakan `json:"tindakans,omitempty"`
-	AntrianJam string                 `json:"antrian_jam,omitempty"`
+	AntrianJam string                        `json:"antrian_jam,omitempty"`
 }
 
 func parseDate(s string) (time.Time, error) {
@@ -177,203 +167,6 @@ func (s *Service) ListProdukOnline(p pagination.Params) ([]penjualan.Penjualan, 
 	var items []penjualan.Penjualan
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
-}
-
-func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
-	tanggal := req.Tanggal
-	if tanggal == "" {
-		tanggal = time.Now().Format("2006-01-02")
-	}
-
-	switch strings.ToLower(req.SourceType) {
-	case "penjualan":
-		return s.bayarPenjualan(req)
-	case "perawatan":
-		return s.bayarPerawatan(req, tanggal)
-	default:
-		return nil, fmt.Errorf("unsupported source_type: %s", req.SourceType)
-	}
-}
-
-func (s *Service) bayarPenjualan(req BayarRequest) (*penjualan.Penjualan, error) {
-	var item penjualan.Penjualan
-	if err := s.repo.db.First(&item, req.SourceID).Error; err != nil {
-		return nil, err
-	}
-	item.Status = "paid"
-	item.JenisPembayaran = req.JenisPembayaran
-	item.BankID = req.BankID
-	item.JumlahBayar = req.JumlahBayar
-	if err := s.repo.db.Save(&item).Error; err != nil {
-		return nil, err
-	}
-	var result penjualan.Penjualan
-	s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").
-		First(&result, item.ID)
-	return &result, nil
-}
-
-func (s *Service) bayarPerawatan(req BayarRequest, tanggal string) (*penjualan.Penjualan, error) {
-	var pw perawatan.Perawatan
-	if err := s.repo.db.Preload("Tindakans").First(&pw, req.SourceID).Error; err != nil {
-		return nil, err
-	}
-
-	var existing penjualan.Penjualan
-	if err := s.repo.db.Where("perawatan_id = ? AND status != ?", pw.ID, "cancelled").First(&existing).Error; err == nil {
-		existing.Status = "paid"
-		existing.JenisPembayaran = req.JenisPembayaran
-		existing.BankID = req.BankID
-		existing.JumlahBayar = req.JumlahBayar
-		existing.StaffID = req.StaffID
-		if err := s.repo.db.Save(&existing).Error; err != nil {
-			return nil, err
-		}
-		if err := s.finalizePerawatan(&pw); err != nil {
-			return nil, err
-		}
-		if err := s.createPaketRecords(&pw, req.StaffID, tanggal); err != nil {
-			return nil, err
-		}
-		var result penjualan.Penjualan
-		s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").
-			First(&result, existing.ID)
-		return &result, nil
-	}
-
-	details := buildPenjualanDetails(pw)
-	if len(details) == 0 {
-		return nil, fmt.Errorf("perawatan has no billable items")
-	}
-
-	penSvc := penjualan.NewService(penjualan.NewRepository(s.repo.db), s.gen)
-	pid := pw.ID
-	aid := pw.AntrianID
-	created, err := penSvc.Create(penjualan.UpsertRequest{
-		PasienID:        pw.PasienID,
-		StaffID:         req.StaffID,
-		PerawatanID:     &pid,
-		AntrianID:       aid,
-		Tanggal:         tanggal,
-		Status:          "paid",
-		Keterangan:      "Pembayaran perawatan " + pw.Kode,
-		JenisPembayaran: req.JenisPembayaran,
-		BankID:          req.BankID,
-		JumlahBayar:     req.JumlahBayar,
-		Details:         details,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := s.finalizePerawatan(&pw); err != nil {
-		return nil, err
-	}
-	if err := s.createPaketRecords(&pw, req.StaffID, tanggal); err != nil {
-		return nil, err
-	}
-	return created, nil
-}
-
-func buildPenjualanDetails(pw perawatan.Perawatan) []penjualan.DetailInput {
-	details := make([]penjualan.DetailInput, 0, len(pw.Tindakans))
-	for _, t := range pw.Tindakans {
-		qty := t.Jumlah
-		if qty <= 0 {
-			qty = 1
-		}
-		if t.TreatmentID > 0 {
-			harga := t.Total / float64(qty)
-			if harga == 0 {
-				harga = t.Harga
-			}
-			details = append(details, penjualan.DetailInput{
-				TreatmentID:    t.TreatmentID,
-				JenisPenjualan: "treatment",
-				Qty:            qty,
-				HargaJual:      harga,
-			})
-		} else if t.Total > 0 {
-			details = append(details, penjualan.DetailInput{
-				JenisPenjualan: "layanan",
-				Qty:            qty,
-				HargaJual:      t.Total,
-			})
-		}
-	}
-	if len(details) == 0 && pw.Biaya > 0 {
-		if pw.TreatmentID != nil && *pw.TreatmentID > 0 {
-			details = append(details, penjualan.DetailInput{
-				TreatmentID:    *pw.TreatmentID,
-				JenisPenjualan: "treatment",
-				Qty:            1,
-				HargaJual:      pw.Biaya,
-			})
-		} else {
-			details = append(details, penjualan.DetailInput{
-				JenisPenjualan: "layanan",
-				Qty:            1,
-				HargaJual:      pw.Biaya,
-			})
-		}
-	}
-	return details
-}
-
-func (s *Service) createPaketRecords(pw *perawatan.Perawatan, staffID uint, tanggal string) error {
-	tgl, err := parseDate(tanggal)
-	if err != nil {
-		return err
-	}
-	for _, t := range pw.Tindakans {
-		if t.TreatmentID == 0 {
-			continue
-		}
-		var tr treatment.Treatment
-		if err := s.repo.db.First(&tr, t.TreatmentID).Error; err != nil {
-			continue
-		}
-		if !strings.Contains(strings.ToLower(tr.Kategori), "paket") {
-			continue
-		}
-		sesi := tr.SesiPaket
-		if sesi <= 0 {
-			sesi = tr.Durasi
-		}
-		if sesi <= 0 {
-			sesi = 1
-		}
-		kode, err := s.gen.Generate("PKT")
-		if err != nil {
-			return err
-		}
-		harga := t.Total
-		if harga == 0 {
-			harga = tr.Harga
-		}
-		paket := PaketPerawatan{
-			Kode: kode, PasienID: pw.PasienID, TreatmentID: tr.ID, StaffID: staffID,
-			TanggalBeli: tgl, TotalSesi: sesi, SisaSesi: sesi, HargaTotal: harga,
-			Status: "aktif", IsActive: true,
-		}
-		if err := s.repo.db.Create(&paket).Error; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Service) finalizePerawatan(pw *perawatan.Perawatan) error {
-	return s.repo.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(pw).Update("status", "selesai").Error; err != nil {
-			return err
-		}
-		if pw.AntrianID != nil {
-			if err := tx.Table("antrians").Where("id = ?", *pw.AntrianID).Update("status", "selesai").Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
@@ -502,7 +295,6 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 	return &item, nil
 }
 
-
 func (h *Handler) PerawatanReguler(c *gin.Context) {
 	items, meta, err := h.svc.ListPerawatanReguler(pagination.FromContext(c))
 	if err != nil {
@@ -546,11 +338,56 @@ func (h *Handler) Bayar(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Bayar(req)
+	if errors.Is(err, ErrSudahDibayar) {
+		response.Fail(c, http.StatusConflict, err.Error(), nil)
+		return
+	}
 	if err != nil {
-		response.BadRequest(c, "payment failed", err.Error())
+		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 	response.OK(c, item, "payment completed")
+}
+
+func (h *Handler) Tagihan(c *gin.Context) {
+	var req TagihanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "validation failed", err.Error())
+		return
+	}
+	item, err := h.svc.HitungTagihan(req)
+	if errors.Is(err, ErrSudahDibayar) {
+		response.Fail(c, http.StatusConflict, err.Error(), nil)
+		return
+	}
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	response.OK(c, item, "ok")
+}
+
+func (h *Handler) SaldoPasien(c *gin.Context) {
+	pasienID, err := strconv.ParseUint(c.Query("pasien_id"), 10, 64)
+	if err != nil || pasienID == 0 {
+		response.BadRequest(c, "pasien_id wajib diisi", nil)
+		return
+	}
+	saldo, err := SaldoDeposit(h.svc.repo.db, uint(pasienID))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	mem, err := activeMembership(h.svc.repo.db, uint(pasienID))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	out := gin.H{"saldo_deposit": saldo, "membership_id": nil, "poin": 0, "nilai_poin": NilaiPoin}
+	if mem != nil {
+		out["membership_id"], out["poin"] = mem.ID, mem.Points
+	}
+	response.OK(c, out, "ok")
 }
 
 func (h *Handler) ListDeposit(c *gin.Context) {
@@ -611,7 +448,9 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.GET("/perawatan/paket", h.PerawatanPaket)
 		g.GET("/produk/langsung", h.ProdukLangsung)
 		g.GET("/produk/online", h.ProdukOnline)
+		g.POST("/tagihan", h.Tagihan)
 		g.POST("/bayar", h.Bayar)
+		g.GET("/deposit/saldo", h.SaldoPasien)
 		g.GET("/deposit", h.ListDeposit)
 		g.POST("/deposit", h.Deposit)
 		g.GET("/paket/sisa", h.PaketSisa)

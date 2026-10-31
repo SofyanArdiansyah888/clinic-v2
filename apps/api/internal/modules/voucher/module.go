@@ -1,6 +1,8 @@
 package voucher
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -107,17 +109,21 @@ func (s *Service) Delete(id uint) error {
 func (s *Service) Validate(kode string, total float64) (*Voucher, error) {
 	var item Voucher
 	if err := s.repo.db.Where("kode = ? AND is_active = true", kode).First(&item).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("kode voucher tidak ditemukan atau tidak aktif")
+		}
 		return nil, err
 	}
 	now := time.Now()
 	if item.TanggalMulai != nil && now.Before(*item.TanggalMulai) {
-		return nil, gorm.ErrInvalidData
+		return nil, errors.New("voucher belum berlaku")
 	}
-	if item.TanggalSelesai != nil && now.After(*item.TanggalSelesai) {
-		return nil, gorm.ErrInvalidData
+	// tanggal_selesai is a date; the voucher stays valid through the end of that day.
+	if item.TanggalSelesai != nil && !now.Before(item.TanggalSelesai.AddDate(0, 0, 1)) {
+		return nil, errors.New("voucher sudah kedaluwarsa")
 	}
 	if total < item.MinPembelian {
-		return nil, gorm.ErrInvalidData
+		return nil, fmt.Errorf("minimal pembelian untuk voucher ini Rp %.0f", item.MinPembelian)
 	}
 	return &item, nil
 }
