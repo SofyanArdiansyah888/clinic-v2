@@ -17,6 +17,7 @@ import {
 import { useMemo, useState, type ElementType } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useAuthStore } from '@/features/auth/store'
+import { canAccess, ROLE_LABEL } from '@/shared/lib/access'
 import { cn } from '@/shared/lib/cn'
 
 type NavItem = { label: string; to: string; badge?: string; badgeTone?: 'amber' | 'rose' }
@@ -154,6 +155,17 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     return initial
   })
 
+  // Only show menu entries the signed-in role may open; groups left empty are dropped.
+  const nav = useMemo(() => {
+    const role = user?.role
+    return NAV.map((section) => ({
+      ...section,
+      items: section.items
+        .map((item) => (item.children ? { ...item, children: item.children.filter((c) => canAccess(role, c.to)) } : item))
+        .filter((item) => (item.children ? item.children.length > 0 : canAccess(role, item.to ?? ''))),
+    })).filter((section) => section.items.length > 0)
+  }, [user?.role])
+
   const initials = useMemo(() => {
     const name = user?.name ?? 'HP'
     return name
@@ -222,7 +234,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       ) : null}
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-        {NAV.map((section) => (
+        {nav.map((section) => (
           <div key={section.title}>
             {!collapsed ? (
               <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
@@ -334,7 +346,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           {!collapsed ? (
             <div className="min-w-0 truncate">
               <p className="truncate text-xs font-bold text-white">{user?.name ?? 'Staff'}</p>
-              <p className="truncate text-[11px] font-medium text-rose-400">{user?.role ?? 'Online'}</p>
+              <p className="truncate text-[11px] font-medium text-rose-400">{(user?.role && ROLE_LABEL[user.role]) ?? user?.role ?? 'Online'}</p>
             </div>
           ) : null}
         </div>

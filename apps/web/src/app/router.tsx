@@ -8,6 +8,7 @@ import {
 import { AppLayout } from '@/app/layouts/AppLayout'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { useAuthStore } from '@/features/auth/store'
+import { canAccess } from '@/shared/lib/access'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { KunjunganPage } from '@/features/resepsionis/KunjunganPage'
 import { AppointmentPage } from '@/features/resepsionis/AppointmentPage'
@@ -78,9 +79,13 @@ const loginRoute = createRoute({
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
-  beforeLoad: () => {
+  beforeLoad: ({ location }) => {
     useAuthStore.getState().hydrate()
     requireAuth()
+    // Pages outside the role's access go back to the dashboard; the API enforces the same rules.
+    if (location.pathname !== '/' && !canAccess(useAuthStore.getState().user?.role, location.pathname)) {
+      throw redirect({ to: '/' })
+    }
   },
   component: AppLayout,
 })

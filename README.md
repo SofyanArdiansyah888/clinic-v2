@@ -37,6 +37,30 @@ Or from root after deps installed:
 pnpm dev
 ```
 
+## Tests
+
+```bash
+docker compose up -d postgres
+pnpm --filter @clinic/api test   # or: cd apps/api && go test ./...
+```
+
+Integration tests (`apps/api/internal/server`) run against a separate database,
+`clinic_test` by default (override with `TEST_DB_NAME`), which is wiped on every
+test. They are skipped when Postgres is not reachable.
+
+## Roles
+
+| Role | Akses |
+|---|---|
+| `admin` | Semua menu dan data |
+| `staff` (FO / kasir) | Resepsionis, perawatan, kasir & pembayaran, pasien, membership, laporan FO |
+| `doctor` | Perawatan, laporan DM |
+| `nurse` | Perawatan, laporan Nurse |
+| `apoteker` | Depo, warehouse, pembelian, supplier, laporan Apotek |
+
+The API enforces this in `apps/api/internal/platform/middleware/rbac.go`; the web
+menu mirrors it in `apps/web/src/shared/lib/access.ts`.
+
 - Web: http://localhost:5173  
 - API: http://localhost:8080/api/health  
 - Login: `admin` / `admin123`

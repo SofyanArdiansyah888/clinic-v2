@@ -87,7 +87,7 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 	}
 
 	protected := api.Group("")
-	protected.Use(middleware.Auth(jm))
+	protected.Use(middleware.Auth(jm), middleware.Authorize())
 	{
 		auth.RegisterProtectedRoutes(protected, db, jm)
 		generate.RegisterRoutes(protected, gen)
