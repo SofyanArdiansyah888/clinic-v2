@@ -32,6 +32,7 @@ type UpsertRequest struct {
 	Alamat   string `json:"alamat"`
 	NoTelp   string `json:"no_telp"`
 	Email    string `json:"email"`
+	Pic      string `json:"pic"`
 	IsActive *bool  `json:"is_active"`
 }
 
@@ -68,11 +69,12 @@ func (s *Service) Create(req UpsertRequest) (*Supplier, error) {
 		return nil, err
 	}
 	item := &Supplier{Kode: kode, IsActive: true}
-	
+
 	item.Nama = req.Nama
 	item.Alamat = req.Alamat
 	item.NoTelp = req.NoTelp
 	item.Email = req.Email
+	item.Pic = req.Pic
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}
@@ -87,11 +89,12 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Supplier, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	item.Nama = req.Nama
 	item.Alamat = req.Alamat
 	item.NoTelp = req.NoTelp
 	item.Email = req.Email
+	item.Pic = req.Pic
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}

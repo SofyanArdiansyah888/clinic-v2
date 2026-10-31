@@ -28,12 +28,14 @@ func NewService(repo *Repository, gen *generator.Service) *Service {
 }
 
 type UpsertRequest struct {
-	Nama      string  `json:"nama" binding:"required"`
-	Kategori  string  `json:"kategori"`
-	Harga     float64 `json:"harga"`
-	Durasi    int     `json:"durasi"`
-	Deskripsi string  `json:"deskripsi"`
-	IsActive  *bool   `json:"is_active"`
+	Nama          string  `json:"nama" binding:"required"`
+	Kategori      string  `json:"kategori"`
+	Harga         float64 `json:"harga"`
+	Durasi        int     `json:"durasi"`
+	KomisiDokter  float64 `json:"komisi_dokter"`
+	KomisiTerapis float64 `json:"komisi_terapis"`
+	Deskripsi     string  `json:"deskripsi"`
+	IsActive      *bool   `json:"is_active"`
 }
 
 type Handler struct {
@@ -69,11 +71,13 @@ func (s *Service) Create(req UpsertRequest) (*Treatment, error) {
 		return nil, err
 	}
 	item := &Treatment{Kode: kode, IsActive: true}
-	
+
 	item.Nama = req.Nama
 	item.Kategori = req.Kategori
 	item.Harga = req.Harga
 	item.Durasi = req.Durasi
+	item.KomisiDokter = req.KomisiDokter
+	item.KomisiTerapis = req.KomisiTerapis
 	item.Deskripsi = req.Deskripsi
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
@@ -89,11 +93,13 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Treatment, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	item.Nama = req.Nama
 	item.Kategori = req.Kategori
 	item.Harga = req.Harga
 	item.Durasi = req.Durasi
+	item.KomisiDokter = req.KomisiDokter
+	item.KomisiTerapis = req.KomisiTerapis
 	item.Deskripsi = req.Deskripsi
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive

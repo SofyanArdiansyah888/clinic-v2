@@ -14,10 +14,13 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/cabang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/dashboard"
 	"github.com/scaleup/clinic-v2/api/internal/modules/generate"
+	"github.com/scaleup/clinic-v2/api/internal/modules/informedconsent"
+	"github.com/scaleup/clinic-v2/api/internal/modules/jadwaldokter"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembelian"
+	"github.com/scaleup/clinic-v2/api/internal/modules/pengaturan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perusahaan"
@@ -111,6 +114,10 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 		membership.RegisterRoutes(protected, db, gen)
 		voucher.RegisterRoutes(protected, db, gen)
 		promo.RegisterRoutes(protected, db, gen)
+
+		jadwaldokter.RegisterRoutes(protected, db)
+		informedconsent.RegisterRoutes(protected, db)
+		pengaturan.RegisterRoutes(protected, db)
 	}
 
 	r.NoRoute(func(c *gin.Context) {

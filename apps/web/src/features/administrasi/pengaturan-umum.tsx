@@ -1,27 +1,74 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, Save } from 'lucide-react'
+import { apiGet, apiPut } from '@/shared/api/client'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 
+type KlinikForm = {
+  nama: string
+  telepon: string
+  email: string
+  alamat: string
+  garansi: string
+  catatan_invoice: string
+}
+
+const emptyForm: KlinikForm = {
+  nama: '',
+  telepon: '',
+  email: '',
+  alamat: '',
+  garansi: '',
+  catatan_invoice: '',
+}
+
 export function PengaturanUmumPage() {
-  // Form Setup Klinik State
-  const [klinikForm, setKlinikForm] = useState({
-    nama: 'Klinik Utama Sehat',
-    telepon: '021-5551234',
-    email: 'info@kliniksehat.com',
-    alamat: 'Jl. Sudirman No. 45, Jakarta Selatan',
-    garansi: '7 hari garansi kontrol ulang tanpa biaya tambahan.',
-    catatanInvoice: 'Terima kasih atas kunjungan Anda. Harap simpan bukti pembayaran ini.',
-  })
+  const queryClient = useQueryClient()
+  const [klinikForm, setKlinikForm] = useState<KlinikForm>(emptyForm)
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['pengaturan-klinik'],
+    queryFn: () => apiGet<KlinikForm>('/pengaturan/klinik'),
+  })
+
+  useEffect(() => {
+    if (!data?.data) return
+    const k = data.data
+    setKlinikForm({
+      nama: k.nama ?? '',
+      telepon: k.telepon ?? '',
+      email: k.email ?? '',
+      alamat: k.alamat ?? '',
+      garansi: k.garansi ?? '',
+      catatan_invoice: k.catatan_invoice ?? '',
+    })
+  }, [data])
+
+  const saveMutation = useMutation({
+    mutationFn: (body: KlinikForm) => apiPut<KlinikForm>('/pengaturan/klinik', body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['pengaturan-klinik'] })
+      setSaveError(null)
+      setSavedSuccess(true)
+      setTimeout(() => setSavedSuccess(false), 3000)
+    },
+    onError: (err: unknown) => {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Gagal menyimpan pengaturan'
+      setSaveError(message)
+    },
+  })
 
   function handleSaveKlinik(e: React.FormEvent) {
     e.preventDefault()
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 3000)
+    saveMutation.mutate(klinikForm)
   }
 
   return (
@@ -103,10 +150,14 @@ export function PengaturanUmumPage() {
                 id="catatanInvoice"
                 rows={2}
                 className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
-                value={klinikForm.catatanInvoice}
-                onChange={(e) => setKlinikForm({ ...klinikForm, catatanInvoice: e.target.value })}
+                value={klinikForm.catatan_invoice}
+                onChange={(e) => setKlinikForm({ ...klinikForm, catatan_invoice: e.target.value })}
               />
             </div>
+
+            {saveError ? (
+              <div className="rounded-md bg-rose-50 p-3 text-xs font-semibold text-rose-700">{saveError}</div>
+            ) : null}
 
             {savedSuccess ? (
               <div className="rounded-md bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
@@ -115,9 +166,9 @@ export function PengaturanUmumPage() {
             ) : null}
 
             <div className="pt-2">
-              <Button type="submit" className="gap-2">
+              <Button type="submit" className="gap-2" disabled={isLoading || saveMutation.isPending}>
                 <Save className="h-4 w-4" />
-                Simpan Pengaturan
+                {saveMutation.isPending ? 'Menyimpan...' : 'Simpan Pengaturan'}
               </Button>
             </div>
           </form>

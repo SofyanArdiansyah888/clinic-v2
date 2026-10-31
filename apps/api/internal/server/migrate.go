@@ -6,10 +6,13 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/bank"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/cabang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/informedconsent"
+	"github.com/scaleup/clinic-v2/api/internal/modules/jadwaldokter"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembelian"
+	"github.com/scaleup/clinic-v2/api/internal/modules/pengaturan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perusahaan"
@@ -58,5 +61,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&membership.Membership{},
 		&voucher.Voucher{},
 		&promo.Promo{},
+		&jadwaldokter.JadwalDokter{},
+		&informedconsent.Template{},
+		&pengaturan.Klinik{},
 	)
 }
