@@ -98,6 +98,7 @@ const NAV: NavSection[] = [
         label: 'Administrasi',
         icon: Settings2,
         children: [
+          { label: 'Pengaturan Umum', to: '/administrasi/pengaturan-umum' },
           { label: 'Pasien', to: '/administrasi/pasien' },
           { label: 'Staff', to: '/administrasi/staff' },
           { label: 'Treatment', to: '/administrasi/treatment' },
@@ -109,6 +110,7 @@ const NAV: NavSection[] = [
           { label: 'Membership', to: '/administrasi/membership' },
           { label: 'Voucher', to: '/administrasi/voucher' },
           { label: 'Promo', to: '/administrasi/promo' },
+          { label: 'Template Informed Consent', to: '/administrasi/template-informed-consent' },
         ],
       },
       {

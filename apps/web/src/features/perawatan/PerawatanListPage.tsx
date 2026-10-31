@@ -277,7 +277,7 @@ export function PerawatanListPage() {
     setRegulerDetails((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  function handleRegulerTreatmentSelect(idx: number, val: string, selected?: TreatmentLite) {
+  function handleRegulerTreatmentSelect(idx: number, _val: string, selected?: TreatmentLite) {
     if (!selected) return
     setRegulerDetails((prev) => {
       const updated = [...prev]
@@ -297,7 +297,7 @@ export function PerawatanListPage() {
     })
   }
 
-  function handleRegulerBeauticianSelect(idx: number, val: string, selected?: StaffLite) {
+  function handleRegulerBeauticianSelect(idx: number, _val: string, selected?: StaffLite) {
     setRegulerDetails((prev) => {
       const updated = [...prev]
       updated[idx] = {
@@ -395,7 +395,7 @@ export function PerawatanListPage() {
     setPaketDetails((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  function handlePaketTreatmentSelect(idx: number, val: string, selected?: TreatmentLite) {
+  function handlePaketTreatmentSelect(idx: number, _val: string, selected?: TreatmentLite) {
     if (!selected) return
     setPaketDetails((prev) => {
       const updated = [...prev]
@@ -415,7 +415,7 @@ export function PerawatanListPage() {
     })
   }
 
-  function handlePaketBeauticianSelect(idx: number, val: string, selected?: StaffLite) {
+  function handlePaketBeauticianSelect(idx: number, _val: string, selected?: StaffLite) {
     setPaketDetails((prev) => {
       const updated = [...prev]
       updated[idx] = {

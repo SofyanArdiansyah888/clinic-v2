@@ -27,6 +27,7 @@ import { ProduksiPage } from '@/features/warehouse/ProduksiPage'
 import { KonversiPage } from '@/features/warehouse/KonversiPage'
 import { PenjualanPage } from '@/features/data-transaksi/PenjualanPage'
 import { PembelianPage } from '@/features/data-transaksi/PembelianPage'
+import { PengaturanUmumPage } from '@/features/administrasi/pengaturan-umum'
 import { PasienPage } from '@/features/administrasi/pasien'
 import { StaffPage } from '@/features/administrasi/staff'
 import { TreatmentPage } from '@/features/administrasi/treatment'
@@ -38,10 +39,12 @@ import { PerusahaanPage } from '@/features/administrasi/perusahaan'
 import { MembershipPage } from '@/features/administrasi/membership'
 import { VoucherPage } from '@/features/administrasi/voucher'
 import { PromoPage } from '@/features/administrasi/promo'
+import { TemplateInformedConsentPage } from '@/features/administrasi/template-informed-consent'
 import { FoPage } from '@/features/laporan/FoPage'
 import { ApotekPage } from '@/features/laporan/ApotekPage'
 import { NursePage } from '@/features/laporan/NursePage'
 import { DmPage } from '@/features/laporan/DmPage'
+
 
 function requireAuth() {
   const token = localStorage.getItem('clinic_access_token')
@@ -195,11 +198,18 @@ const depositRiwayatRoute = createRoute({
   component: DepositPage,
 })
 
+const pengaturanUmumRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/administrasi/pengaturan-umum',
+  component: PengaturanUmumPage,
+})
+
 const pasienRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/administrasi/pasien',
   component: PasienPage,
 })
+
 
 const staffRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -261,6 +271,12 @@ const promoRoute = createRoute({
   component: PromoPage,
 })
 
+const templateInformedConsentRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/administrasi/template-informed-consent',
+  component: TemplateInformedConsentPage,
+})
+
 const laporanFoRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/laporan/fo',
@@ -307,6 +323,7 @@ const routeTree = rootRoute.addChildren([
     penjualanRoute,
     pembelianRoute,
     depositRiwayatRoute,
+    pengaturanUmumRoute,
     pasienRoute,
     staffRoute,
     treatmentRoute,
@@ -318,6 +335,7 @@ const routeTree = rootRoute.addChildren([
     membershipRoute,
     voucherRoute,
     promoRoute,
+    templateInformedConsentRoute,
     laporanFoRoute,
     laporanApotekRoute,
     laporanNurseRoute,

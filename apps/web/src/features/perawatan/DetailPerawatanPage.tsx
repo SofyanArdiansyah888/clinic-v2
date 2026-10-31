@@ -301,7 +301,7 @@ export function DetailPerawatanPage() {
     setTindakans((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function handleTreatmentSelect(index: number, val: string, selected?: TreatmentLite) {
+  function handleTreatmentSelect(index: number, _val: string, selected?: TreatmentLite) {
     if (!selected) return
     setTindakans((prev) => {
       const updated = [...prev]
@@ -321,7 +321,7 @@ export function DetailPerawatanPage() {
     })
   }
 
-  function handleBeauticianSelect(index: number, val: string, selected?: StaffLite) {
+  function handleBeauticianSelect(index: number, _val: string, selected?: StaffLite) {
     setTindakans((prev) => {
       const updated = [...prev]
       updated[index] = {

@@ -43,7 +43,7 @@ export function ResepModal({ isOpen, onClose, onSave }: ResepModalProps) {
     setBarangs((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function handleBarangSelect(index: number, val: string, selected?: BarangLite) {
+  function handleBarangSelect(index: number, _val: string, selected?: BarangLite) {
     if (!selected) return
     setBarangs((prev) => {
       const updated = [...prev]
