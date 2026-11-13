@@ -1,5 +1,5 @@
 import { KpiCard } from '@/shared/components/KpiCard'
-import { formatCurrency } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { KpiGrid, ReportShell } from '@/features/laporan/ReportShell'
 import { Rp, StatementCard, StatementSection } from '@/features/finance/components/Statement'
 import { saldoCsv, type AkunSaldo } from '@/features/finance/types'
@@ -23,17 +23,17 @@ export function LabaRugiPage() {
     >
       {(d) => (
         <>
-          <KpiGrid>
-            <KpiCard label="Pendapatan Bersih" value={formatCurrency(d.total_pendapatan)} valueClass="text-teal-700" />
+          <KpiGrid cols={3}>
+            <KpiCard label="Pendapatan Bersih" value={formatCurrency(d.total_pendapatan)} valueClass="text-emerald-700" />
             <KpiCard label="Total Beban" value={formatCurrency(d.total_beban)} />
             <KpiCard
               label={d.laba_bersih >= 0 ? 'Laba Bersih' : 'Rugi Bersih'}
               value={formatCurrency(Math.abs(d.laba_bersih))}
-              valueClass={d.laba_bersih >= 0 ? 'text-teal-700' : 'text-rose-600'}
+              valueClass={d.laba_bersih >= 0 ? 'text-emerald-700' : 'text-rose-600'}
             />
           </KpiGrid>
           <StatementCard
-            title={`Laporan Laba Rugi ${d.dari} s/d ${d.sampai}`}
+            title={`Laporan Laba Rugi ${formatDate(d.dari)} – ${formatDate(d.sampai)}`}
             csv={{
               filename: `laba_rugi_${d.dari}_${d.sampai}`,
               headers: ['Bagian', 'Kode', 'Akun', 'Saldo'],

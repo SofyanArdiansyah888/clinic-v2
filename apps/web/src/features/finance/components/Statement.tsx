@@ -36,7 +36,7 @@ export function StatementSection({ title, rows, extra, total, totalLabel }: Sect
         {rows.map((r) => (
           <li key={r.akun.id} className="flex items-center justify-between gap-3 px-4 py-2">
             <span>
-              <span className="font-mono text-[11px] text-teal-700">{r.akun.kode}</span> {r.akun.nama}
+              <span className="font-mono text-[11px] text-rose-700">{r.akun.kode}</span> {r.akun.nama}
             </span>
             <Rp value={r.saldo} />
           </li>

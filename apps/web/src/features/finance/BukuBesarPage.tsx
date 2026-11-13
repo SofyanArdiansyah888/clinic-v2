@@ -28,7 +28,7 @@ type BukuBesar = {
 
 const columns: ReportColumn<Row>[] = [
   { key: 'tanggal', header: 'Tanggal', cell: (r) => formatDate(r.tanggal), csv: (r) => r.tanggal.slice(0, 10) },
-  { key: 'kode', header: 'Jurnal', cell: (r) => <span className="font-mono text-xs text-teal-700">{r.kode}</span>, csv: (r) => r.kode },
+  { key: 'kode', header: 'Jurnal', cell: (r) => <span className="font-mono text-xs text-rose-700">{r.kode}</span>, csv: (r) => r.kode },
   { key: 'sumber', header: 'Sumber', cell: (r) => SOURCE_LABEL[r.source_type] ?? r.source_type, csv: (r) => r.source_type },
   {
     key: 'ket',
@@ -36,7 +36,7 @@ const columns: ReportColumn<Row>[] = [
     cell: (r) => (
       <div>
         <p>{r.keterangan}</p>
-        {r.referensi ? <p className="font-mono text-[10px] text-slate-500">{r.referensi}</p> : null}
+        {r.referensi ? <p className="font-mono text-[11px] text-slate-500">{r.referensi}</p> : null}
       </div>
     ),
     csv: (r) => r.keterangan,
@@ -56,10 +56,11 @@ export function BukuBesarPage() {
       endpoint="/finance/laporan/buku-besar"
       params={{ akun_id: akunId }}
       enabled={!!akunId}
+      idleMessage="Pilih akun di atas untuk melihat mutasi dan saldo berjalannya."
       filters={
         <div className="w-full space-y-1.5 sm:w-80">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Akun</span>
-          <AkunSelect value={akunId} onChange={setAkunId} />
+          <label htmlFor="bb-akun" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Akun</label>
+          <AkunSelect id="bb-akun" value={akunId} onChange={setAkunId} />
         </div>
       }
     >
@@ -69,11 +70,11 @@ export function BukuBesarPage() {
             <KpiCard label="Saldo Awal" value={formatCurrency(d.saldo_awal)} />
             <KpiCard label="Total Debit" value={formatCurrency(d.total_debit)} />
             <KpiCard label="Total Kredit" value={formatCurrency(d.total_kredit)} />
-            <KpiCard label="Saldo Akhir" value={formatCurrency(d.saldo_akhir)} valueClass="text-teal-700" />
+            <KpiCard label="Saldo Akhir" value={formatCurrency(d.saldo_akhir)} valueClass="text-emerald-700" />
           </KpiGrid>
           <ReportTable
             title={`${d.akun.kode} · ${d.akun.nama}`}
-            description={`Saldo normal ${d.akun.saldo_normal}`}
+            description={`Saldo normal ${d.akun.saldo_normal} · ${formatDate(periode.dari)} – ${formatDate(periode.sampai)}`}
             columns={columns}
             rows={d.rows}
             rowKey={(r) => `${r.jurnal_id}-${r.debit}-${r.kredit}`}

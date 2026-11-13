@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save } from 'lucide-react'
+import { toast } from '@/shared/components/Toaster'
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPut } from '@/shared/api/client'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -18,15 +19,17 @@ export function PengaturanAkunPage() {
 
   // Draft values keyed by mapping key; '' means unset.
   const [draft, setDraft] = useState<Record<string, string>>({})
-  const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
 
-  useEffect(() => {
-    if (!mapping) return
+  const saved = useMemo(() => {
     const next: Record<string, string> = {}
-    for (const it of mapping.items) next[it.key] = it.akun_id ? String(it.akun_id) : ''
-    for (const b of mapping.banks) next[b.key] = b.akun_id ? String(b.akun_id) : ''
-    setDraft(next)
+    for (const it of mapping?.items ?? []) next[it.key] = it.akun_id ? String(it.akun_id) : ''
+    for (const b of mapping?.banks ?? []) next[b.key] = b.akun_id ? String(b.akun_id) : ''
+    return next
   }, [mapping])
+
+  useEffect(() => setDraft(saved), [saved])
+
+  const changed = Object.keys(saved).filter((k) => (draft[k] ?? '') !== saved[k]).length
 
   const groups = useMemo(() => {
     const out = new Map<string, MappingResponse['items']>()
@@ -43,37 +46,23 @@ export function PengaturanAkunPage() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['finance', 'mapping'] })
-      setNotice({ tone: 'ok', text: 'Pengaturan akun tersimpan.' })
+      toast('Pengaturan akun tersimpan')
     },
-    onError: (err) => setNotice({ tone: 'err', text: apiErrorMessage(err, 'Gagal menyimpan pengaturan akun') }),
+    onError: (err) => toast(apiErrorMessage(err, 'Gagal menyimpan pengaturan akun'), 'error'),
   })
 
-  const set = (key: string) => (v: string) => {
-    setNotice(null)
-    setDraft((d) => ({ ...d, [key]: v }))
-  }
+  const set = (key: string) => (v: string) => setDraft((d) => ({ ...d, [key]: v }))
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20">
       <PageHeader
         title="Pengaturan Akun Transaksi"
         description="Tentukan akun yang dipakai jurnal otomatis untuk setiap jenis transaksi kasir, deposit, pembelian, dan stok."
-        actions={
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || isLoading || missing > 0} className="gap-1.5">
-            <Save className="h-4 w-4" />
-            Simpan Pengaturan
-          </Button>
-        }
       />
 
       {missing > 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           {missing} jenis transaksi belum punya akun. Transaksi jenis itu akan ditolak sampai akunnya diatur.
-        </div>
-      ) : null}
-      {notice ? (
-        <div className={notice.tone === 'ok' ? 'rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-800' : 'rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700'}>
-          {notice.text}
         </div>
       ) : null}
       {isLoading ? <p className="text-sm text-slate-500">Memuat pengaturan...</p> : null}
@@ -91,7 +80,11 @@ export function PengaturanAkunPage() {
                     <p className="text-xs font-bold text-slate-800">{it.label}</p>
                     <p className="text-[11px] text-slate-500">{it.keterangan}</p>
                   </div>
-                  <AkunSelect value={draft[it.key] ?? ''} onChange={set(it.key)} />
+                  <AkunSelect
+                    value={draft[it.key] ?? ''}
+                    onChange={set(it.key)}
+                    className={draft[it.key] ? undefined : 'rounded-xl ring-2 ring-amber-300'}
+                  />
                 </div>
               ))}
             </div>
@@ -126,6 +119,29 @@ export function PengaturanAkunPage() {
             </div>
           </Card>
         ) : null}
+      </div>
+
+      {/* Save bar stays in reach on a long page and shows whether anything is pending. */}
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
+        <p className="text-xs text-slate-600">
+          {changed > 0 ? (
+            <span className="font-semibold text-amber-700">{changed} perubahan belum disimpan</span>
+          ) : (
+            'Semua perubahan sudah tersimpan'
+          )}
+          {missing > 0 ? <span className="text-slate-500"> · {missing} jenis transaksi belum diatur</span> : null}
+        </p>
+        <div className="flex gap-2">
+          {changed > 0 ? (
+            <Button variant="outline" onClick={() => setDraft(saved)} disabled={saveMutation.isPending}>
+              Batalkan
+            </Button>
+          ) : null}
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || isLoading || changed === 0} className="gap-1.5">
+            <Save className="h-4 w-4" />
+            Simpan Pengaturan
+          </Button>
+        </div>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { formatCurrency } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { ReportShell, ReportTable, type ReportColumn } from '@/features/laporan/ReportShell'
 import { TIPE_LABEL, type Akun } from '@/features/finance/types'
 
@@ -9,7 +9,7 @@ const columns: ReportColumn<Row>[] = [
   {
     key: 'kode',
     header: 'Kode',
-    cell: (r) => <span className="font-mono text-xs text-teal-700">{r.akun.kode}</span>,
+    cell: (r) => <span className="font-mono text-xs text-rose-700">{r.akun.kode}</span>,
     csv: (r) => r.akun.kode,
   },
   { key: 'nama', header: 'Akun', cell: (r) => r.akun.nama, csv: (r) => r.akun.nama },
@@ -33,17 +33,17 @@ export function NeracaSaldoPage() {
             <div
               className={
                 seimbang
-                  ? 'flex flex-wrap justify-between gap-2 rounded-xl bg-teal-50 p-3 text-xs font-semibold text-teal-800'
+                  ? 'flex flex-wrap justify-between gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800'
                   : 'flex flex-wrap justify-between gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700'
               }
             >
               <span>
                 Total Debit {formatCurrency(d.total_debit)} · Total Kredit {formatCurrency(d.total_kredit)}
               </span>
-              <span>{seimbang ? 'Seimbang' : 'Tidak seimbang'}</span>
+              <span>{seimbang ? '✓ Seimbang' : `Tidak seimbang · selisih ${formatCurrency(Math.abs(d.total_debit - d.total_kredit))}`}</span>
             </div>
             <ReportTable
-              title={`Neraca Saldo per ${d.sampai}`}
+              title={`Neraca Saldo per ${formatDate(d.sampai)}`}
               columns={columns}
               rows={d.rows}
               rowKey={(r) => r.akun.id}

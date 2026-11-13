@@ -175,6 +175,12 @@ func TestJurnalManualDanPengaturanAkun(t *testing.T) {
 	if r := e.call("admin", "DELETE", fmt.Sprintf("/finance/akun/%d", kas.ID), nil); r.Code != http.StatusBadRequest {
 		t.Fatalf("delete system akun: %d, want 400", r.Code)
 	}
+	// Kas is mapped to cash payments: deactivating it would break the cashier.
+	if r := e.call("admin", "PUT", fmt.Sprintf("/finance/akun/%d", kas.ID), map[string]any{
+		"kode": kas.Kode, "nama": kas.Nama, "tipe": kas.Tipe, "is_active": false,
+	}); r.Code != http.StatusBadRequest {
+		t.Fatalf("deactivate mapped akun: %d %s, want 400", r.Code, r.Message)
+	}
 
 	jurnal := func(debit, kredit float64, akunD uint) resp {
 		return e.call("finance", "POST", "/finance/jurnal", map[string]any{

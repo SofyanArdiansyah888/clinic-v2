@@ -138,6 +138,15 @@ func (s *Service) UpdateAkun(id uint, req AkunRequest) (*Akun, error) {
 			return nil, errors.New("akun dipakai di Pengaturan Akun, tidak bisa dijadikan header")
 		}
 	}
+	// Posting rejects inactive accounts, so deactivating a mapped one would make every
+	// transaction of that kind fail at the cashier.
+	if req.IsActive != nil && !*req.IsActive && a.IsActive {
+		var n int64
+		s.db.Model(&AkunMapping{}).Where("akun_id = ?", id).Count(&n)
+		if n > 0 {
+			return nil, errors.New("akun dipakai di Pengaturan Akun; ganti akunnya di sana dulu sebelum menonaktifkan")
+		}
+	}
 	if err := s.applyAkun(a, req); err != nil {
 		return nil, err
 	}
@@ -275,6 +284,9 @@ func (s *Service) UpdateMapping(req MappingRequest) (*MappingResponse, error) {
 			}
 			if a.IsHeader {
 				return fmt.Errorf("akun %s %s adalah akun header", a.Kode, a.Nama)
+			}
+			if !a.IsActive {
+				return fmt.Errorf("akun %s %s tidak aktif", a.Kode, a.Nama)
 			}
 			m := AkunMapping{Key: it.Key, AkunID: a.ID}
 			if err := tx.Clauses(clause.OnConflict{

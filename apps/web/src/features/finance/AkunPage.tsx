@@ -2,11 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FolderTree, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/client'
+import { useConfirm } from '@/shared/components/ConfirmDialog'
 import { Dialog } from '@/shared/components/Dialog'
+import { toast } from '@/shared/components/Toaster'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/lib/cn'
 import { apiErrorMessage, TIPE_LABEL, type Akun, type TipeAkun } from '@/features/finance/types'
 
@@ -34,7 +37,7 @@ const emptyForm: FormState = {
   keterangan: '',
 }
 
-const fieldLabel = 'text-[11px] font-bold uppercase tracking-wider text-slate-500'
+const fieldLabel = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500'
 const selectClass =
   'h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-rose-600 focus:outline-none'
 
@@ -63,6 +66,7 @@ export function AkunPage() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   const { data, isLoading } = useQuery({
     queryKey: ['finance', 'akun', 'all'],
@@ -97,14 +101,18 @@ export function AkunPage() {
     onSuccess: () => {
       void invalidate()
       setOpen(false)
+      toast(editing ? 'Akun diperbarui' : 'Akun ditambahkan')
     },
     onError: (err) => setError(apiErrorMessage(err, 'Gagal menyimpan akun')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiDelete(`/finance/akun/${id}`),
-    onSuccess: () => void invalidate(),
-    onError: (err) => window.alert(apiErrorMessage(err, 'Gagal menghapus akun')),
+    onSuccess: () => {
+      void invalidate()
+      toast('Akun dihapus')
+    },
+    onError: (err) => toast(apiErrorMessage(err, 'Gagal menghapus akun'), 'error'),
   })
 
   function openCreate() {
@@ -138,6 +146,7 @@ export function AkunPage() {
 
   return (
     <div className="space-y-5">
+      {confirmDialog}
       <PageHeader
         title="Daftar Akun (COA)"
         description="Bagan akun untuk pencatatan jurnal. Akun header hanya mengelompokkan dan tidak bisa diposting."
@@ -151,10 +160,22 @@ export function AkunPage() {
 
       <div className="relative max-w-sm">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari kode atau nama akun..." className="pl-9" />
+        <Input
+          type="search"
+          aria-label="Cari akun"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cari kode atau nama akun..."
+          className="pl-9"
+        />
       </div>
 
-      {isLoading ? <p className="text-sm text-slate-500">Memuat akun...</p> : null}
+      {isLoading ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {groups.map(({ tipe, rows }) => (
@@ -174,10 +195,10 @@ export function AkunPage() {
                       <span className="shrink-0 font-mono text-[11px] text-rose-700">{akun.kode}</span>
                       <span className={cn('truncate', akun.is_header ? 'font-bold text-slate-900' : 'text-slate-700')}>{akun.nama}</span>
                       {akun.saldo_normal !== (tipe === 'aset' || tipe === 'beban' ? 'debit' : 'kredit') ? (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">kontra</span>
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">kontra</span>
                       ) : null}
                       {!akun.is_active ? (
-                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">nonaktif</span>
+                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-bold text-slate-600">nonaktif</span>
                       ) : null}
                     </div>
                     {akun.is_system ? (
@@ -185,16 +206,29 @@ export function AkunPage() {
                         <Lock className="h-3 w-3 text-slate-300" />
                       </span>
                     ) : null}
-                    <button type="button" onClick={() => openEdit(akun)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-700" title="Edit">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(akun)}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-700"
+                      title="Edit"
+                      aria-label={`Edit akun ${akun.kode} ${akun.nama}`}
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     {!akun.is_system ? (
                       <button
                         type="button"
                         title="Hapus"
+                        aria-label={`Hapus akun ${akun.kode} ${akun.nama}`}
                         className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                        onClick={() => {
-                          if (window.confirm(`Hapus akun ${akun.kode} ${akun.nama}?`)) deleteMutation.mutate(akun.id)
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Hapus akun ${akun.kode}?`,
+                            description: `${akun.nama} akan dihapus dari bagan akun. Akun yang sudah dipakai di jurnal tidak bisa dihapus; nonaktifkan saja.`,
+                            confirmLabel: 'Ya, hapus',
+                            destructive: true,
+                          })
+                          if (ok) deleteMutation.mutate(akun.id)
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -282,6 +316,11 @@ export function AkunPage() {
               Aktif
             </label>
           </div>
+          {editing?.is_system ? (
+            <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+              Akun bawaan sistem: tidak bisa dihapus. Akun yang dipakai di Pengaturan Akun tidak bisa dinonaktifkan sebelum diganti di sana.
+            </p>
+          ) : null}
           {error ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
