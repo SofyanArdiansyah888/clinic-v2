@@ -1,3 +1,6 @@
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiGet } from '@/shared/api/client'
 import { ResourceListPage, type FormField } from '@/shared/components/ResourceListPage'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
@@ -20,8 +23,7 @@ const columns: Column<Membership>[] = [
   { key: 'status', header: 'Status Active', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
-const formFields: FormField[] = [
-  { name: 'pasien_id', label: 'ID Pasien', type: 'number', required: true, placeholder: '1' },
+const otherFields: FormField[] = [
   {
     name: 'tipe',
     label: 'Tier / Level Member',
@@ -36,7 +38,31 @@ const formFields: FormField[] = [
   { name: 'points', label: 'Saldo Poin Reward', type: 'number', placeholder: '0' },
 ]
 
+type PasienLite = { id: number; nama?: string; kode?: string }
+
 export function MembershipPage() {
+  // Same query as PasienSelect, so the list is shared from cache.
+  const { data } = useQuery({
+    queryKey: ['pasien', 'select'],
+    queryFn: () => apiGet<PasienLite[]>('/pasien', { per_page: 200, page: 1 }),
+  })
+  const formFields = useMemo<FormField[]>(
+    () => [
+      {
+        name: 'pasien_id',
+        label: 'Pasien',
+        type: 'select',
+        required: true,
+        options: [
+          { label: 'Pilih pasien...', value: '' },
+          ...(data?.data ?? []).map((p) => ({ label: [p.kode, p.nama].filter(Boolean).join(' · ') || `Pasien #${p.id}`, value: String(p.id) })),
+        ],
+      },
+      ...otherFields,
+    ],
+    [data?.data],
+  )
+
   return (
     <ResourceListPage<Membership>
       title="Membership & Keanggotaan Pasien"

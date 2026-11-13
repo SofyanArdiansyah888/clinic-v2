@@ -44,7 +44,7 @@ export function PenjualanPage() {
           type: 'select',
           options: [
             { label: 'Draft', value: 'draft' },
-            { label: 'Paid', value: 'paid' },
+            { label: 'Confirmed (ke kasir)', value: 'confirmed' },
           ],
         },
         { name: 'keterangan', label: 'Keterangan' },

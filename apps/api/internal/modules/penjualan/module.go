@@ -288,6 +288,10 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if !validStatus[req.Status] {
 		return nil, fmt.Errorf("status penjualan %q tidak dikenal", req.Status)
 	}
+	// Paid only comes from the cashier (/pembayaran/bayar), which posts the journal.
+	if req.Status == "paid" && item.Status != "paid" {
+		return nil, errors.New("status paid hanya bisa lewat pembayaran kasir")
+	}
 	if item.Status == "cancelled" && req.Status != "cancelled" {
 		return nil, errors.New("penjualan yang sudah dibatalkan tidak bisa diaktifkan lagi")
 	}
@@ -387,6 +391,11 @@ func (h *Handler) Store(c *gin.Context) {
 	var req UpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "validation failed", err.Error())
+		return
+	}
+	// A new sale waits at the cashier; paid sales are created by /pembayaran/bayar.
+	if req.Status != "" && req.Status != "draft" && req.Status != "confirmed" {
+		response.BadRequest(c, "status penjualan baru harus draft atau confirmed", nil)
 		return
 	}
 	item, err := h.svc.Create(req)

@@ -372,3 +372,48 @@ func TestPenjualanBatalTidakMengembalikanStokDuaKali(t *testing.T) {
 		t.Errorf("stok after deleting a cancelled penjualan = %d, want 5 (not returned twice)", got)
 	}
 }
+
+func TestPenjualanPaidHanyaLewatKasir(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	body := map[string]any{
+		"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "status": "paid",
+		"details": []map[string]any{{"barang_id": f.barang, "qty": 1}},
+	}
+	if r := e.call("apoteker", "POST", "/penjualan", body); r.Code != http.StatusBadRequest {
+		t.Errorf("create penjualan as paid = %d, want 400", r.Code)
+	}
+	pj := e.penjualanLangsung(f, 1)
+	if r := e.call("admin", "PATCH", fmt.Sprintf("/penjualan/%d/status", pj), map[string]any{"status": "paid"}); r.Code != http.StatusBadRequest {
+		t.Errorf("PATCH status paid without payment = %d, want 400", r.Code)
+	}
+	if got := e.saldo("1-1101"); got != 0 {
+		t.Errorf("kas = %v, want 0 (nothing paid)", got)
+	}
+}
+
+func TestAntreanKasirMenampilkanTotalTagihan(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	pw := e.perawatan(f)
+	var rows []struct {
+		ID        uint    `json:"id"`
+		Total     float64 `json:"total"`
+		Tindakans []struct {
+			Treatment *struct {
+				Nama string `json:"nama"`
+			} `json:"treatment"`
+		} `json:"tindakans"`
+	}
+	e.must("GET", "/pembayaran/perawatan/reguler", nil, &rows)
+	if len(rows) != 1 || rows[0].ID != pw {
+		t.Fatalf("queue = %+v", rows)
+	}
+	// Facial 350.000 + resep 2 x 10.000.
+	if rows[0].Total != 370000 {
+		t.Errorf("queue total = %v, want 370000", rows[0].Total)
+	}
+	if len(rows[0].Tindakans) != 1 || rows[0].Tindakans[0].Treatment == nil || rows[0].Tindakans[0].Treatment.Nama != "Facial Uji" {
+		t.Errorf("queue tindakan lacks treatment name: %+v", rows[0].Tindakans)
+	}
+}

@@ -23,6 +23,7 @@ import { PaymentModal, type PaymentTarget } from '@/features/pembayaran/componen
 
 type TindakanRow = {
   treatment_id?: number
+  treatment?: { nama?: string }
   jumlah?: number
   total?: number
   catatan?: string
@@ -39,11 +40,14 @@ type QueueRow = {
   pasien?: { id: number; nama?: string; kode?: string }
   staff?: { id: number; nama?: string }
   tindakans?: TindakanRow[]
+  /** Bill before discounts (tindakan + resep), computed by the API. */
+  total?: number
 }
 
 const today = todayISO()
 
 function rowTotal(row: QueueRow): number {
+  if (row.total && row.total > 0) return row.total
   if (row.biaya && row.biaya > 0) return row.biaya
   return (row.tindakans ?? []).reduce((sum, t) => sum + (t.total ?? 0), 0)
 }
@@ -52,7 +56,7 @@ function tindakanSummary(row: QueueRow): string {
   const items = row.tindakans ?? []
   if (items.length === 0) return row.diagnosa || 'Perawatan'
   return items
-    .map((t) => `Treatment #${t.treatment_id ?? '-'} (${t.jumlah ?? 1}x)`)
+    .map((t) => `${t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`} (${t.jumlah ?? 1}x)`)
     .join(', ')
 }
 
@@ -60,7 +64,7 @@ function buildLineItems(row: QueueRow) {
   const items = row.tindakans ?? []
   if (items.length > 0) {
     return items.map((t) => ({
-      nama: `Treatment #${t.treatment_id ?? '-'}`,
+      nama: t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`,
       qty: t.jumlah ?? 1,
       subtotal: t.total ?? 0,
     }))

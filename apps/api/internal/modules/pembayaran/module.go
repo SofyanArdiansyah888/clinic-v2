@@ -70,6 +70,8 @@ type PerawatanQueueItem struct {
 	Staff      interface{}                   `json:"staff,omitempty"`
 	Tindakans  []perawatan.PerawatanTindakan `json:"tindakans,omitempty"`
 	AntrianJam string                        `json:"antrian_jam,omitempty"`
+	// Total is what the cashier will bill: tindakan plus resep, same as /pembayaran/tagihan before discounts.
+	Total float64 `json:"total"`
 }
 
 func parseDate(s string) (time.Time, error) {
@@ -89,7 +91,7 @@ func (s *Service) ListPerawatanReguler(p pagination.Params) ([]PerawatanQueueIte
 				WHERE t.kategori ILIKE '%paket%'
 			)
 		)`).
-		Preload("Pasien").Preload("Staff").Preload("Tindakans")
+		Preload("Pasien").Preload("Staff").Preload("Tindakans.Treatment").Preload("Reseps.Barangs.Barang")
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR diagnosa ILIKE ?", like, like)
@@ -101,11 +103,7 @@ func (s *Service) ListPerawatanReguler(p pagination.Params) ([]PerawatanQueueIte
 	}
 	items := make([]PerawatanQueueItem, 0, len(raw))
 	for _, r := range raw {
-		item := PerawatanQueueItem{
-			ID: r.ID, Kode: r.Kode, Tanggal: r.Tanggal, Status: r.Status,
-			Biaya: r.Biaya, Diagnosa: r.Diagnosa, AntrianID: r.AntrianID,
-			Pasien: r.Pasien, Staff: r.Staff, Tindakans: r.Tindakans,
-		}
+		item := toQueueItem(r)
 		if r.AntrianID != nil {
 			var ant struct{ Jam string }
 			s.repo.db.Table("antrians").Select("jam").Where("id = ?", *r.AntrianID).Scan(&ant)
@@ -114,6 +112,19 @@ func (s *Service) ListPerawatanReguler(p pagination.Params) ([]PerawatanQueueIte
 		items = append(items, item)
 	}
 	return items, meta, nil
+}
+
+func toQueueItem(r perawatan.Perawatan) PerawatanQueueItem {
+	item := PerawatanQueueItem{
+		ID: r.ID, Kode: r.Kode, Tanggal: r.Tanggal, Status: r.Status,
+		Biaya: r.Biaya, Diagnosa: r.Diagnosa, AntrianID: r.AntrianID,
+		Pasien: r.Pasien, Staff: r.Staff, Tindakans: r.Tindakans,
+	}
+	_, lines := buildPerawatanBill(r, r.Reseps)
+	for _, l := range lines {
+		item.Total += l.Subtotal
+	}
+	return item
 }
 
 func (s *Service) ListPerawatanPaket(p pagination.Params) ([]PerawatanQueueItem, pagination.Meta, error) {
@@ -126,7 +137,7 @@ func (s *Service) ListPerawatanPaket(p pagination.Params) ([]PerawatanQueueItem,
 				WHERE t.kategori ILIKE '%paket%'
 			)
 		)`).
-		Preload("Pasien").Preload("Staff").Preload("Tindakans")
+		Preload("Pasien").Preload("Staff").Preload("Tindakans.Treatment").Preload("Reseps.Barangs.Barang")
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR diagnosa ILIKE ?", like, like)
@@ -138,11 +149,7 @@ func (s *Service) ListPerawatanPaket(p pagination.Params) ([]PerawatanQueueItem,
 	}
 	items := make([]PerawatanQueueItem, 0, len(raw))
 	for _, r := range raw {
-		items = append(items, PerawatanQueueItem{
-			ID: r.ID, Kode: r.Kode, Tanggal: r.Tanggal, Status: r.Status,
-			Biaya: r.Biaya, Diagnosa: r.Diagnosa, AntrianID: r.AntrianID,
-			Pasien: r.Pasien, Staff: r.Staff, Tindakans: r.Tindakans,
-		})
+		items = append(items, toQueueItem(r))
 	}
 	return items, meta, nil
 }
@@ -334,8 +341,13 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 		if item.Status == "dibatalkan" {
 			return errors.New("paket sudah dibatalkan")
 		}
-		if req.Refund > item.HargaTotal+0.005 {
-			return fmt.Errorf("refund melebihi harga paket Rp %.0f", item.HargaTotal)
+		// Only the unused sessions can be refunded.
+		maxRefund := item.HargaTotal
+		if item.TotalSesi > 0 {
+			maxRefund = roundRp(item.HargaTotal * float64(item.SisaSesi) / float64(item.TotalSesi))
+		}
+		if req.Refund > maxRefund+0.005 {
+			return fmt.Errorf("refund melebihi nilai sisa paket Rp %.0f (%d dari %d sesi)", maxRefund, item.SisaSesi, item.TotalSesi)
 		}
 		item.Status = "dibatalkan"
 		item.KeteranganBatal = req.Keterangan

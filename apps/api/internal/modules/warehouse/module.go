@@ -31,7 +31,7 @@ func NewService(repo *Repository, gen *generator.Service) *Service {
 type DetailIO struct {
 	BarangID uint   `json:"barang_id" binding:"required"`
 	Qty      int    `json:"qty" binding:"required,gt=0"`
-	Tipe     string `json:"tipe" binding:"required,oneof=masuk keluar input output"`
+	Tipe     string `json:"tipe" binding:"required,oneof=masuk keluar"`
 }
 
 type OpnameDetailInput struct {
@@ -69,6 +69,7 @@ func (s *Service) applyStockMove(tx *gorm.DB, barangID uint, qty int, tipe, refe
 	return ApplyStockMove(tx, s.gen, barangID, qty, tipe, referensi, ket, tanggal)
 }
 
+// "input"/"output" are accepted only for documents saved before the API settled on masuk/keluar.
 func isMasuk(tipe string) bool { return tipe == "input" || tipe == "masuk" }
 
 func balik(tipe string) string {

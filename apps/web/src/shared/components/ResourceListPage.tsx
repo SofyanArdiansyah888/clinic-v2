@@ -44,6 +44,13 @@ type ResourceListPageProps<T extends { id: number | string }> = {
   filterParams?: Record<string, string | number | undefined>
 }
 
+// The API decodes dates into time.Time, which only accepts RFC3339; a plain
+// <input type="date"> value (YYYY-MM-DD) is sent as midnight UTC of that day.
+function toApiDate(raw: string): string | null {
+  if (raw === '') return null
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00Z` : raw
+}
+
 export function ResourceListPage<T extends { id: number | string }>({
   title,
   description,
@@ -178,7 +185,8 @@ export function ResourceListPage<T extends { id: number | string }>({
     if (!enableCreate || !createFields?.length) return
     const initial: Record<string, string> = {}
     for (const field of createFields) {
-      if (field.type === 'date' && !field.placeholder) {
+      // Only required dates start at today; optional ones (tanggal lahir, masa berlaku) stay empty.
+      if (field.type === 'date' && field.required && !field.placeholder) {
         initial[field.name] = todayISO()
       } else {
         initial[field.name] = field.options?.[0]?.value ?? ''
@@ -201,7 +209,7 @@ export function ResourceListPage<T extends { id: number | string }>({
               return [field.name, raw === '' ? 0 : Number(raw)]
             }
             if (field.type === 'date') {
-              return [field.name, raw === '' ? null : raw]
+              return [field.name, toApiDate(raw)]
             }
             return [field.name, raw]
           }),
@@ -249,7 +257,7 @@ export function ResourceListPage<T extends { id: number | string }>({
               return [field.name, raw === '' ? 0 : Number(raw)]
             }
             if (field.type === 'date') {
-              return [field.name, raw === '' ? null : raw]
+              return [field.name, toApiDate(raw)]
             }
             return [field.name, raw]
           }),
