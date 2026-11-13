@@ -85,6 +85,13 @@ type PerawatanResep struct {
 
 func (PerawatanResep) TableName() string { return "perawatan_resep" }
 
+// Resep lifecycle: draft while the doctor edits it, dibayar once the cashier has
+// billed it (stock is taken out then), diserahkan after the depo hands it over.
+const (
+	ResepStatusDibayar    = "dibayar"
+	ResepStatusDiserahkan = "diserahkan"
+)
+
 type PerawatanResepBarang struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
 	PerawatanResepID uint           `gorm:"not null;index" json:"perawatan_resep_id"`

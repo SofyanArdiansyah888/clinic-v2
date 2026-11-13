@@ -6,6 +6,7 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "test": "turbo run test",
     "dev:web": "turbo run dev --filter=@clinic/web",
     "dev:api": "turbo run dev --filter=@clinic/api"
   },

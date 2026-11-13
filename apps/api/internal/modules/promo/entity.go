@@ -17,3 +17,18 @@ type Promo struct {
 }
 
 func (Promo) TableName() string { return "promos" }
+
+// Potongan returns the discount amount for the given total, never more than the total.
+func (x *Promo) Potongan(total float64) float64 {
+	potongan := x.NilaiDiskon
+	if x.TipeDiskon == "percent" {
+		potongan = total * x.NilaiDiskon / 100
+	}
+	if potongan > total {
+		return total
+	}
+	if potongan < 0 {
+		return 0
+	}
+	return potongan
+}

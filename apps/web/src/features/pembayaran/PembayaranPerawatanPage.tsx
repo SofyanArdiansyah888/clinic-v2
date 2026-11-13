@@ -1,7 +1,7 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRight,
-  CreditCard,
   Gift,
   HandCoins,
   Info,
@@ -17,13 +17,13 @@ import { useMemo, useState } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 import { PaymentModal, type PaymentTarget } from '@/features/pembayaran/components/PaymentModal'
-import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
 
 type TindakanRow = {
   treatment_id?: number
+  treatment?: { nama?: string }
   jumlah?: number
   total?: number
   catatan?: string
@@ -40,11 +40,14 @@ type QueueRow = {
   pasien?: { id: number; nama?: string; kode?: string }
   staff?: { id: number; nama?: string }
   tindakans?: TindakanRow[]
+  /** Bill before discounts (tindakan + resep), computed by the API. */
+  total?: number
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function rowTotal(row: QueueRow): number {
+  if (row.total && row.total > 0) return row.total
   if (row.biaya && row.biaya > 0) return row.biaya
   return (row.tindakans ?? []).reduce((sum, t) => sum + (t.total ?? 0), 0)
 }
@@ -53,7 +56,7 @@ function tindakanSummary(row: QueueRow): string {
   const items = row.tindakans ?? []
   if (items.length === 0) return row.diagnosa || 'Perawatan'
   return items
-    .map((t) => `Treatment #${t.treatment_id ?? '-'} (${t.jumlah ?? 1}x)`)
+    .map((t) => `${t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`} (${t.jumlah ?? 1}x)`)
     .join(', ')
 }
 
@@ -61,7 +64,7 @@ function buildLineItems(row: QueueRow) {
   const items = row.tindakans ?? []
   if (items.length > 0) {
     return items.map((t) => ({
-      nama: `Treatment #${t.treatment_id ?? '-'}`,
+      nama: t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`,
       qty: t.jumlah ?? 1,
       subtotal: t.total ?? 0,
     }))
@@ -75,11 +78,9 @@ export function PembayaranPerawatanPage() {
   const [search, setSearch] = useState('')
   const [staffId, setStaffId] = useState('')
   const [payTarget, setPayTarget] = useState<PaymentTarget | null>(null)
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   const endpoint =
@@ -120,7 +121,6 @@ export function PembayaranPerawatanPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? <PembayaranToast message={toast.message} tone={toast.tone} /> : null}
 
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
@@ -145,13 +145,13 @@ export function PembayaranPerawatanPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4">
         <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <div>
             <p className="text-xs font-medium text-slate-500">Antrian Ke Kasir</p>
-            <h3 className="mt-1 text-xl font-extrabold text-teal-600">{stats.count} Pasien</h3>
+            <h3 className="mt-1 text-xl font-extrabold text-rose-600">{stats.count} Pasien</h3>
           </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
             <Users className="h-6 w-6" />
           </div>
         </div>
@@ -164,17 +164,6 @@ export function PembayaranPerawatanPage() {
             <HandCoins className="h-6 w-6" />
           </div>
         </div>
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Tab Aktif</p>
-            <h3 className="mt-1 text-xl font-extrabold text-rose-600">
-              {activeTab === 'reguler' ? 'Reguler' : 'Paket'}
-            </h3>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-            <CreditCard className="h-6 w-6" />
-          </div>
-        </div>
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-sm">
@@ -184,7 +173,7 @@ export function PembayaranPerawatanPage() {
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
             activeTab === 'reguler'
-              ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20'
+              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/20'
               : 'text-slate-600 hover:bg-slate-100',
           )}
         >
@@ -197,7 +186,7 @@ export function PembayaranPerawatanPage() {
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
             activeTab === 'paket'
-              ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/20'
+              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/20'
               : 'text-slate-600 hover:bg-slate-100',
           )}
         >
@@ -209,7 +198,7 @@ export function PembayaranPerawatanPage() {
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Stethoscope className="h-4 w-4 text-teal-600" />
+            <Stethoscope className="h-4 w-4 text-rose-600" />
             <h3 className="text-sm font-extrabold text-slate-900">
               {activeTab === 'reguler' ? 'Queue Reguler' : 'Queue Paket'}
             </h3>
@@ -221,7 +210,7 @@ export function PembayaranPerawatanPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari pasien / kode..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-teal-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
         </div>
@@ -245,7 +234,7 @@ export function PembayaranPerawatanPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="table-sticky-actions w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <tr>
                   <th className="px-4 py-3">Kode</th>
@@ -261,9 +250,10 @@ export function PembayaranPerawatanPage() {
               <tbody className="divide-y divide-slate-100">
                 {rows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-teal-700">{row.kode}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
-                      {row.antrian_jam || formatDate(row.tanggal || today)}
+                    <td className="px-4 py-3 font-mono text-xs font-bold whitespace-nowrap text-rose-700">{row.kode}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap text-slate-600">
+                      <div>{formatDate(row.tanggal || today)}</div>
+                      {row.antrian_jam ? <div className="text-[11px] text-slate-400">{row.antrian_jam}</div> : null}
                     </td>
                     <td className="px-4 py-3 text-xs font-semibold text-slate-800">{row.pasien?.nama || '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{row.staff?.nama || '-'}</td>
@@ -280,7 +270,7 @@ export function PembayaranPerawatanPage() {
                           type="button"
                           size="sm"
                           onClick={() => openPay(row)}
-                          className="h-8 rounded-lg bg-teal-600 text-[11px] font-bold text-white hover:bg-teal-700"
+                          className="h-8 rounded-lg bg-rose-600 text-[11px] font-bold text-white hover:bg-rose-700"
                         >
                           Bayar
                         </Button>

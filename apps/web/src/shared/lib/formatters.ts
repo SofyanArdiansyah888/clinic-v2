@@ -24,3 +24,9 @@ export function formatDate(value?: string | Date | null, pattern = 'dd MMM yyyy'
 export function formatDateTime(value?: string | Date | null) {
   return formatDate(value, 'dd MMM yyyy HH:mm')
 }
+
+// Today's date as yyyy-MM-dd in the browser's local time zone. toISOString() would
+// give the UTC date, which is still yesterday in the early morning in Indonesia.
+export function todayISO() {
+  return format(new Date(), 'yyyy-MM-dd')
+}

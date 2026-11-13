@@ -21,16 +21,16 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        'flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm transition-all hover:shadow',
+        'flex items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4 transition-all hover:shadow',
         className,
       )}
     >
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <p className="text-xs font-semibold text-slate-500">{label}</p>
-        <h3 className={cn('text-2xl font-bold tracking-tight', valueClass)}>{value}</h3>
+        <h3 className={cn('text-xl font-bold tracking-tight sm:text-2xl', valueClass)}>{value}</h3>
       </div>
       {icon ? (
-        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base', iconClass)}>
+        <div className={cn('hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base sm:flex', iconClass)}>
           {icon}
         </div>
       ) : null}

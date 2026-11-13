@@ -35,7 +35,21 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
-let refreshPromise: Promise<string | null> | null = null
+function friendlyMessage(error: AxiosError) {
+  const serverMessage = (error.response?.data as { message?: string } | undefined)?.message
+  if (serverMessage) return serverMessage
+  const status = error.response?.status
+  if (!error.response || status === 502 || status === 503 || status === 504) {
+    return 'Server tidak dapat dihubungi. Periksa koneksi lalu coba lagi.'
+  }
+  if (status === 401) return 'Sesi Anda berakhir. Silakan masuk kembali.'
+  if (status === 403) return 'Anda tidak memiliki akses untuk tindakan ini.'
+  if (status === 404) return 'Data tidak ditemukan.'
+  if (status && status >= 500) return 'Terjadi kesalahan pada server. Coba lagi beberapa saat.'
+  return 'Permintaan gagal diproses. Periksa kembali data yang diisi.'
+}
+
+let refreshPromise:Promise<string | null> | null = null
 
 async function refreshAccessToken() {
   const refresh = getRefreshToken()
@@ -58,6 +72,9 @@ async function refreshAccessToken() {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // Many screens show `err.message` directly; replace axios' technical text
+    // ("Request failed with status code 502") with something staff can act on.
+    error.message = friendlyMessage(error)
     const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined
     if (!original || error.response?.status !== 401 || original._retry) {
       return Promise.reject(error)

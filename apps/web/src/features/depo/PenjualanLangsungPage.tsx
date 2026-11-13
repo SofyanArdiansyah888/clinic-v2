@@ -1,15 +1,15 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Package, Plus, Search, ShoppingCart } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { apiGet, apiPost } from '@/shared/api/client'
 import { BarangSelect, type BarangLite } from '@/shared/components/BarangSelect'
-import { DokterSelect } from '@/shared/components/DokterSelect'
+import { StaffSelect } from '@/shared/components/StaffSelect'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
-import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
 
 type PenjualanRow = {
   id: number
@@ -21,12 +21,11 @@ type PenjualanRow = {
   pasien?: { nama?: string }
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 export function PenjualanLangsungPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
   const [form, setForm] = useState({
     tanggal: today,
     pasien_id: '',
@@ -37,8 +36,7 @@ export function PenjualanLangsungPage() {
   })
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   const { data, isLoading } = useQuery({
@@ -97,7 +95,6 @@ export function PenjualanLangsungPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? <PembayaranToast message={toast.message} tone={toast.tone} /> : null}
 
       <div>
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Depo — Penjualan Langsung</h2>
@@ -107,54 +104,54 @@ export function PenjualanLangsungPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-teal-50 to-emerald-50 px-5 py-4">
-          <ShoppingCart className="h-5 w-5 text-teal-600" />
+        <div className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-white px-5 py-4">
+          <ShoppingCart className="h-5 w-5 text-rose-600" />
           <h3 className="text-sm font-extrabold text-slate-900">Form Penjualan Langsung</h3>
         </div>
         <div className="space-y-4 p-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tanggal</label>
-              <input
+              <label htmlFor="penjualanlangsungpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tanggal</label>
+              <input id="penjualanlangsungpage-f1"
                 type="date"
                 value={form.tanggal}
                 onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pasien</label>
-              <PasienSelect value={form.pasien_id} onChange={(v) => setForm((f) => ({ ...f, pasien_id: v }))} required />
+              <label htmlFor="penjualanlangsungpage-f2" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pasien</label>
+              <PasienSelect id="penjualanlangsungpage-f2" value={form.pasien_id} onChange={(v) => setForm((f) => ({ ...f, pasien_id: v }))} required />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Staff Depo</label>
-              <DokterSelect value={form.staff_id} onChange={(v) => setForm((f) => ({ ...f, staff_id: v }))} required />
+              <label htmlFor="penjualanlangsungpage-f3" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Staff Depo</label>
+              <StaffSelect id="penjualanlangsungpage-f3" value={form.staff_id} onChange={(v) => setForm((f) => ({ ...f, staff_id: v }))} placeholder="Cari & pilih staff..." required />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Barang / Obat</label>
-              <BarangSelect value={form.barang_id} onChange={handleBarangSelect} required />
+              <label htmlFor="penjualanlangsungpage-f4" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Barang / Obat</label>
+              <BarangSelect id="penjualanlangsungpage-f4" value={form.barang_id} onChange={handleBarangSelect} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Qty</label>
-                <input
+                <label htmlFor="penjualanlangsungpage-f5" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Qty</label>
+                <input id="penjualanlangsungpage-f5"
                   type="number"
                   min={1}
                   value={form.qty}
                   onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-teal-500 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Harga</label>
-                <input
+                <label htmlFor="penjualanlangsungpage-f6" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Harga</label>
+                <input id="penjualanlangsungpage-f6"
                   type="number"
                   value={form.harga_jual}
                   onChange={(e) => setForm((f) => ({ ...f, harga_jual: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-teal-500 focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -165,7 +162,7 @@ export function PenjualanLangsungPage() {
               type="button"
               disabled={submitMutation.isPending}
               onClick={() => submitMutation.mutate()}
-              className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-xs font-bold text-white"
+              className="rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 text-xs font-bold text-white"
             >
               <Plus className="mr-1.5 h-4 w-4" />
               {submitMutation.isPending ? 'Memproses...' : 'Proses Ke Kasir Pembayaran'}
@@ -177,7 +174,7 @@ export function PenjualanLangsungPage() {
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-teal-600" />
+            <Package className="h-4 w-4 text-rose-600" />
             <h3 className="text-sm font-extrabold text-slate-900">Riwayat Penjualan Langsung</h3>
           </div>
           <div className="relative w-full sm:w-72">
@@ -187,7 +184,7 @@ export function PenjualanLangsungPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari kode / invoice..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-teal-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
         </div>
@@ -211,7 +208,7 @@ export function PenjualanLangsungPage() {
               <tbody className="divide-y divide-slate-100">
                 {rows.map((row) => (
                   <tr key={row.id} className={cn('hover:bg-slate-50/60')}>
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-teal-700">{row.kode}</td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-rose-700">{row.kode}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{formatDate(row.tanggal)}</td>
                     <td className="px-4 py-3 text-xs font-semibold">{row.pasien?.nama || '-'}</td>
                     <td className="px-4 py-3 text-xs font-bold">{formatCurrency(row.total_harga ?? 0)}</td>

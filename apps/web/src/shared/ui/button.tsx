@@ -12,7 +12,8 @@ const buttonVariants = cva(
         secondary: 'bg-slate-100 text-slate-800 hover:bg-slate-200',
         outline: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
         ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-        destructive: 'bg-rose-600 text-white hover:bg-rose-700',
+        // Plain red, no brand gradient/glow, so it never reads as the primary CTA.
+        destructive: 'bg-red-600 text-white shadow-sm ring-1 ring-red-700/20 hover:bg-red-700',
       },
       size: {
         default: 'h-10 rounded-xl px-4 py-2',

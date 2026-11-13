@@ -16,7 +16,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // API_PROXY_TARGET lets a second dev setup point at an API on another port.
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
       },
     },

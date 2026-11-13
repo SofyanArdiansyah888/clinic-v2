@@ -1,6 +1,8 @@
 package antrian
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -53,6 +55,27 @@ type Handler struct{ svc *Service }
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
+// ValidStatus is the queue lifecycle: menunggu → dipanggil → diproses → bayar → selesai, or batal.
+var ValidStatus = map[string]bool{
+	"menunggu": true, "dipanggil": true, "diproses": true, "bayar": true, "selesai": true, "batal": true,
+}
+
+func checkStatus(status string) error {
+	if status != "" && !ValidStatus[status] {
+		return fmt.Errorf("status antrian %q tidak dikenal", status)
+	}
+	return nil
+}
+
+// fail maps service errors: missing rows are 404, everything else the caller sent is 400.
+func fail(c *gin.Context, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		response.NotFound(c, "data tidak ditemukan")
+		return
+	}
+	response.BadRequest(c, err.Error(), nil)
+}
+
 func parseDate(s string) (time.Time, error) {
 	if t, err := time.Parse("2006-01-02", s); err == nil {
 		return t, nil
@@ -103,6 +126,9 @@ func (s *Service) Get(id uint) (*Antrian, error) {
 }
 
 func (s *Service) Create(req UpsertRequest) (*Antrian, error) {
+	if err := checkStatus(req.Status); err != nil {
+		return nil, err
+	}
 	kode, err := s.gen.Generate("ANT")
 	if err != nil {
 		return nil, err
@@ -133,6 +159,9 @@ func (s *Service) Create(req UpsertRequest) (*Antrian, error) {
 }
 
 func (s *Service) Update(id uint, req UpsertRequest) (*Antrian, error) {
+	if err := checkStatus(req.Status); err != nil {
+		return nil, err
+	}
 	item, err := s.Get(id)
 	if err != nil {
 		return nil, err
@@ -165,6 +194,9 @@ type StatusRequest struct {
 }
 
 func (s *Service) UpdateStatus(id uint, status string) (*Antrian, error) {
+	if err := checkStatus(status); err != nil {
+		return nil, err
+	}
 	item, err := s.Get(id)
 	if err != nil {
 		return nil, err
@@ -272,7 +304,7 @@ func (h *Handler) Store(c *gin.Context) {
 	}
 	item, err := h.svc.Create(req)
 	if err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.Created(c, item, "created")
@@ -287,7 +319,7 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 	item, err := h.svc.Update(uint(id), req)
 	if err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.OK(c, item, "updated")
@@ -302,7 +334,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 	}
 	item, err := h.svc.UpdateStatus(uint(id), req.Status)
 	if err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.OK(c, item, "status updated")

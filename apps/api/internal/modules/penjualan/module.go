@@ -1,12 +1,14 @@
 package penjualan
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
@@ -68,6 +70,14 @@ type ListFilters struct {
 }
 
 type Handler struct{ svc *Service }
+
+func fail(c *gin.Context, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		response.NotFound(c, "penjualan tidak ditemukan")
+		return
+	}
+	response.BadRequest(c, err.Error(), nil)
+}
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
@@ -131,6 +141,24 @@ func (s *Service) Get(id uint) (*Penjualan, error) {
 }
 
 func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
+	var createdID uint
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		item, err := s.CreateTx(tx, req)
+		if err != nil {
+			return err
+		}
+		createdID = item.ID
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.Get(createdID)
+}
+
+// CreateTx creates a penjualan with its details inside the caller's transaction,
+// taking barang stock out and writing kartu stok rows.
+func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 	kode, err := s.gen.Generate("PJL")
 	if err != nil {
 		return nil, err
@@ -148,110 +176,108 @@ func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
 		noInvoice = kode
 	}
 
-	var createdID uint
-	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
-		var total float64
-		item := &Penjualan{
-			Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
-			PerawatanID: req.PerawatanID, AntrianID: req.AntrianID,
-			Tanggal: tanggal, NoInvoice: noInvoice, Status: status,
-			Keterangan: req.Keterangan, JenisPembayaran: req.JenisPembayaran,
-			BankID: req.BankID, JumlahBayar: req.JumlahBayar, IsActive: true,
-		}
-		if req.IsActive != nil {
-			item.IsActive = *req.IsActive
-		}
-		if err := tx.Create(item).Error; err != nil {
-			return err
-		}
-		createdID = item.ID
-
-		for i, d := range req.Details {
-			jenis := d.JenisPenjualan
-			if jenis == "" {
-				if d.TreatmentID > 0 {
-					jenis = "treatment"
-				} else {
-					jenis = "barang"
-				}
-			}
-
-			harga := d.HargaJual
-			subtotal := harga * float64(d.Qty)
-			detailKode := fmt.Sprintf("%s-D%03d", kode, i+1)
-			detail := PenjualanDetail{
-				Kode: detailKode, PenjualanID: item.ID,
-				JenisPenjualan: jenis, Qty: d.Qty, HargaJual: harga, Subtotal: subtotal, IsActive: true,
-			}
-
-			if jenis == "treatment" {
-				if d.TreatmentID == 0 {
-					return fmt.Errorf("treatment_id required for treatment detail")
-				}
-				var tr treatment.Treatment
-				if err := tx.First(&tr, d.TreatmentID).Error; err != nil {
-					return err
-				}
-				if harga == 0 {
-					harga = tr.Harga
-					subtotal = harga * float64(d.Qty)
-					detail.HargaJual = harga
-					detail.Subtotal = subtotal
-				}
-				tid := d.TreatmentID
-				detail.TreatmentID = &tid
-			} else if jenis == "layanan" {
-				if harga == 0 {
-					return fmt.Errorf("harga_jual required for layanan detail")
-				}
-			} else {
-				if d.BarangID == 0 {
-					return fmt.Errorf("barang_id required for barang detail")
-				}
-				var b barang.Barang
-				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
-					return err
-				}
-				if b.StokAktual < d.Qty {
-					return fmt.Errorf("insufficient stock for barang %s", b.Kode)
-				}
-				if harga == 0 {
-					harga = b.HargaJual
-					subtotal = harga * float64(d.Qty)
-					detail.HargaJual = harga
-					detail.Subtotal = subtotal
-				}
-				bid := d.BarangID
-				detail.BarangID = &bid
-				newStok := b.StokAktual - d.Qty
-				if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
-					return err
-				}
-				kstKode, err := s.gen.Generate("KST")
-				if err != nil {
-					return err
-				}
-				ks := warehouse.KartuStok{
-					Kode: kstKode, BarangID: b.ID, Tanggal: tanggal,
-					Keterangan: "Penjualan " + kode, QtyMasuk: 0, QtyKeluar: d.Qty,
-					Saldo: newStok, Referensi: kode, IsActive: true,
-				}
-				if err := tx.Create(&ks).Error; err != nil {
-					return err
-				}
-			}
-
-			total += subtotal
-			if err := tx.Create(&detail).Error; err != nil {
-				return err
-			}
-		}
-		return tx.Model(item).Update("total_harga", total).Error
-	})
-	if err != nil {
+	var total float64
+	item := &Penjualan{
+		Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
+		PerawatanID: req.PerawatanID, AntrianID: req.AntrianID,
+		Tanggal: tanggal, NoInvoice: noInvoice, Status: status,
+		Keterangan: req.Keterangan, JenisPembayaran: req.JenisPembayaran,
+		BankID: req.BankID, JumlahBayar: req.JumlahBayar, IsActive: true,
+	}
+	if req.IsActive != nil {
+		item.IsActive = *req.IsActive
+	}
+	if err := tx.Create(item).Error; err != nil {
 		return nil, err
 	}
-	return s.Get(createdID)
+
+	for i, d := range req.Details {
+		if d.Qty < 1 {
+			return nil, fmt.Errorf("qty baris %d harus minimal 1", i+1)
+		}
+		jenis := d.JenisPenjualan
+		if jenis == "" {
+			if d.TreatmentID > 0 {
+				jenis = "treatment"
+			} else {
+				jenis = "barang"
+			}
+		}
+
+		harga := d.HargaJual
+		subtotal := harga * float64(d.Qty)
+		detailKode := fmt.Sprintf("%s-D%03d", kode, i+1)
+		detail := PenjualanDetail{
+			Kode: detailKode, PenjualanID: item.ID,
+			JenisPenjualan: jenis, Qty: d.Qty, HargaJual: harga, Subtotal: subtotal, IsActive: true,
+		}
+
+		if jenis == "treatment" {
+			if d.TreatmentID == 0 {
+				return nil, fmt.Errorf("treatment_id required for treatment detail")
+			}
+			var tr treatment.Treatment
+			if err := tx.First(&tr, d.TreatmentID).Error; err != nil {
+				return nil, err
+			}
+			if harga == 0 {
+				harga = tr.Harga
+				subtotal = harga * float64(d.Qty)
+				detail.HargaJual = harga
+				detail.Subtotal = subtotal
+			}
+			tid := d.TreatmentID
+			detail.TreatmentID = &tid
+		} else if jenis == "layanan" {
+			if harga == 0 {
+				return nil, fmt.Errorf("harga_jual required for layanan detail")
+			}
+		} else {
+			if d.BarangID == 0 {
+				return nil, fmt.Errorf("barang_id required for barang detail")
+			}
+			var b barang.Barang
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
+				return nil, err
+			}
+			if b.StokAktual < d.Qty {
+				return nil, fmt.Errorf("stok %s (%s) tidak cukup: tersedia %d, dibutuhkan %d", b.Nama, b.Kode, b.StokAktual, d.Qty)
+			}
+			if harga == 0 {
+				harga = b.HargaJual
+				subtotal = harga * float64(d.Qty)
+				detail.HargaJual = harga
+				detail.Subtotal = subtotal
+			}
+			bid := d.BarangID
+			detail.BarangID = &bid
+			newStok := b.StokAktual - d.Qty
+			if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
+				return nil, err
+			}
+			kstKode, err := s.gen.Generate("KST")
+			if err != nil {
+				return nil, err
+			}
+			ks := warehouse.KartuStok{
+				Kode: kstKode, BarangID: b.ID, Tanggal: tanggal,
+				Keterangan: "Penjualan " + kode, QtyMasuk: 0, QtyKeluar: d.Qty,
+				Saldo: newStok, Referensi: kode, IsActive: true,
+			}
+			if err := tx.Create(&ks).Error; err != nil {
+				return nil, err
+			}
+		}
+
+		total += subtotal
+		if err := tx.Create(&detail).Error; err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Model(item).Update("total_harga", total).Error; err != nil {
+		return nil, err
+	}
+	return item, nil
 }
 
 func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
@@ -259,6 +285,18 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !validStatus[req.Status] {
+		return nil, fmt.Errorf("status penjualan %q tidak dikenal", req.Status)
+	}
+	// Paid only comes from the cashier (/pembayaran/bayar), which posts the journal.
+	if req.Status == "paid" && item.Status != "paid" {
+		return nil, errors.New("status paid hanya bisa lewat pembayaran kasir")
+	}
+	if item.Status == "cancelled" && req.Status != "cancelled" {
+		return nil, errors.New("penjualan yang sudah dibatalkan tidak bisa diaktifkan lagi")
+	}
+	wasPaid := item.Status == "paid"
+	cancelling := item.Status != "cancelled" && req.Status == "cancelled"
 	item.Status = req.Status
 	if req.JenisPembayaran != "" {
 		item.JenisPembayaran = req.JenisPembayaran
@@ -269,15 +307,63 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if req.JumlahBayar > 0 {
 		item.JumlahBayar = req.JumlahBayar
 	}
-	if err := s.repo.db.Save(item).Error; err != nil {
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit(clause.Associations).Save(item).Error; err != nil {
+			return err
+		}
+		if cancelling {
+			if err := s.returnStock(tx, item.ID, item.Kode, "Pembatalan penjualan "+item.Kode); err != nil {
+				return err
+			}
+		}
+		// Taking a paid sale out of paid undoes its journal.
+		if wasPaid && item.Status != "paid" {
+			return finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Pembatalan penjualan "+item.Kode)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 	return s.Get(id)
 }
 
+var validStatus = map[string]bool{"draft": true, "confirmed": true, "paid": true, "cancelled": true}
+
+// returnStock puts back the barang taken out when the penjualan was created.
+func (s *Service) returnStock(tx *gorm.DB, penjualanID uint, kode, ket string) error {
+	var details []PenjualanDetail
+	if err := tx.Where("penjualan_id = ? AND barang_id IS NOT NULL", penjualanID).Find(&details).Error; err != nil {
+		return err
+	}
+	for _, d := range details {
+		if d.BarangID == nil || d.Qty <= 0 {
+			continue
+		}
+		if err := warehouse.ApplyStockMove(tx, s.gen, *d.BarangID, d.Qty, "masuk", kode, ket, time.Now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
-		tx.Where("penjualan_id = ?", id).Delete(&PenjualanDetail{})
+		var item Penjualan
+		if err := tx.First(&item, id).Error; err != nil {
+			return err
+		}
+		if err := finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Hapus penjualan "+item.Kode); err != nil {
+			return err
+		}
+		if item.Status != "cancelled" {
+			if err := s.returnStock(tx, item.ID, item.Kode, "Hapus penjualan "+item.Kode); err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("penjualan_id = ?", id).Delete(&PenjualanDetail{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&Penjualan{}, id).Error
 	})
 }
@@ -307,6 +393,11 @@ func (h *Handler) Store(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
+	// A new sale waits at the cashier; paid sales are created by /pembayaran/bayar.
+	if req.Status != "" && req.Status != "draft" && req.Status != "confirmed" {
+		response.BadRequest(c, "status penjualan baru harus draft atau confirmed", nil)
+		return
+	}
 	item, err := h.svc.Create(req)
 	if err != nil {
 		response.BadRequest(c, "failed to create penjualan", err.Error())
@@ -318,7 +409,7 @@ func (h *Handler) Store(c *gin.Context) {
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.svc.Delete(uint(id)); err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.OK(c, nil, "deleted")
@@ -333,7 +424,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 	}
 	item, err := h.svc.UpdateStatus(uint(id), req)
 	if err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.OK(c, item, "status updated")

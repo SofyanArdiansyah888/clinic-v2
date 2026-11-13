@@ -1,7 +1,9 @@
 package perawatan
 
 import (
+	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -293,10 +295,16 @@ func (s *Service) Create(req UpsertRequest) (*Perawatan, error) {
 	return s.Get(item.ID)
 }
 
+var ErrPerawatanTerkunci = errors.New("perawatan sudah dibayar; tindakan dan resep tidak bisa diubah")
+
 func (s *Service) Update(id uint, req UpsertRequest) (*Perawatan, error) {
 	item, err := s.Get(id)
 	if err != nil {
 		return nil, err
+	}
+	// Once paid, tindakan and resep are billed and resep stock is out; rewriting them would desync both.
+	if item.Status == "selesai" && (req.Tindakans != nil || req.Reseps != nil) {
+		return nil, ErrPerawatanTerkunci
 	}
 	if err := s.applyFields(item, req); err != nil {
 		return nil, err
@@ -383,6 +391,10 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 	item, err := h.svc.Update(uint(id), req)
 	if err != nil {
+		if errors.Is(err, ErrPerawatanTerkunci) {
+			response.BadRequest(c, err.Error(), nil)
+			return
+		}
 		response.Internal(c, err.Error())
 		return
 	}
@@ -413,6 +425,56 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 	response.OK(c, item, "status updated")
 }
 
+func (s *Service) ListResep(p pagination.Params, status string) ([]PerawatanResep, pagination.Meta, error) {
+	q := s.repo.db.Model(&PerawatanResep{}).Preload("Pasien").Preload("Staff").Preload("Barangs")
+	if status != "" {
+		q = q.Where("status IN ?", strings.Split(status, ","))
+	}
+	if p.Search != "" {
+		like := "%" + p.Search + "%"
+		q = q.Where("kode ILIKE ? OR pasien_id IN (SELECT id FROM pasiens WHERE nama ILIKE ? OR kode ILIKE ?)", like, like, like)
+	}
+	var items []PerawatanResep
+	meta, err := pagination.Paginate(q, p, &items)
+	return items, meta, err
+}
+
+func (s *Service) SerahkanResep(id uint) (*PerawatanResep, error) {
+	res := s.repo.db.Model(&PerawatanResep{}).
+		Where("id = ? AND status = ?", id, ResepStatusDibayar).
+		Update("status", ResepStatusDiserahkan)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, errors.New("resep tidak ditemukan atau belum dibayar")
+	}
+	var item PerawatanResep
+	if err := s.repo.db.Preload("Pasien").Preload("Staff").Preload("Barangs").First(&item, id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (h *Handler) IndexResep(c *gin.Context) {
+	items, meta, err := h.svc.ListResep(pagination.FromContext(c), c.Query("status"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OKWithMeta(c, items, meta, "ok")
+}
+
+func (h *Handler) SerahkanResep(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	item, err := h.svc.SerahkanResep(uint(id))
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	response.OK(c, item, "resep diserahkan")
+}
+
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	h := NewHandler(NewService(NewRepository(db), gen))
 	g := rg.Group("/perawatan")
@@ -423,5 +485,10 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.PUT("/:id", h.Update)
 		g.DELETE("/:id", h.Destroy)
 		g.PATCH("/:id/status", h.UpdateStatus)
+	}
+	r := rg.Group("/resep")
+	{
+		r.GET("", h.IndexResep)
+		r.PATCH("/:id/serahkan", h.SerahkanResep)
 	}
 }

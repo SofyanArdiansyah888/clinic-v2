@@ -177,3 +177,20 @@ table,
 .animate-fade-in-up {
   animation: fade-in-up 0.35s ease-out both;
 }
+
+/* Keep the row-action column visible when a wide table scrolls horizontally (tablet widths).
+   Not on phones: there the pinned column would cover most of the row. */
+@media (min-width: 640px) {
+  /* Direct rows only: skip nested tables and full-width (colspan) detail rows. */
+  .table-sticky-actions > thead > tr > :last-child,
+  .table-sticky-actions > tbody > tr > :last-child:not([colspan]) {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: #fff;
+    box-shadow: -8px 0 8px -8px rgb(15 23 42 / 0.15);
+  }
+  .table-sticky-actions > thead > tr > :last-child {
+    background-color: rgb(248 250 252);
+  }
+}

@@ -1,6 +1,7 @@
 package promo
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -106,14 +107,18 @@ func (s *Service) Delete(id uint) error {
 func (s *Service) Validate(kode string) (*Promo, error) {
 	var item Promo
 	if err := s.repo.db.Where("kode = ? AND is_active = true", kode).First(&item).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("kode promo tidak ditemukan atau tidak aktif")
+		}
 		return nil, err
 	}
 	now := time.Now()
 	if item.TanggalMulai != nil && now.Before(*item.TanggalMulai) {
-		return nil, gorm.ErrInvalidData
+		return nil, errors.New("promo belum berlaku")
 	}
-	if item.TanggalSelesai != nil && now.After(*item.TanggalSelesai) {
-		return nil, gorm.ErrInvalidData
+	// tanggal_selesai is a date; the promo stays valid through the end of that day.
+	if item.TanggalSelesai != nil && !now.Before(item.TanggalSelesai.AddDate(0, 0, 1)) {
+		return nil, errors.New("promo sudah kedaluwarsa")
 	}
 	return &item, nil
 }

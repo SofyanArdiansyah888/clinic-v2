@@ -43,7 +43,7 @@ export function DataTable<T>({
 
   return (
     <div className={cn('overflow-x-auto', className)}>
-      <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+      <table className="table-sticky-actions w-full min-w-[640px] border-collapse text-left text-[13px]">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
             {columns.map((col) => (

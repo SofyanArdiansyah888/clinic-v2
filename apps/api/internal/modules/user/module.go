@@ -27,7 +27,7 @@ type UpsertRequest struct {
 	Email    string         `json:"email" binding:"required"`
 	Username string         `json:"username" binding:"required"`
 	Password string         `json:"password"`
-	Role     string         `json:"role"`
+	Role     string         `json:"role" binding:"omitempty,oneof=admin doctor staff apoteker nurse finance"`
 	HakAkses datatypes.JSON `json:"hak_akses"`
 	IsActive *bool          `json:"is_active"`
 }

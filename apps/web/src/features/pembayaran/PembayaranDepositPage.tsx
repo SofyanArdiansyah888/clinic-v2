@@ -1,3 +1,4 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowRight, BadgeDollarSign, CreditCard, History, Info, Loader2, Users } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
@@ -9,8 +10,7 @@ import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StaffSelect } from '@/shared/components/StaffSelect'
 import { TreatmentSelect } from '@/shared/components/TreatmentSelect'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency } from '@/shared/lib/formatters'
-import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
+import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 
 const JENIS_OPTIONS = [
   { value: 'pembayaran_deposit', label: 'Pembayaran Deposit' },
@@ -42,10 +42,9 @@ const JENIS_INFO: Record<string, { title: string; desc: string; output: string }
   },
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 export function PembayaranDepositPage() {
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
   const [lastSuccessJenis, setLastSuccessJenis] = useState<string | null>(null)
   const [form, setForm] = useState({
     tanggal: today,
@@ -60,8 +59,7 @@ export function PembayaranDepositPage() {
   })
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   const needsTreatment = form.jenis === 'pembayaran_deposit_treatment'
@@ -109,7 +107,6 @@ export function PembayaranDepositPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? <PembayaranToast message={toast.message} tone={toast.tone} /> : null}
 
       <div>
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kasir — Deposit & Member</h2>
@@ -118,11 +115,11 @@ export function PembayaranDepositPage() {
         </p>
       </div>
 
-      <div className="flex items-start gap-3 rounded-2xl border border-teal-100 bg-teal-50/60 p-4">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
-        <div className="text-xs text-teal-900">
+      <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+        <div className="text-xs text-rose-900">
           <p className="font-bold">Input → Proses → Output</p>
-          <p className="mt-1 text-teal-800">
+          <p className="mt-1 text-rose-800">
             Semua transaksi disimpan ke tabel deposit. Transaksi member juga membuat/memperbarui data di menu
             Administrasi → Membership. Lihat riwayat lengkap di Data Transaksi → Deposit.
           </p>
@@ -154,16 +151,16 @@ export function PembayaranDepositPage() {
       ) : null}
 
       <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-teal-50 to-emerald-50 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-rose-50 to-white px-5 py-4">
           <div className="flex items-center gap-2">
-            <BadgeDollarSign className="h-5 w-5 text-teal-600" />
+            <BadgeDollarSign className="h-5 w-5 text-rose-600" />
             <h3 className="text-sm font-extrabold text-slate-900">Pembayaran Deposit / Pendaftaran Member</h3>
           </div>
           <Button
             type="button"
             disabled={submitMutation.isPending}
             onClick={() => submitMutation.mutate()}
-            className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-xs font-bold text-white"
+            className="rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 text-xs font-bold text-white"
           >
             {submitMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1 h-4 w-4" />}
             Bayar
@@ -175,7 +172,7 @@ export function PembayaranDepositPage() {
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs">
               <p className="font-bold text-slate-800">{jenisInfo.title}</p>
               <p className="mt-1 text-slate-600">{jenisInfo.desc}</p>
-              <p className="mt-2 flex items-center gap-1 font-semibold text-teal-700">
+              <p className="mt-2 flex items-center gap-1 font-semibold text-rose-700">
                 <ArrowRight className="h-3 w-3" />
                 Output: {jenisInfo.output}
               </p>
@@ -184,37 +181,37 @@ export function PembayaranDepositPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tanggal</label>
-              <input
+              <label htmlFor="pembayarandepositpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tanggal</label>
+              <input id="pembayarandepositpage-f1"
                 type="date"
                 value={form.tanggal}
                 onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Kwitansi</label>
-              <input
+              <label htmlFor="pembayarandepositpage-f2" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Kwitansi</label>
+              <input id="pembayarandepositpage-f2"
                 type="text"
                 value={form.kwitansi}
                 onChange={(e) => setForm((f) => ({ ...f, kwitansi: e.target.value }))}
                 placeholder="Auto-generate jika kosong"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pasien</label>
-              <PasienSelect value={form.pasien_id} onChange={(v) => setForm((f) => ({ ...f, pasien_id: v }))} required />
+              <label htmlFor="pembayarandepositpage-f3" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pasien</label>
+              <PasienSelect id="pembayarandepositpage-f3" value={form.pasien_id} onChange={(v) => setForm((f) => ({ ...f, pasien_id: v }))} required />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jenis Transaksi</label>
-              <select
+              <label htmlFor="pembayarandepositpage-f4" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jenis Transaksi</label>
+              <select id="pembayarandepositpage-f4"
                 value={form.jenis}
                 onChange={(e) => setForm((f) => ({ ...f, jenis: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
               >
                 {JENIS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -227,8 +224,8 @@ export function PembayaranDepositPage() {
 
           {needsTreatment ? (
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Untuk Treatment</label>
-              <TreatmentSelect
+              <label htmlFor="pembayarandepositpage-f5" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Untuk Treatment</label>
+              <TreatmentSelect id="pembayarandepositpage-f5"
                 value={form.treatment_id}
                 onChange={(v) => setForm((f) => ({ ...f, treatment_id: v }))}
               />
@@ -236,14 +233,14 @@ export function PembayaranDepositPage() {
           ) : null}
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Staff Kasir</label>
-            <StaffSelect value={form.staff_id} onChange={(v) => setForm((f) => ({ ...f, staff_id: v }))} required />
+            <label htmlFor="pembayarandepositpage-f6" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Staff Kasir</label>
+            <StaffSelect id="pembayarandepositpage-f6" value={form.staff_id} onChange={(v) => setForm((f) => ({ ...f, staff_id: v }))} required />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jenis Pembayaran</label>
-              <JenisPembayaranSelect
+              <label htmlFor="pembayarandepositpage-f7" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jenis Pembayaran</label>
+              <JenisPembayaranSelect id="pembayarandepositpage-f7"
                 value={form.jenis_pembayaran}
                 onChange={(v) => setForm((f) => ({ ...f, jenis_pembayaran: v }))}
                 required
@@ -251,25 +248,25 @@ export function PembayaranDepositPage() {
             </div>
             {needsBank ? (
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bank</label>
-                <BankSelect value={form.bank_id} onChange={(v) => setForm((f) => ({ ...f, bank_id: v }))} />
+                <label htmlFor="pembayarandepositpage-f8" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bank</label>
+                <BankSelect id="pembayarandepositpage-f8" value={form.bank_id} onChange={(v) => setForm((f) => ({ ...f, bank_id: v }))} />
               </div>
             ) : null}
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total (Rp)</label>
-            <input
+            <label htmlFor="pembayarandepositpage-f9" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total (Rp)</label>
+            <input id="pembayarandepositpage-f9"
               type="number"
               value={form.jumlah}
               onChange={(e) => setForm((f) => ({ ...f, jumlah: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-extrabold text-slate-900 focus:border-teal-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-extrabold text-slate-900 focus:border-rose-500 focus:outline-none"
             />
           </div>
 
           {form.jumlah ? (
-            <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-4 text-center">
-              <p className="text-[11px] font-bold uppercase text-teal-700">Total Pembayaran</p>
+            <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4 text-center">
+              <p className="text-[11px] font-bold uppercase text-rose-700">Total Pembayaran</p>
               <p className="mt-1 text-2xl font-extrabold text-slate-900">{formatCurrency(Number(form.jumlah))}</p>
             </div>
           ) : null}
@@ -277,7 +274,7 @@ export function PembayaranDepositPage() {
           {isMemberJenis ? (
             <p className="text-center text-[11px] text-slate-500">
               Setelah bayar, cek data pasien di{' '}
-              <Link to="/administrasi/membership" className="font-bold text-teal-600 hover:underline">
+              <Link to="/administrasi/membership" className="font-bold text-rose-600 hover:underline">
                 Administrasi → Membership
               </Link>
             </p>

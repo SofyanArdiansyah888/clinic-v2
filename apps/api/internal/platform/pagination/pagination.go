@@ -1,11 +1,15 @@
 package pagination
 
 import (
+	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// sortColumn restricts sort_by to a plain column name; it is interpolated into ORDER BY.
+var sortColumn = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 
 type Params struct {
 	Page    int
@@ -35,11 +39,15 @@ func FromContext(c *gin.Context) Params {
 	if sortDir != "asc" && sortDir != "desc" {
 		sortDir = "desc"
 	}
+	sortBy := c.DefaultQuery("sort_by", "id")
+	if !sortColumn.MatchString(sortBy) {
+		sortBy = "id"
+	}
 	return Params{
 		Page:    page,
 		PerPage: perPage,
 		Search:  c.Query("search"),
-		SortBy:  c.DefaultQuery("sort_by", "id"),
+		SortBy:  sortBy,
 		SortDir: sortDir,
 	}
 }

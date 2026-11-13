@@ -31,6 +31,10 @@ var Keys = map[string]string{
 	"PRW": "Perawatan",
 	"RES": "Resep",
 	"VCR": "Voucher",
+	"DPS": "Deposit",
+	"PKT": "Paket Perawatan",
+	"JRN": "Jurnal",
+	"PLB": "Pelunasan Pembelian",
 }
 
 type MonthlySequence struct {

@@ -4,6 +4,7 @@ import {
   CreditCard,
   FileBarChart,
   HeartPulse,
+  Landmark,
   LayoutDashboard,
   LogOut,
   PanelLeftClose,
@@ -17,6 +18,7 @@ import {
 import { useMemo, useState, type ElementType } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useAuthStore } from '@/features/auth/store'
+import { canAccess, ROLE_LABEL } from '@/shared/lib/access'
 import { cn } from '@/shared/lib/cn'
 
 type NavItem = { label: string; to: string; badge?: string; badgeTone?: 'amber' | 'rose' }
@@ -78,6 +80,7 @@ const NAV: NavSection[] = [
           { label: 'Stok Opname', to: '/warehouse/stok-opname' },
           { label: 'Produksi', to: '/warehouse/produksi' },
           { label: 'Konversi', to: '/warehouse/konversi' },
+          { label: 'Kartu Stok', to: '/warehouse/kartu-stok' },
         ],
       },
       {
@@ -98,6 +101,7 @@ const NAV: NavSection[] = [
         label: 'Administrasi',
         icon: Settings2,
         children: [
+          { label: 'Pengaturan Umum', to: '/administrasi/pengaturan-umum' },
           { label: 'Pasien', to: '/administrasi/pasien' },
           { label: 'Staff', to: '/administrasi/staff' },
           { label: 'Treatment', to: '/administrasi/treatment' },
@@ -109,6 +113,20 @@ const NAV: NavSection[] = [
           { label: 'Membership', to: '/administrasi/membership' },
           { label: 'Voucher', to: '/administrasi/voucher' },
           { label: 'Promo', to: '/administrasi/promo' },
+          { label: 'Template Informed Consent', to: '/administrasi/template-informed-consent' },
+        ],
+      },
+      {
+        label: 'Keuangan',
+        icon: Landmark,
+        children: [
+          { label: 'Jurnal Umum', to: '/finance/jurnal' },
+          { label: 'Buku Besar', to: '/finance/buku-besar' },
+          { label: 'Neraca Saldo', to: '/finance/neraca-saldo' },
+          { label: 'Laba Rugi', to: '/finance/laba-rugi' },
+          { label: 'Neraca', to: '/finance/neraca' },
+          { label: 'Daftar Akun (COA)', to: '/finance/akun' },
+          { label: 'Pengaturan Akun', to: '/finance/pengaturan-akun' },
         ],
       },
       {
@@ -151,6 +169,17 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     return initial
   })
 
+  // Only show menu entries the signed-in role may open; groups left empty are dropped.
+  const nav = useMemo(() => {
+    const role = user?.role
+    return NAV.map((section) => ({
+      ...section,
+      items: section.items
+        .map((item) => (item.children ? { ...item, children: item.children.filter((c) => canAccess(role, c.to)) } : item))
+        .filter((item) => (item.children ? item.children.length > 0 : canAccess(role, item.to ?? ''))),
+    })).filter((section) => section.items.length > 0)
+  }, [user?.role])
+
   const initials = useMemo(() => {
     const name = user?.name ?? 'HP'
     return name
@@ -173,8 +202,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         collapsed ? 'w-20' : 'w-64',
       )}
     >
-      <div className="flex h-16 items-center justify-between border-b border-slate-800/80 px-4">
-        <Link to="/" className={cn('flex min-w-0 items-center gap-3', collapsed && 'justify-center')}>
+      <div className={cn('flex h-16 items-center border-b border-slate-800/80', collapsed ? 'justify-center' : 'justify-between px-4')}>
+        <Link to="/" className={cn('flex min-w-0 items-center gap-3', collapsed && 'hidden')}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-pink-400 text-white shadow-lg shadow-rose-600/30">
             <HeartPulse className="h-5 w-5" strokeWidth={2.5} />
           </div>
@@ -202,7 +231,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
       {!collapsed ? (
         <div className="border-b border-slate-800/60 p-4">
-          <label className="mb-1.5 block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+          <label className="mb-1.5 block text-[11px] font-bold tracking-wider text-slate-400 uppercase">
             Unit Cabang
           </label>
           <button
@@ -219,10 +248,10 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       ) : null}
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-        {NAV.map((section) => (
+        {nav.map((section) => (
           <div key={section.title}>
             {!collapsed ? (
-              <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+              <div className="mb-2 px-3 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
                 {section.title}
               </div>
             ) : null}
@@ -303,7 +332,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                               {child.badge ? (
                                 <span
                                   className={cn(
-                                    'rounded-full border px-1.5 py-0.5 text-[10px] font-bold',
+                                    'rounded-full border px-1.5 py-0.5 text-[11px] font-bold',
                                     badgeClass[child.badgeTone ?? 'rose'],
                                   )}
                                 >
@@ -331,7 +360,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           {!collapsed ? (
             <div className="min-w-0 truncate">
               <p className="truncate text-xs font-bold text-white">{user?.name ?? 'Staff'}</p>
-              <p className="truncate text-[11px] font-medium text-rose-400">{user?.role ?? 'Online'}</p>
+              <p className="truncate text-[11px] font-medium text-rose-400">{(user?.role && ROLE_LABEL[user.role]) ?? user?.role ?? 'Online'}</p>
             </div>
           ) : null}
         </div>

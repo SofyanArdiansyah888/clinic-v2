@@ -8,6 +8,7 @@ import {
 import { AppLayout } from '@/app/layouts/AppLayout'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { useAuthStore } from '@/features/auth/store'
+import { canAccess } from '@/shared/lib/access'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { KunjunganPage } from '@/features/resepsionis/KunjunganPage'
 import { AppointmentPage } from '@/features/resepsionis/AppointmentPage'
@@ -25,8 +26,10 @@ import { BarangPage } from '@/features/warehouse/BarangPage'
 import { StokOpnamePage } from '@/features/warehouse/StokOpnamePage'
 import { ProduksiPage } from '@/features/warehouse/ProduksiPage'
 import { KonversiPage } from '@/features/warehouse/KonversiPage'
+import { KartuStokPage } from '@/features/warehouse/KartuStokPage'
 import { PenjualanPage } from '@/features/data-transaksi/PenjualanPage'
 import { PembelianPage } from '@/features/data-transaksi/PembelianPage'
+import { PengaturanUmumPage } from '@/features/administrasi/pengaturan-umum'
 import { PasienPage } from '@/features/administrasi/pasien'
 import { StaffPage } from '@/features/administrasi/staff'
 import { TreatmentPage } from '@/features/administrasi/treatment'
@@ -38,10 +41,19 @@ import { PerusahaanPage } from '@/features/administrasi/perusahaan'
 import { MembershipPage } from '@/features/administrasi/membership'
 import { VoucherPage } from '@/features/administrasi/voucher'
 import { PromoPage } from '@/features/administrasi/promo'
+import { TemplateInformedConsentPage } from '@/features/administrasi/template-informed-consent'
 import { FoPage } from '@/features/laporan/FoPage'
 import { ApotekPage } from '@/features/laporan/ApotekPage'
 import { NursePage } from '@/features/laporan/NursePage'
 import { DmPage } from '@/features/laporan/DmPage'
+import { AkunPage } from '@/features/finance/AkunPage'
+import { PengaturanAkunPage } from '@/features/finance/PengaturanAkunPage'
+import { JurnalPage } from '@/features/finance/JurnalPage'
+import { BukuBesarPage } from '@/features/finance/BukuBesarPage'
+import { NeracaSaldoPage } from '@/features/finance/NeracaSaldoPage'
+import { LabaRugiPage } from '@/features/finance/LabaRugiPage'
+import { NeracaPage } from '@/features/finance/NeracaPage'
+
 
 function requireAuth() {
   const token = localStorage.getItem('clinic_access_token')
@@ -74,9 +86,13 @@ const loginRoute = createRoute({
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
-  beforeLoad: () => {
+  beforeLoad: ({ location }) => {
     useAuthStore.getState().hydrate()
     requireAuth()
+    // Pages outside the role's access go back to the dashboard; the API enforces the same rules.
+    if (location.pathname !== '/' && !canAccess(useAuthStore.getState().user?.role, location.pathname)) {
+      throw redirect({ to: '/' })
+    }
   },
   component: AppLayout,
 })
@@ -177,6 +193,12 @@ const konversiRoute = createRoute({
   component: KonversiPage,
 })
 
+const kartuStokRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/warehouse/kartu-stok',
+  component: KartuStokPage,
+})
+
 const penjualanRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/data-transaksi/penjualan',
@@ -195,11 +217,18 @@ const depositRiwayatRoute = createRoute({
   component: DepositPage,
 })
 
+const pengaturanUmumRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/administrasi/pengaturan-umum',
+  component: PengaturanUmumPage,
+})
+
 const pasienRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/administrasi/pasien',
   component: PasienPage,
 })
+
 
 const staffRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -261,6 +290,12 @@ const promoRoute = createRoute({
   component: PromoPage,
 })
 
+const templateInformedConsentRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/administrasi/template-informed-consent',
+  component: TemplateInformedConsentPage,
+})
+
 const laporanFoRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/laporan/fo',
@@ -285,6 +320,48 @@ const laporanDmRoute = createRoute({
   component: DmPage,
 })
 
+const financeAkunRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/akun',
+  component: AkunPage,
+})
+
+const financeMappingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/pengaturan-akun',
+  component: PengaturanAkunPage,
+})
+
+const financeJurnalRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/jurnal',
+  component: JurnalPage,
+})
+
+const financeBukuBesarRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/buku-besar',
+  component: BukuBesarPage,
+})
+
+const financeNeracaSaldoRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/neraca-saldo',
+  component: NeracaSaldoPage,
+})
+
+const financeLabaRugiRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/laba-rugi',
+  component: LabaRugiPage,
+})
+
+const financeNeracaRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/neraca',
+  component: NeracaPage,
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -304,9 +381,11 @@ const routeTree = rootRoute.addChildren([
     stokOpnameRoute,
     produksiRoute,
     konversiRoute,
+    kartuStokRoute,
     penjualanRoute,
     pembelianRoute,
     depositRiwayatRoute,
+    pengaturanUmumRoute,
     pasienRoute,
     staffRoute,
     treatmentRoute,
@@ -318,10 +397,18 @@ const routeTree = rootRoute.addChildren([
     membershipRoute,
     voucherRoute,
     promoRoute,
+    templateInformedConsentRoute,
     laporanFoRoute,
     laporanApotekRoute,
     laporanNurseRoute,
     laporanDmRoute,
+    financeAkunRoute,
+    financeMappingRoute,
+    financeJurnalRoute,
+    financeBukuBesarRoute,
+    financeNeracaSaldoRoute,
+    financeLabaRugiRoute,
+    financeNeracaRoute,
   ]),
 ])
 

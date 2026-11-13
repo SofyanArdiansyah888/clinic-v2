@@ -1,3 +1,5 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
+import { useConfirm } from '@/shared/components/ConfirmDialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -26,6 +28,7 @@ import { StatusBadge } from '@/shared/components/StatusBadge'
 import { KpiCard } from '@/shared/components/KpiCard'
 import { cn } from '@/shared/lib/cn'
 import { Button } from '@/shared/ui/button'
+import { todayISO } from '@/shared/lib/formatters'
 
 type PasienLite = { id: number; kode?: string; nama?: string; no_telp?: string }
 type StaffLite = { id: number; nama?: string; jabatan?: string }
@@ -43,7 +46,7 @@ type AntrianRow = {
   staff?: StaffLite
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function nowTime() {
   return new Date().toTimeString().slice(0, 5)
@@ -198,6 +201,7 @@ function printAntrianTicket(row: AntrianRow) {
 }
 
 export function KunjunganPage() {
+  const [confirm, confirmDialog] = useConfirm()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table')
@@ -207,7 +211,6 @@ export function KunjunganPage() {
   const [printAfterCreate, setPrintAfterCreate] = useState(true)
   const [layaniRow, setLayaniRow] = useState<AntrianRow | null>(null)
   const [layaniSubmitting, setLayaniSubmitting] = useState(false)
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
   const [form, setForm] = useState({
     mode: 'existing' as 'existing' | 'new',
     pasien_id: '',
@@ -219,8 +222,8 @@ export function KunjunganPage() {
   })
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['antrian', 'kunjungan'],
-    queryFn: () => apiGet<AntrianRow[]>('/antrian', { per_page: 100, page: 1 }),
+    queryKey: ['antrian', 'kunjungan', today],
+    queryFn: () => apiGet<AntrianRow[]>('/antrian', { per_page: 100, page: 1, tanggal: today }),
   })
 
   const rows = data?.data ?? []
@@ -247,8 +250,7 @@ export function KunjunganPage() {
   }, [rows])
 
   function showToast(message: string, tone: 'success' | 'info' | 'error' = 'info') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   const updateMutation = useMutation({
@@ -326,9 +328,20 @@ export function KunjunganPage() {
     onError: (err) => showToast(err instanceof Error ? err.message : 'Gagal mendaftarkan kunjungan', 'error'),
   })
 
-  function setStatus(row: AntrianRow, nextStatus: string) {
+  async function setStatus(row: AntrianRow, nextStatus: string) {
     if (nextStatus === 'diproses') {
       setLayaniRow(row)
+      return
+    }
+    if (
+      nextStatus === 'batal' &&
+      !(await confirm({
+        title: `Batalkan antrian ${row.kode}?`,
+        description: `${row.pasien?.nama ?? 'Pasien'} akan dikeluarkan dari antrian hari ini dan tidak akan dilayani.`,
+        confirmLabel: 'Ya, batalkan',
+        destructive: true,
+      }))
+    ) {
       return
     }
     updateMutation.mutate({ ...row, nextStatus })
@@ -391,25 +404,7 @@ export function KunjunganPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? (
-        <div className="pointer-events-none fixed top-5 right-5 z-[110] max-w-sm">
-          <div
-            className={cn(
-              'pointer-events-auto flex items-center gap-3 rounded-2xl border p-3.5 text-xs font-semibold text-white shadow-xl',
-              toast.tone === 'error'
-                ? 'border-rose-800 bg-rose-950'
-                : toast.tone === 'success'
-                  ? 'border-rose-500/40 bg-slate-950'
-                  : 'border-slate-700 bg-slate-950',
-            )}
-          >
-            <span className="flex-1">{toast.message}</span>
-            <button type="button" className="text-slate-400 hover:text-white" onClick={() => setToast(null)}>
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {confirmDialog}
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -463,7 +458,7 @@ export function KunjunganPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Total Kunjungan"
           value={`${stats.total} Pasien`}
@@ -561,7 +556,7 @@ export function KunjunganPage() {
 
         {!isLoading && !empty && viewMode === 'table' ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="table-sticky-actions w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <tr>
                   <th className="w-28 px-3 py-3 text-center">No.</th>
@@ -577,13 +572,13 @@ export function KunjunganPage() {
                 {filtered.map((row) => (
                   <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
                     <td className="px-3 py-2.5 text-center">
-                      <span className="queue-no inline-block rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-mono text-sm font-bold tracking-wide text-rose-800">
+                      <span className="queue-no inline-block whitespace-nowrap rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 font-mono text-sm font-bold tracking-wide text-rose-800">
                         {row.kode}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="text-xs font-bold text-slate-900">{row.pasien?.nama || '-'}</div>
-                      <div className="font-mono text-[10px] text-slate-400">
+                      <div className="font-mono text-[11px] text-slate-400">
                         {row.pasien?.kode || `ID-${row.pasien_id}`}
                       </div>
                     </td>
@@ -648,7 +643,7 @@ export function KunjunganPage() {
                             <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-rose-800">
                               {item.kode}
                             </span>
-                            <span className="text-[10px] font-bold text-slate-500">{formatJam(item.jam)}</span>
+                            <span className="text-[11px] font-bold text-slate-500">{formatJam(item.jam)}</span>
                           </div>
                           <div>
                             <h5 className="text-xs font-extrabold text-slate-900">{item.pasien?.nama || '-'}</h5>
@@ -721,8 +716,8 @@ export function KunjunganPage() {
 
           {form.mode === 'existing' ? (
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
-              <PasienSelect
+              <label htmlFor="kunjunganpage-f1" className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
+              <PasienSelect id="kunjunganpage-f1"
                 required
                 value={form.pasien_id}
                 onChange={(pasien_id) => setForm((f) => ({ ...f, pasien_id }))}
@@ -731,8 +726,8 @@ export function KunjunganPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Nama Pasien *</label>
-                <input
+                <label htmlFor="kunjunganpage-f2" className="mb-1 block text-xs font-bold text-slate-700">Nama Pasien *</label>
+                <input id="kunjunganpage-f2"
                   required
                   value={form.nama}
                   onChange={(e) => setForm((f) => ({ ...f, nama: e.target.value }))}
@@ -741,8 +736,8 @@ export function KunjunganPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">No. Telepon *</label>
-                <input
+                <label htmlFor="kunjunganpage-f3" className="mb-1 block text-xs font-bold text-slate-700">No. Telepon *</label>
+                <input id="kunjunganpage-f3"
                   required
                   value={form.no_telp}
                   onChange={(e) => setForm((f) => ({ ...f, no_telp: e.target.value }))}
@@ -755,16 +750,16 @@ export function KunjunganPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Dokter *</label>
-              <DokterSelect
+              <label htmlFor="kunjunganpage-f4" className="mb-1 block text-xs font-bold text-slate-700">Dokter *</label>
+              <DokterSelect id="kunjunganpage-f4"
                 required
                 value={form.staff_id}
                 onChange={(staff_id) => setForm((f) => ({ ...f, staff_id }))}
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Jam Kedatangan</label>
-              <input
+              <label htmlFor="kunjunganpage-f5" className="mb-1 block text-xs font-bold text-slate-700">Jam Kedatangan</label>
+              <input id="kunjunganpage-f5"
                 type="time"
                 value={form.jam}
                 onChange={(e) => setForm((f) => ({ ...f, jam: e.target.value }))}
@@ -774,8 +769,8 @@ export function KunjunganPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Keluhan / Keterangan</label>
-            <input
+            <label htmlFor="kunjunganpage-f6" className="mb-1 block text-xs font-bold text-slate-700">Keluhan / Keterangan</label>
+            <input id="kunjunganpage-f6"
               value={form.keterangan}
               onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value }))}
               placeholder="Cth: Kontrol rutin, konsultasi kulit..."
@@ -783,8 +778,8 @@ export function KunjunganPage() {
             />
           </div>
 
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input
+          <label htmlFor="kunjunganpage-f7" className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <input id="kunjunganpage-f7"
               type="checkbox"
               checked={printAfterCreate}
               onChange={(e) => setPrintAfterCreate(e.target.checked)}

@@ -24,7 +24,7 @@ func (h *Handler) KPI(c *gin.Context) {
 	var kpi KPI
 	h.db.Table("penjualans").
 		Where("DATE(tanggal) = ? AND status = ?", today, "paid").
-		Select("COALESCE(SUM(total_harga),0)").Scan(&kpi.RevenueToday)
+		Select("COALESCE(SUM(total_harga - diskon_promo - diskon_voucher),0)").Scan(&kpi.RevenueToday)
 	h.db.Table("antrians").Where("DATE(tanggal) = ?", today).Count(&kpi.VisitsToday)
 	h.db.Table("pasiens").Where("DATE(created_at) = ?", today).Count(&kpi.NewPatientsToday)
 	h.db.Table("antrians").Where("DATE(tanggal) = ? AND status = ?", today, "menunggu").Count(&kpi.PendingQueue)

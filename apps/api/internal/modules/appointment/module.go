@@ -1,6 +1,8 @@
 package appointment
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -68,7 +70,30 @@ func (s *Service) Get(id uint) (*Appointment, error) {
 	return &item, nil
 }
 
+// checkRefs turns a dangling pasien/staff id into a clear 400 instead of a foreign-key 500.
+func (s *Service) checkRefs(pasienID, staffID uint) error {
+	var n int64
+	if err := s.repo.db.Table("pasiens").Where("id = ?", pasienID).Count(&n).Error; err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("pasien #%d tidak ditemukan", pasienID)
+	}
+	if staffID > 0 {
+		if err := s.repo.db.Table("staffs").Where("id = ?", staffID).Count(&n).Error; err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("staff #%d tidak ditemukan", staffID)
+		}
+	}
+	return nil
+}
+
 func (s *Service) Create(req UpsertRequest) (*Appointment, error) {
+	if err := s.checkRefs(req.PasienID, req.StaffID); err != nil {
+		return nil, errBadRequest{err}
+	}
 	kode, err := s.gen.Generate("APT")
 	if err != nil {
 		return nil, err
@@ -155,6 +180,8 @@ func (h *Handler) Show(c *gin.Context) {
 	response.OK(c, item, "ok")
 }
 
+type errBadRequest struct{ error }
+
 func (h *Handler) Store(c *gin.Context) {
 	var req UpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -162,6 +189,11 @@ func (h *Handler) Store(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Create(req)
+	var bad errBadRequest
+	if errors.As(err, &bad) {
+		response.BadRequest(c, bad.Error(), nil)
+		return
+	}
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

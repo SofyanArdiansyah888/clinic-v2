@@ -1,3 +1,4 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
@@ -22,7 +23,7 @@ import { FotoUploadField } from '@/shared/components/FotoUploadField'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { TreatmentSelect, type TreatmentLite } from '@/shared/components/TreatmentSelect'
 import { Button } from '@/shared/ui/button'
-import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { cn } from '@/shared/lib/cn'
 import { ResepModal, type ResepItem } from './ResepModal'
 import { ConsentDocumentModal } from './ConsentDocumentModal'
@@ -82,7 +83,7 @@ type PerawatanDetailResponse = {
   reseps?: PerawatanResepItem[]
 }
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 
 function calculateTindakanTotal(t: PerawatanTindakanItem): number {
   const jumlah = Number(t.jumlah) || 0
@@ -134,7 +135,6 @@ export function DetailPerawatanPage() {
   const [resepModalOpen, setResepModalOpen] = useState(false)
   const [consentModalOpen, setConsentModalOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   // Fetch existing treatment detail if ID is provided
   const { data: existingPerawatan, isLoading: loadingExisting } = useQuery({
@@ -181,8 +181,7 @@ export function DetailPerawatanPage() {
   }, [existingPerawatan, queryPasienId])
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   const grandTotalTindakan = useMemo(() => {
@@ -301,7 +300,7 @@ export function DetailPerawatanPage() {
     setTindakans((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function handleTreatmentSelect(index: number, val: string, selected?: TreatmentLite) {
+  function handleTreatmentSelect(index: number, _val: string, selected?: TreatmentLite) {
     if (!selected) return
     setTindakans((prev) => {
       const updated = [...prev]
@@ -321,7 +320,7 @@ export function DetailPerawatanPage() {
     })
   }
 
-  function handleBeauticianSelect(index: number, val: string, selected?: StaffLite) {
+  function handleBeauticianSelect(index: number, _val: string, selected?: StaffLite) {
     setTindakans((prev) => {
       const updated = [...prev]
       updated[index] = {
@@ -374,18 +373,6 @@ export function DetailPerawatanPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? (
-        <div className="pointer-events-none fixed top-5 right-5 z-[110] max-w-sm">
-          <div
-            className={cn(
-              'pointer-events-auto flex items-center gap-3 rounded-2xl border p-3.5 text-xs font-semibold text-white shadow-xl',
-              toast.tone === 'error' ? 'border-rose-800 bg-rose-950' : 'border-emerald-700 bg-slate-950',
-            )}
-          >
-            <span className="flex-1">{toast.message}</span>
-          </div>
-        </div>
-      ) : null}
 
       {/* Page Title & Actions */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -444,7 +431,7 @@ export function DetailPerawatanPage() {
             <User className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PASIEN / MEMBER</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">PASIEN / MEMBER</p>
             <h4 className="text-xs font-extrabold text-slate-900">{patientName}</h4>
             <p className="font-mono text-[11px] font-semibold text-rose-600">{patientCode}</p>
           </div>
@@ -455,7 +442,7 @@ export function DetailPerawatanPage() {
             <Stethoscope className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">DOKTER PEMERIKSA (DPJP)</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">DOKTER PEMERIKSA (DPJP)</p>
             <h4 className="text-xs font-extrabold text-slate-900">{doctorName}</h4>
             <p className="text-[11px] font-medium text-slate-500">Aesthetic Dermatologist</p>
           </div>
@@ -466,7 +453,7 @@ export function DetailPerawatanPage() {
             <Calendar className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TANGGAL SESSION</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">TANGGAL SESSION</p>
             <h4 className="text-xs font-extrabold text-slate-900">{formatDate(form.tanggal)}</h4>
             <p className="font-mono text-[11px] text-slate-500">{form.antrian_id ? `Antrian #${form.antrian_id}` : 'Direct Entry'}</p>
           </div>
@@ -477,9 +464,9 @@ export function DetailPerawatanPage() {
             <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ESTIMASI TOTAL BIAYA</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">ESTIMASI TOTAL BIAYA</p>
             <h4 className="text-sm font-black text-emerald-700">{formatCurrency(grandTotalTindakan)}</h4>
-            <p className="text-[10px] font-bold text-emerald-600">{tindakans.length} Tindakan Medis</p>
+            <p className="text-[11px] font-bold text-emerald-600">{tindakans.length} Tindakan Medis</p>
           </div>
         </div>
       </div>
@@ -550,11 +537,11 @@ export function DetailPerawatanPage() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-rose-600 text-xs font-black text-white">
                     S
                   </span>
-                  <label className="text-xs font-extrabold text-slate-900">
+                  <label htmlFor="detailperawatanpage-f1" className="text-xs font-extrabold text-slate-900">
                     SUBJECTIVE (Keluhan Utama Pasien / Anamnesis)
                   </label>
                 </div>
-                <textarea
+                <textarea id="detailperawatanpage-f1"
                   rows={4}
                   value={form.anamnesis}
                   onChange={(e) => setForm((f) => ({ ...f, anamnesis: e.target.value }))}
@@ -597,11 +584,11 @@ export function DetailPerawatanPage() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-600 text-xs font-black text-white">
                     A
                   </span>
-                  <label className="text-xs font-extrabold text-slate-900">
+                  <label htmlFor="detailperawatanpage-f2" className="text-xs font-extrabold text-slate-900">
                     ASSESSMENT (Diagnosa Estetika & Spesialis)
                   </label>
                 </div>
-                <textarea
+                <textarea id="detailperawatanpage-f2"
                   rows={4}
                   value={form.diagnosa}
                   onChange={(e) => setForm((f) => ({ ...f, diagnosa: e.target.value }))}
@@ -616,11 +603,11 @@ export function DetailPerawatanPage() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-xs font-black text-white">
                     P
                   </span>
-                  <label className="text-xs font-extrabold text-slate-900">
+                  <label htmlFor="detailperawatanpage-f3" className="text-xs font-extrabold text-slate-900">
                     PLAN (Rencana Tindakan Medis & Homecare)
                   </label>
                 </div>
-                <textarea
+                <textarea id="detailperawatanpage-f3"
                   rows={4}
                   value={form.catatan}
                   onChange={(e) => setForm((f) => ({ ...f, catatan: e.target.value }))}
@@ -670,7 +657,7 @@ export function DetailPerawatanPage() {
                     </div>
 
                     <table className="w-full overflow-hidden rounded-lg border border-slate-200 bg-white text-left text-xs">
-                      <thead className="bg-slate-100 font-bold text-slate-600 text-[10px] uppercase">
+                      <thead className="bg-slate-100 font-bold text-slate-600 text-[11px] uppercase">
                         <tr>
                           <th className="px-3 py-2">Kode</th>
                           <th className="px-3 py-2">Nama Barang / Obat</th>
@@ -729,7 +716,7 @@ export function DetailPerawatanPage() {
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 border-b border-slate-200 font-bold text-slate-600 uppercase text-[10px]">
+                <thead className="bg-slate-100 border-b border-slate-200 font-bold text-slate-600 uppercase text-[11px]">
                   <tr>
                     <th className="min-w-[200px] px-3 py-2.5">Tindakan / Treatment</th>
                     <th className="w-20 px-3 py-2.5">Qty</th>
@@ -852,8 +839,8 @@ export function DetailPerawatanPage() {
             </h3>
 
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
-              <PasienSelect
+              <label htmlFor="detailperawatanpage-f4" className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
+              <PasienSelect id="detailperawatanpage-f4"
                 required
                 value={form.pasien_id}
                 onChange={(pasien_id) => setForm((f) => ({ ...f, pasien_id }))}
@@ -861,8 +848,8 @@ export function DetailPerawatanPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab (DPJP) *</label>
-              <DokterSelect
+              <label htmlFor="detailperawatanpage-f5" className="mb-1 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab (DPJP) *</label>
+              <DokterSelect id="detailperawatanpage-f5"
                 required
                 value={form.staff_id}
                 onChange={(staff_id) => setForm((f) => ({ ...f, staff_id }))}
@@ -871,8 +858,8 @@ export function DetailPerawatanPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Tanggal Perawatan</label>
-                <input
+                <label htmlFor="detailperawatanpage-f6" className="mb-1 block text-xs font-bold text-slate-700">Tanggal Perawatan</label>
+                <input id="detailperawatanpage-f6"
                   type="date"
                   value={form.tanggal}
                   onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))}
@@ -880,8 +867,8 @@ export function DetailPerawatanPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Kunjungan Berikutnya</label>
-                <input
+                <label htmlFor="detailperawatanpage-f7" className="mb-1 block text-xs font-bold text-slate-700">Kunjungan Berikutnya</label>
+                <input id="detailperawatanpage-f7"
                   type="date"
                   value={form.kunjungan_berikutnya}
                   onChange={(e) => setForm((f) => ({ ...f, kunjungan_berikutnya: e.target.value }))}

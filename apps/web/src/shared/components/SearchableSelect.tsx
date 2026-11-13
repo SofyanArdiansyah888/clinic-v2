@@ -1,5 +1,6 @@
 import { Check, ChevronsUpDown, Search, X } from 'lucide-react'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/shared/lib/cn'
 
 export type SearchableSelectOption = {
@@ -23,6 +24,14 @@ type SearchableSelectProps = {
   id?: string
 }
 
+type Coords = {
+  top?: number
+  bottom?: number
+  left: number
+  width: number
+  maxHeight: number
+}
+
 export function SearchableSelect({
   value,
   onChange,
@@ -39,9 +48,13 @@ export function SearchableSelect({
   const autoId = useId()
   const inputId = id ?? autoId
   const rootRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const portalRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [coords, setCoords] = useState<Coords | null>(null)
 
   const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value])
 
@@ -54,31 +67,82 @@ export function SearchableSelect({
     })
   }, [options, query])
 
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return
+    const rect = buttonRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+
+    const PREFERRED_HEIGHT = 280
+
+    let top: number | undefined = rect.bottom + 4
+    let bottom: number | undefined = undefined
+    let maxHeight = Math.min(260, Math.max(120, spaceBelow - 12))
+
+    if (spaceBelow < PREFERRED_HEIGHT && spaceAbove > spaceBelow) {
+      top = undefined
+      bottom = window.innerHeight - rect.top + 4
+      maxHeight = Math.min(260, Math.max(120, spaceAbove - 12))
+    }
+
+    setCoords({
+      top,
+      bottom,
+      left: Math.max(8, rect.left),
+      width: Math.max(160, rect.width),
+      maxHeight,
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (open) {
+      updatePosition()
+    }
+  }, [open, updatePosition])
+
   useEffect(() => {
     if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) {
-        setOpen(false)
-        setQuery('')
-      }
+
+    const handleScrollOrResize = () => {
+      updatePosition()
     }
-    const onKey = (e: KeyboardEvent) => {
+
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (
+        buttonRef.current?.contains(target) ||
+        portalRef.current?.contains(target)
+      ) {
+        return
+      }
+      setOpen(false)
+      setQuery('')
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpen(false)
         setQuery('')
       }
     }
-    document.addEventListener('mousedown', onDoc)
-    window.addEventListener('keydown', onKey)
+
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    window.addEventListener('resize', handleScrollOrResize)
+    document.addEventListener('mousedown', onDocMouseDown)
+    window.addEventListener('keydown', onKeyDown)
+
     return () => {
-      document.removeEventListener('mousedown', onDoc)
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+      document.removeEventListener('mousedown', onDocMouseDown)
+      window.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
+  }, [open, updatePosition])
 
   useEffect(() => {
     if (open) {
-      window.setTimeout(() => searchRef.current?.focus(), 0)
+      const timer = window.setTimeout(() => searchRef.current?.focus(), 50)
+      return () => clearTimeout(timer)
     }
   }, [open])
 
@@ -103,6 +167,7 @@ export function SearchableSelect({
       ) : null}
 
       <button
+        ref={buttonRef}
         type="button"
         id={inputId}
         disabled={disabled || loading}
@@ -138,53 +203,72 @@ export function SearchableSelect({
         </span>
       </button>
 
-      {open ? (
-        <div className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="relative border-b border-slate-100 p-2">
-            <Search className="absolute top-1/2 left-4 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
-            />
-          </div>
-          <ul role="listbox" className="max-h-56 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <li className="px-3 py-6 text-center text-xs text-slate-400">{emptyText}</li>
-            ) : (
-              filtered.map((opt) => {
-                const active = opt.value === value
-                return (
-                  <li key={opt.value}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      onClick={() => pick(opt.value)}
-                      className={cn(
-                        'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors',
-                        active ? 'bg-rose-50 text-rose-900' : 'hover:bg-slate-50',
-                      )}
-                    >
-                      <Check
-                        className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', active ? 'text-rose-600 opacity-100' : 'opacity-0')}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-bold text-slate-900">{opt.label}</span>
-                        {opt.description ? (
-                          <span className="mt-0.5 block truncate text-[11px] text-slate-500">{opt.description}</span>
-                        ) : null}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })
-            )}
-          </ul>
-        </div>
-      ) : null}
+      {open && coords
+        ? createPortal(
+            <div
+              ref={portalRef}
+              style={{
+                position: 'fixed',
+                top: coords.top !== undefined ? `${coords.top}px` : undefined,
+                bottom: coords.bottom !== undefined ? `${coords.bottom}px` : undefined,
+                left: `${coords.left}px`,
+                width: `${coords.width}px`,
+                zIndex: 99999,
+              }}
+              className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-100"
+            >
+              <div className="relative border-b border-slate-100 p-2 bg-white">
+                <Search className="absolute top-1/2 left-4 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
+                />
+              </div>
+              <ul
+                role="listbox"
+                style={{ maxHeight: `${coords.maxHeight}px` }}
+                className="overflow-y-auto p-1 bg-white"
+              >
+                {filtered.length === 0 ? (
+                  <li className="px-3 py-6 text-center text-xs text-slate-400">{emptyText}</li>
+                ) : (
+                  filtered.map((opt) => {
+                    const active = opt.value === value
+                    return (
+                      <li key={opt.value}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => pick(opt.value)}
+                          className={cn(
+                            'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors',
+                            active ? 'bg-rose-50 text-rose-900' : 'hover:bg-slate-50',
+                          )}
+                        >
+                          <Check
+                            className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', active ? 'text-rose-600 opacity-100' : 'opacity-0')}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-bold text-slate-900">{opt.label}</span>
+                            {opt.description ? (
+                              <span className="mt-0.5 block truncate text-[11px] text-slate-500">{opt.description}</span>
+                            ) : null}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })
+                )}
+              </ul>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
+
