@@ -4,8 +4,52 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@clinic/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@clinic/web",
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@clinic/api",
+        "dev"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "api-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@clinic/api",
+        "dev"
+      ],
+      "port": 8081,
+      "env": {
+        "APP_PORT": "8081"
+      }
+    },
+    {
+      "name": "web-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@clinic/web",
+        "dev",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174,
+      "env": {
+        "API_PROXY_TARGET": "http://localhost:8081"
+      }
     }
   ]
 }
