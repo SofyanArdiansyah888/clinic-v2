@@ -50,6 +50,25 @@
       "env": {
         "API_PROXY_TARGET": "http://localhost:8081"
       }
+    },
+    {
+      "name": "api-e2e",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@clinic/api", "dev"],
+      "port": 8082,
+      "env": {
+        "APP_PORT": "8082",
+        "DB_NAME": "clinic_e2e"
+      }
+    },
+    {
+      "name": "web-e2e",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@clinic/web", "dev", "--", "--port", "5175", "--strictPort"],
+      "port": 5175,
+      "env": {
+        "API_PROXY_TARGET": "http://localhost:8082"
+      }
     }
   ]
 }
