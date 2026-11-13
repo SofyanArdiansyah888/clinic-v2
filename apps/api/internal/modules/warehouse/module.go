@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -305,6 +306,7 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 			return err
 		}
 		id = item.ID
+		var nilaiLebih, nilaiKurang float64
 		for i, d := range req.Details {
 			var b barang.Barang
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
@@ -333,8 +335,10 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 			masuk, keluar := 0, 0
 			if selisih > 0 {
 				masuk = selisih
+				nilaiLebih += float64(selisih) * b.HargaBeli
 			} else if selisih < 0 {
 				keluar = -selisih
+				nilaiKurang += float64(-selisih) * b.HargaBeli
 			}
 			if err := tx.Create(&KartuStok{
 				Kode: kstKode, BarangID: b.ID, Tanggal: tanggal, Keterangan: "Stok Opname " + kode,
@@ -343,7 +347,18 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 				return err
 			}
 		}
-		return nil
+		// Stock differences are valued at the barang's purchase price.
+		_, err := finance.Post(tx, s.gen, finance.Entry{
+			Tanggal: tanggal, SourceType: finance.SourceStokOpname, SourceID: item.ID, Referensi: kode,
+			Keterangan: "Selisih stok opname " + kode,
+			Lines: []finance.Line{
+				finance.Debit(finance.KeyPersediaan, nilaiLebih),
+				finance.Kredit(finance.KeyStokSelisihLebih, nilaiLebih),
+				finance.Debit(finance.KeyStokSelisihKurang, nilaiKurang),
+				finance.Kredit(finance.KeyPersediaan, nilaiKurang),
+			},
+		})
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -357,6 +372,9 @@ func (s *Service) DeleteOpname(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item StokOpname
 		if err := tx.Preload("Details").First(&item, id).Error; err != nil {
+			return err
+		}
+		if err := finance.Reverse(tx, s.gen, finance.SourceStokOpname, item.ID, time.Now(), "Hapus stok opname "+item.Kode); err != nil {
 			return err
 		}
 		for _, d := range item.Details {

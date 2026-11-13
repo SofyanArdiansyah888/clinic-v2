@@ -4,6 +4,7 @@ import {
   CreditCard,
   FileBarChart,
   HeartPulse,
+  Landmark,
   LayoutDashboard,
   LogOut,
   PanelLeftClose,
@@ -116,6 +117,19 @@ const NAV: NavSection[] = [
         ],
       },
       {
+        label: 'Keuangan',
+        icon: Landmark,
+        children: [
+          { label: 'Jurnal Umum', to: '/finance/jurnal' },
+          { label: 'Buku Besar', to: '/finance/buku-besar' },
+          { label: 'Neraca Saldo', to: '/finance/neraca-saldo' },
+          { label: 'Laba Rugi', to: '/finance/laba-rugi' },
+          { label: 'Neraca', to: '/finance/neraca' },
+          { label: 'Daftar Akun (COA)', to: '/finance/akun' },
+          { label: 'Pengaturan Akun', to: '/finance/pengaturan-akun' },
+        ],
+      },
+      {
         label: 'Laporan',
         icon: FileBarChart,
         children: [
@@ -217,7 +231,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
       {!collapsed ? (
         <div className="border-b border-slate-800/60 p-4">
-          <label className="mb-1.5 block text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+          <label className="mb-1.5 block text-[11px] font-bold tracking-wider text-slate-400 uppercase">
             Unit Cabang
           </label>
           <button
@@ -237,7 +251,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         {nav.map((section) => (
           <div key={section.title}>
             {!collapsed ? (
-              <div className="mb-2 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+              <div className="mb-2 px-3 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
                 {section.title}
               </div>
             ) : null}
@@ -318,7 +332,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                               {child.badge ? (
                                 <span
                                   className={cn(
-                                    'rounded-full border px-1.5 py-0.5 text-[10px] font-bold',
+                                    'rounded-full border px-1.5 py-0.5 text-[11px] font-bold',
                                     badgeClass[child.badgeTone ?? 'rose'],
                                   )}
                                 >

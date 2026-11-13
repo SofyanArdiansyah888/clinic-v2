@@ -6,6 +6,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/bank"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/cabang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/informedconsent"
 	"github.com/scaleup/clinic-v2/api/internal/modules/jadwaldokter"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
@@ -51,6 +52,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&pembayaran.PaketPerawatan{},
 		&pembelian.Pembelian{},
 		&pembelian.PembelianDetail{},
+		&pembelian.PembelianPembayaran{},
 		&warehouse.KartuStok{},
 		&warehouse.KonversiStok{},
 		&warehouse.KonversiStokDetail{},
@@ -64,10 +66,19 @@ func AutoMigrate(db *gorm.DB) error {
 		&jadwaldokter.JadwalDokter{},
 		&informedconsent.Template{},
 		&pengaturan.Klinik{},
+		&finance.Akun{},
+		&finance.AkunMapping{},
+		&finance.Jurnal{},
+		&finance.JurnalDetail{},
 	); err != nil {
 		return err
 	}
 	// AutoMigrate never relaxes NOT NULL. barang_id became optional when treatment
 	// lines were added to penjualan_details, so older databases need it altered.
-	return db.Migrator().AlterColumn(&penjualan.PenjualanDetail{}, "BarangID")
+	if err := db.Migrator().AlterColumn(&penjualan.PenjualanDetail{}, "BarangID"); err != nil {
+		return err
+	}
+	// The default chart of accounts and transaction mapping must exist before any
+	// transaction can be journaled.
+	return finance.SeedDefault(db)
 }

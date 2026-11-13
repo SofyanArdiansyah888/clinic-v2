@@ -2,12 +2,14 @@ package pembayaran
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
@@ -15,6 +17,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct{ db *gorm.DB }
@@ -48,8 +51,11 @@ type DepositRequest struct {
 }
 
 type BatalPaketRequest struct {
-	Keterangan string  `json:"keterangan"`
-	Refund     float64 `json:"refund"`
+	Keterangan      string  `json:"keterangan"`
+	Refund          float64 `json:"refund"`
+	JenisPembayaran string  `json:"jenis_pembayaran"`
+	BankID          *uint   `json:"bank_id"`
+	Tanggal         string  `json:"tanggal"`
 }
 
 type PerawatanQueueItem struct {
@@ -195,7 +201,20 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 			return err
 		}
 		createdID = item.ID
+		if err := s.linkMembership(tx, req, item); err != nil {
+			return err
+		}
+		return s.jurnalDeposit(tx, item)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetDeposit(createdID)
+}
 
+// linkMembership creates or extends the pasien's membership for member payments.
+func (s *Service) linkMembership(tx *gorm.DB, req DepositRequest, item *DepositTransaksi) error {
+	{
 		jenis := strings.ToLower(req.Jenis)
 		if strings.Contains(jenis, "member") {
 			if strings.Contains(jenis, "perpanjangan") {
@@ -228,11 +247,28 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 			return tx.Save(item).Error
 		}
 		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return s.GetDeposit(createdID)
+}
+
+// jurnalDeposit books money received at the deposit counter: member fees are
+// revenue, everything else is held for the pasien until used at the cashier.
+func (s *Service) jurnalDeposit(tx *gorm.DB, item *DepositTransaksi) error {
+	if item.Jumlah <= 0 {
+		return nil
+	}
+	lawan := finance.KeyDepositTitipan
+	if strings.Contains(strings.ToLower(item.Jenis), "member") {
+		lawan = finance.KeyPendapatanMembership
+	}
+	_, err := finance.Post(tx, s.gen, finance.Entry{
+		Tanggal: item.Tanggal, SourceType: finance.SourceDeposit, SourceID: item.ID, Referensi: item.Kwitansi,
+		Keterangan: "Deposit " + item.Jenis + " " + item.Kode,
+		Lines: []finance.Line{
+			finance.Debit(finance.KasKey(tx, item.JenisPembayaran, item.BankID), item.Jumlah),
+			finance.Kredit(lawan, item.Jumlah),
+		},
+	})
+	return err
 }
 
 func (s *Service) ListDeposit(p pagination.Params, jenis, tanggal string, pasienID uint) ([]DepositTransaksi, pagination.Meta, error) {
@@ -279,16 +315,48 @@ func (s *Service) ListPaketSisa(p pagination.Params) ([]PaketPerawatan, paginati
 }
 
 func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, error) {
+	if req.Refund < 0 {
+		return nil, errors.New("refund tidak boleh negatif")
+	}
+	tgl := time.Now()
+	if req.Tanggal != "" {
+		t, err := parseDate(req.Tanggal)
+		if err != nil {
+			return nil, err
+		}
+		tgl = t
+	}
 	var item PaketPerawatan
-	if err := s.repo.db.First(&item, id).Error; err != nil {
-		return nil, err
-	}
-	item.Status = "dibatalkan"
-	item.KeteranganBatal = req.Keterangan
-	if req.Refund > 0 {
+	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
+			return err
+		}
+		if item.Status == "dibatalkan" {
+			return errors.New("paket sudah dibatalkan")
+		}
+		if req.Refund > item.HargaTotal+0.005 {
+			return fmt.Errorf("refund melebihi harga paket Rp %.0f", item.HargaTotal)
+		}
+		item.Status = "dibatalkan"
+		item.KeteranganBatal = req.Keterangan
 		item.Refund = req.Refund
-	}
-	if err := s.repo.db.Save(&item).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Save(&item).Error; err != nil {
+			return err
+		}
+		if req.Refund == 0 {
+			return nil
+		}
+		_, err := finance.Post(tx, s.gen, finance.Entry{
+			Tanggal: tgl, SourceType: finance.SourcePaket, SourceID: item.ID, Referensi: item.Kode,
+			Keterangan: "Refund batal paket " + item.Kode,
+			Lines: []finance.Line{
+				finance.Debit(finance.KeyPaketRefund, req.Refund),
+				finance.Kredit(finance.KasKey(tx, req.JenisPembayaran, req.BankID), req.Refund),
+			},
+		})
+		return err
+	})
+	if err != nil {
 		return nil, err
 	}
 	s.repo.db.Preload("Pasien").Preload("Staff").Preload("Treatment").First(&item, id)
@@ -434,7 +502,7 @@ func (h *Handler) BatalPaket(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	item, err := h.svc.BatalPaket(uint(id), req)
 	if err != nil {
-		response.BadRequest(c, "cancellation failed", err.Error())
+		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 	response.OK(c, item, "package cancelled")

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
@@ -394,7 +395,7 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 				return err
 			}
 		}
-		return nil
+		return s.jurnalPenjualan(tx, &pj, t, tgl)
 	})
 	if err != nil {
 		return nil, err
@@ -466,4 +467,45 @@ func (s *Service) finalizePerawatan(tx *gorm.DB, pw *perawatan.Perawatan, reseps
 		}
 	}
 	return nil
+}
+
+// jurnalPenjualan books a paid bill: money received, deposit and points used and
+// discounts on the debit side against revenue per line type, plus HPP for barang.
+func (s *Service) jurnalPenjualan(tx *gorm.DB, pj *penjualan.Penjualan, t *Tagihan, tgl time.Time) error {
+	pendapatan := map[string]float64{}
+	for _, it := range t.Items {
+		key := finance.KeyPendapatanBarang
+		switch it.Jenis {
+		case "treatment":
+			key = finance.KeyPendapatanTreatment
+		case "layanan":
+			key = finance.KeyPendapatanLayanan
+		}
+		pendapatan[key] += it.Subtotal
+	}
+	lines := []finance.Line{
+		finance.Debit(finance.KasKey(tx, pj.JenisPembayaran, pj.BankID), t.SisaBayar),
+		finance.Debit(finance.KeyDepositTitipan, t.DepositDipakai),
+		finance.Debit(finance.KeyPenjualanPoin, t.PotonganPoin),
+		finance.Debit(finance.KeyPenjualanDiskon, t.DiskonPromo+t.DiskonVoucher),
+	}
+	for _, key := range []string{finance.KeyPendapatanTreatment, finance.KeyPendapatanLayanan, finance.KeyPendapatanBarang} {
+		lines = append(lines, finance.Kredit(key, pendapatan[key]))
+	}
+
+	var hpp float64
+	if err := tx.Table("penjualan_details d").
+		Select("COALESCE(SUM(d.qty * b.harga_beli), 0)").
+		Joins("JOIN barangs b ON b.id = d.barang_id").
+		Where("d.penjualan_id = ?", pj.ID).
+		Scan(&hpp).Error; err != nil {
+		return err
+	}
+	lines = append(lines, finance.Debit(finance.KeyHPP, hpp), finance.Kredit(finance.KeyPersediaan, hpp))
+
+	_, err := finance.Post(tx, s.gen, finance.Entry{
+		Tanggal: tgl, SourceType: finance.SourcePenjualan, SourceID: pj.ID, Referensi: pj.NoInvoice,
+		Keterangan: "Penjualan " + pj.Kode, Lines: lines,
+	})
+	return err
 }

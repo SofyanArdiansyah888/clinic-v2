@@ -32,6 +32,19 @@ func TestAllowed(t *testing.T) {
 		{RoleStaff, "POST", "/treatment", false},
 		{RoleDoctor, "PUT", "/pengaturan/klinik", false},
 
+		// Finance: books are closed to every other role.
+		{RoleFinance, "GET", "/finance/jurnal", true},
+		{RoleFinance, "POST", "/finance/jurnal", true},
+		{RoleFinance, "PUT", "/finance/mapping", true},
+		{RoleFinance, "GET", "/laporan/fo", true},
+		{RoleFinance, "POST", "/pembelian/:id/bayar", true},
+		{RoleFinance, "POST", "/pembelian", false},
+		{RoleFinance, "POST", "/pasien", false},
+		{RoleStaff, "GET", "/finance/jurnal", false},
+		{RoleApoteker, "GET", "/finance/akun", false},
+		{RoleApoteker, "POST", "/pembelian/:id/bayar", true},
+		{RoleStaff, "POST", "/pembelian/:id/bayar", false},
+
 		// Prefixes match whole path segments only.
 		{RoleApoteker, "POST", "/barangx", false},
 

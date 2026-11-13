@@ -12,6 +12,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/bank"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/cabang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/dashboard"
 	"github.com/scaleup/clinic-v2/api/internal/modules/generate"
 	"github.com/scaleup/clinic-v2/api/internal/modules/informedconsent"
@@ -120,6 +121,7 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 		informedconsent.RegisterRoutes(protected, db)
 		pengaturan.RegisterRoutes(protected, db)
 		laporan.RegisterRoutes(protected, db)
+		finance.RegisterRoutes(protected, db, gen)
 	}
 
 	r.NoRoute(func(c *gin.Context) {

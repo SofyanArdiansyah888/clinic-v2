@@ -1,12 +1,15 @@
 package pembelian
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -73,7 +76,9 @@ func (s *Service) List(p pagination.Params) ([]Pembelian, pagination.Meta, error
 
 func (s *Service) Get(id uint) (*Pembelian, error) {
 	var item Pembelian
-	if err := s.repo.db.Preload("Supplier").Preload("Staff").Preload("Details.Barang").First(&item, id).Error; err != nil {
+	if err := s.repo.db.Preload("Supplier").Preload("Staff").Preload("Details.Barang").
+		Preload("Pembayarans", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).
+		First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -144,7 +149,18 @@ func (s *Service) Create(req UpsertRequest) (*Pembelian, error) {
 				return err
 			}
 		}
-		return tx.Model(item).Update("total_harga", total).Error
+		if err := tx.Model(item).Update("total_harga", total).Error; err != nil {
+			return err
+		}
+		_, err := finance.Post(tx, s.gen, finance.Entry{
+			Tanggal: tanggal, SourceType: finance.SourcePembelian, SourceID: item.ID, Referensi: kode,
+			Keterangan: "Pembelian " + kode,
+			Lines: []finance.Line{
+				finance.Debit(finance.KeyPersediaan, total),
+				finance.Kredit(finance.KeyPembelianUtang, total),
+			},
+		})
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -152,13 +168,74 @@ func (s *Service) Create(req UpsertRequest) (*Pembelian, error) {
 	return s.Get(createdID)
 }
 
+type BayarRequest struct {
+	Tanggal         string  `json:"tanggal" binding:"required"`
+	Jumlah          float64 `json:"jumlah" binding:"required,gt=0"`
+	JenisPembayaran string  `json:"jenis_pembayaran" binding:"required"`
+	BankID          *uint   `json:"bank_id"`
+	Keterangan      string  `json:"keterangan"`
+}
+
+// Bayar records a payment to the supplier and books it against the purchase debt.
+func (s *Service) Bayar(id uint, req BayarRequest) (*Pembelian, error) {
+	tgl, err := parseDate(req.Tanggal)
+	if err != nil {
+		return nil, err
+	}
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		var item Pembelian
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
+			return err
+		}
+		sisa := finance.Round(item.TotalHarga - item.JumlahDibayar)
+		if sisa <= 0 {
+			return errors.New("pembelian sudah lunas")
+		}
+		jumlah := finance.Round(req.Jumlah)
+		if jumlah > sisa+0.005 {
+			return fmt.Errorf("jumlah melebihi sisa utang Rp %.0f", sisa)
+		}
+		kode, err := s.gen.Generate("PLB")
+		if err != nil {
+			return err
+		}
+		bayar := PembelianPembayaran{
+			Kode: kode, PembelianID: item.ID, Tanggal: tgl, Jumlah: jumlah,
+			JenisPembayaran: req.JenisPembayaran, BankID: req.BankID, Keterangan: req.Keterangan,
+		}
+		if err := tx.Create(&bayar).Error; err != nil {
+			return err
+		}
+		item.JumlahDibayar = finance.Round(item.JumlahDibayar + jumlah)
+		item.StatusBayar = "sebagian"
+		if math.Abs(item.TotalHarga-item.JumlahDibayar) < 0.005 {
+			item.StatusBayar = "lunas"
+		}
+		if err := tx.Model(&item).Updates(map[string]any{"jumlah_dibayar": item.JumlahDibayar, "status_bayar": item.StatusBayar}).Error; err != nil {
+			return err
+		}
+		_, err = finance.Post(tx, s.gen, finance.Entry{
+			Tanggal: tgl, SourceType: finance.SourcePelunasanPembelian, SourceID: bayar.ID, Referensi: item.Kode,
+			Keterangan: "Pembayaran pembelian " + item.Kode + " (" + kode + ")",
+			Lines: []finance.Line{
+				finance.Debit(finance.KeyPembelianUtang, jumlah),
+				finance.Kredit(finance.KasKey(tx, req.JenisPembayaran, req.BankID), jumlah),
+			},
+		})
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.Get(id)
+}
+
 func (s *Service) UpdateStatus(id uint, status string) (*Pembelian, error) {
 	item, err := s.Get(id)
 	if err != nil {
 		return nil, err
 	}
-	item.Status = status
-	if err := s.repo.db.Save(item).Error; err != nil {
+	if err := s.repo.db.Model(item).Update("status", status).Error; err != nil {
 		return nil, err
 	}
 	return s.Get(id)
@@ -169,7 +246,16 @@ func (s *Service) UpdateStatus(id uint, status string) (*Pembelian, error) {
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item Pembelian
-		if err := tx.Preload("Details").First(&item, id).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
+			return err
+		}
+		if item.JumlahDibayar > 0 {
+			return errors.New("pembelian sudah ada pembayaran ke supplier, tidak bisa dihapus")
+		}
+		if err := tx.Where("pembelian_id = ?", id).Find(&item.Details).Error; err != nil {
+			return err
+		}
+		if err := finance.Reverse(tx, s.gen, finance.SourcePembelian, item.ID, time.Now(), "Hapus pembelian "+item.Kode); err != nil {
 			return err
 		}
 		for _, d := range item.Details {
@@ -241,6 +327,25 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 	response.OK(c, item, "status updated")
 }
 
+func (h *Handler) Bayar(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var req BayarRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "validation failed", err.Error())
+		return
+	}
+	item, err := h.svc.Bayar(uint(id), req)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(c, "pembelian not found")
+			return
+		}
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	response.OK(c, item, "pembayaran tersimpan")
+}
+
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	h := NewHandler(NewService(NewRepository(db), gen))
 	g := rg.Group("/pembelian")
@@ -250,5 +355,6 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.GET("/:id", h.Show)
 		g.DELETE("/:id", h.Destroy)
 		g.PATCH("/:id/status", h.UpdateStatus)
+		g.POST("/:id/bayar", h.Bayar)
 	}
 }

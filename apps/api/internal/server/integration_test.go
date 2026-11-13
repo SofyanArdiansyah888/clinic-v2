@@ -40,7 +40,7 @@ func newEnv(t *testing.T) *env {
 	db, cfg := testutil.DB(t)
 	jm := jwt.NewManager("test-secret", time.Hour, time.Hour)
 	e := &env{t: t, db: db, jm: jm, h: server.New(cfg, db, jm, generator.New(db)), tok: map[string]string{}}
-	for i, role := range []string{"admin", "doctor", "staff", "apoteker", "nurse"} {
+	for i, role := range []string{"admin", "doctor", "staff", "apoteker", "nurse", "finance"} {
 		tok, err := jm.GenerateAccess(uint(i+1), role, role)
 		if err != nil {
 			t.Fatal(err)

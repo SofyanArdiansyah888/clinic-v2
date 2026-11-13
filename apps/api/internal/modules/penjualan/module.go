@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
@@ -272,6 +273,7 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if err != nil {
 		return nil, err
 	}
+	wasPaid := item.Status == "paid"
 	item.Status = req.Status
 	if req.JenisPembayaran != "" {
 		item.JenisPembayaran = req.JenisPembayaran
@@ -282,7 +284,17 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if req.JumlahBayar > 0 {
 		item.JumlahBayar = req.JumlahBayar
 	}
-	if err := s.repo.db.Save(item).Error; err != nil {
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit(clause.Associations).Save(item).Error; err != nil {
+			return err
+		}
+		// Taking a paid sale out of paid undoes its journal.
+		if wasPaid && item.Status != "paid" {
+			return finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Pembatalan penjualan "+item.Kode)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 	return s.Get(id)
@@ -290,7 +302,16 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
-		tx.Where("penjualan_id = ?", id).Delete(&PenjualanDetail{})
+		var item Penjualan
+		if err := tx.First(&item, id).Error; err != nil {
+			return err
+		}
+		if err := finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Hapus penjualan "+item.Kode); err != nil {
+			return err
+		}
+		if err := tx.Where("penjualan_id = ?", id).Delete(&PenjualanDetail{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&Penjualan{}, id).Error
 	})
 }

@@ -40,6 +40,7 @@ const createFields: FormField[] = [
       { label: 'Front Office / Kasir', value: 'staff' },
       { label: 'Apoteker / Depo', value: 'apoteker' },
       { label: 'Nurse / Terapis', value: 'nurse' },
+      { label: 'Finance / Akuntansi', value: 'finance' },
     ],
   },
 ]
@@ -58,6 +59,7 @@ const editFields: FormField[] = [
       { label: 'Front Office / Kasir', value: 'staff' },
       { label: 'Apoteker / Depo', value: 'apoteker' },
       { label: 'Nurse / Terapis', value: 'nurse' },
+      { label: 'Finance / Akuntansi', value: 'finance' },
     ],
   },
 ]

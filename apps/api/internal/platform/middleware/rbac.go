@@ -14,9 +14,10 @@ const (
 	RoleStaff    = "staff" // front office / kasir
 	RoleApoteker = "apoteker"
 	RoleNurse    = "nurse"
+	RoleFinance  = "finance" // akuntansi / keuangan
 )
 
-var allRoles = []string{RoleAdmin, RoleDoctor, RoleStaff, RoleApoteker, RoleNurse}
+var allRoles = []string{RoleAdmin, RoleDoctor, RoleStaff, RoleApoteker, RoleNurse, RoleFinance}
 
 type access int
 
@@ -37,13 +38,18 @@ type rule struct {
 // role (pickers across modules need master data); writes not listed are admin only.
 var policy = []rule{
 	{read, "/user", []string{RoleAdmin}},
-	{read, "/laporan/fo", []string{RoleAdmin, RoleStaff}},
-	{read, "/laporan/apotek", []string{RoleAdmin, RoleApoteker}},
+	{read, "/laporan/fo", []string{RoleAdmin, RoleStaff, RoleFinance}},
+	{read, "/laporan/apotek", []string{RoleAdmin, RoleApoteker, RoleFinance}},
+	{read, "/finance", []string{RoleAdmin, RoleFinance}},
 	{read, "/laporan/nurse", []string{RoleAdmin, RoleNurse}},
 	{read, "/laporan/dm", []string{RoleAdmin, RoleDoctor}},
 
 	{write, "/auth", allRoles},
 	{write, "/uploads", allRoles},
+
+	// Finance
+	{write, "/finance", []string{RoleAdmin, RoleFinance}},
+	{write, "/pembelian/:id/bayar", []string{RoleAdmin, RoleApoteker, RoleFinance}},
 
 	// Front office
 	{write, "/pasien", []string{RoleAdmin, RoleStaff}},

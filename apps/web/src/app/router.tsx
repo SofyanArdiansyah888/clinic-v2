@@ -46,6 +46,13 @@ import { FoPage } from '@/features/laporan/FoPage'
 import { ApotekPage } from '@/features/laporan/ApotekPage'
 import { NursePage } from '@/features/laporan/NursePage'
 import { DmPage } from '@/features/laporan/DmPage'
+import { AkunPage } from '@/features/finance/AkunPage'
+import { PengaturanAkunPage } from '@/features/finance/PengaturanAkunPage'
+import { JurnalPage } from '@/features/finance/JurnalPage'
+import { BukuBesarPage } from '@/features/finance/BukuBesarPage'
+import { NeracaSaldoPage } from '@/features/finance/NeracaSaldoPage'
+import { LabaRugiPage } from '@/features/finance/LabaRugiPage'
+import { NeracaPage } from '@/features/finance/NeracaPage'
 
 
 function requireAuth() {
@@ -313,6 +320,48 @@ const laporanDmRoute = createRoute({
   component: DmPage,
 })
 
+const financeAkunRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/akun',
+  component: AkunPage,
+})
+
+const financeMappingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/pengaturan-akun',
+  component: PengaturanAkunPage,
+})
+
+const financeJurnalRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/jurnal',
+  component: JurnalPage,
+})
+
+const financeBukuBesarRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/buku-besar',
+  component: BukuBesarPage,
+})
+
+const financeNeracaSaldoRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/neraca-saldo',
+  component: NeracaSaldoPage,
+})
+
+const financeLabaRugiRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/laba-rugi',
+  component: LabaRugiPage,
+})
+
+const financeNeracaRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/neraca',
+  component: NeracaPage,
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -353,6 +402,13 @@ const routeTree = rootRoute.addChildren([
     laporanApotekRoute,
     laporanNurseRoute,
     laporanDmRoute,
+    financeAkunRoute,
+    financeMappingRoute,
+    financeJurnalRoute,
+    financeBukuBesarRoute,
+    financeNeracaSaldoRoute,
+    financeLabaRugiRoute,
+    financeNeracaRoute,
   ]),
 ])
 

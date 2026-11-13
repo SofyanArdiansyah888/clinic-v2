@@ -3,7 +3,9 @@ import { AlertTriangle, FileText, Info, Pencil, Search } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { apiGet, apiPost } from '@/shared/api/client'
+import { BankSelect } from '@/shared/components/BankSelect'
 import { Dialog } from '@/shared/components/Dialog'
+import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
@@ -28,6 +30,9 @@ export function PembatalanPaketPage() {
   const [cancelTarget, setCancelTarget] = useState<PaketRow | null>(null)
   const [keterangan, setKeterangan] = useState('')
   const [refund, setRefund] = useState('')
+  const [metodeRefund, setMetodeRefund] = useState('tunai')
+  const [bankId, setBankId] = useState('')
+  const needsBank = metodeRefund === 'transfer' || metodeRefund === 'e_money' || metodeRefund === 'kartu_debit'
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
@@ -47,15 +52,24 @@ export function PembatalanPaketPage() {
       apiPost(`/pembayaran/paket/${payload.id}/batal`, {
         keterangan: payload.keterangan,
         refund: payload.refund,
+        jenis_pembayaran: metodeRefund,
+        bank_id: needsBank && bankId ? Number(bankId) : null,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['pembayaran-paket-sisa'] })
       setCancelTarget(null)
       setKeterangan('')
       setRefund('')
+      setMetodeRefund('tunai')
+      setBankId('')
       showToast('Paket perawatan berhasil dibatalkan', 'success')
     },
-    onError: (err) => showToast(err instanceof Error ? err.message : 'Gagal membatalkan paket', 'error'),
+    onError: (err) =>
+      showToast(
+        (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
+          (err instanceof Error ? err.message : 'Gagal membatalkan paket'),
+        'error',
+      ),
   })
 
   return (
@@ -193,6 +207,20 @@ export function PembatalanPaketPage() {
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-orange-400 focus:outline-none"
             />
           </div>
+          {Number(refund) > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Metode Refund</label>
+                <JenisPembayaranSelect value={metodeRefund} onChange={setMetodeRefund} />
+              </div>
+              {needsBank ? (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Rekening Asal</label>
+                  <BankSelect value={bankId} onChange={setBankId} />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Keterangan</label>
             <textarea

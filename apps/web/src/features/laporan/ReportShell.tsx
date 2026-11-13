@@ -23,6 +23,13 @@ type ReportShellProps<T> = {
   description: string
   endpoint: string
   children: (data: T, periode: Periode) => ReactNode
+  // 'per' shows a single "per tanggal" date for point-in-time reports such as a balance sheet.
+  mode?: 'range' | 'per'
+  // Extra query parameters and the inputs that set them.
+  params?: Record<string, unknown>
+  filters?: ReactNode
+  enabled?: boolean
+  actions?: ReactNode
 }
 
 const inputClass =
@@ -30,13 +37,24 @@ const inputClass =
 
 // Period picker + data loading shared by the report pages. The server defaults
 // and validates the range (max 1 year); the page starts on the current month.
-export function ReportShell<T>({ title, description, endpoint, children }: ReportShellProps<T>) {
+export function ReportShell<T>({
+  title,
+  description,
+  endpoint,
+  children,
+  mode = 'range',
+  params,
+  filters,
+  enabled = true,
+  actions,
+}: ReportShellProps<T>) {
   const [periode, setPeriode] = useState<Periode>(() => PRESETS[2].range())
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['laporan', endpoint, periode.dari, periode.sampai],
-    queryFn: () => apiGet<T>(endpoint, periode),
-    enabled: !!periode.dari && !!periode.sampai,
+    queryKey: ['laporan', endpoint, mode, periode.dari, periode.sampai, params],
+    queryFn: () =>
+      apiGet<T>(endpoint, mode === 'per' ? { per: periode.sampai, sampai: periode.sampai, ...params } : { ...periode, ...params }),
+    enabled: enabled && !!periode.dari && !!periode.sampai,
   })
 
   const errorMessage =
@@ -44,10 +62,11 @@ export function ReportShell<T>({ title, description, endpoint, children }: Repor
 
   return (
     <div className="space-y-5">
-      <PageHeader title={title} description={description} />
+      <PageHeader title={title} description={description} actions={actions} />
 
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="space-y-1.5">
+        {filters}
+        <div className={mode === 'per' ? 'hidden' : 'space-y-1.5'}>
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-dari">
             Dari
           </label>
@@ -62,18 +81,20 @@ export function ReportShell<T>({ title, description, endpoint, children }: Repor
         </div>
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-sampai">
-            Sampai
+            {mode === 'per' ? 'Per Tanggal' : 'Sampai'}
           </label>
           <input
             id="lap-sampai"
             type="date"
             value={periode.sampai}
-            min={periode.dari}
-            onChange={(e) => setPeriode((p) => ({ ...p, sampai: e.target.value }))}
+            min={mode === 'per' ? undefined : periode.dari}
+            onChange={(e) =>
+              setPeriode((p) => ({ dari: mode === 'per' && e.target.value < p.dari ? e.target.value : p.dari, sampai: e.target.value }))
+            }
             className={inputClass}
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={mode === 'per' ? 'hidden' : 'flex flex-wrap gap-2'}>
           {PRESETS.map((p) => (
             <Button key={p.label} type="button" variant="outline" size="sm" onClick={() => setPeriode(p.range())}>
               {p.label}

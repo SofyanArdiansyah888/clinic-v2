@@ -1,8 +1,9 @@
-export type Role = 'admin' | 'doctor' | 'staff' | 'apoteker' | 'nurse'
+export type Role = 'admin' | 'doctor' | 'staff' | 'apoteker' | 'nurse' | 'finance'
 
 const FO: Role[] = ['admin', 'staff']
 const KLINIS: Role[] = ['admin', 'staff', 'doctor', 'nurse']
 const FARMASI: Role[] = ['admin', 'apoteker']
+const FINANCE: Role[] = ['admin', 'finance']
 
 // Page access per role; the first matching prefix wins and unlisted pages are admin only.
 // This only shapes the UI — the API enforces the same split in middleware/rbac.go.
@@ -13,13 +14,14 @@ const PAGE_ACCESS: [prefix: string, roles: Role[]][] = [
   ['/depo', FARMASI],
   ['/warehouse', FARMASI],
   ['/data-transaksi/penjualan', ['admin', 'staff', 'apoteker']],
-  ['/data-transaksi/pembelian', FARMASI],
+  ['/data-transaksi/pembelian', ['admin', 'apoteker', 'finance']],
   ['/data-transaksi/deposit', FO],
   ['/administrasi/pasien', FO],
   ['/administrasi/membership', FO],
   ['/administrasi/supplier', FARMASI],
-  ['/laporan/fo', FO],
-  ['/laporan/apotek', FARMASI],
+  ['/finance', FINANCE],
+  ['/laporan/fo', ['admin', 'staff', 'finance']],
+  ['/laporan/apotek', ['admin', 'apoteker', 'finance']],
   ['/laporan/nurse', ['admin', 'nurse']],
   ['/laporan/dm', ['admin', 'doctor']],
 ]
@@ -38,4 +40,5 @@ export const ROLE_LABEL: Record<string, string> = {
   staff: 'Front Office / Kasir',
   apoteker: 'Apoteker / Depo',
   nurse: 'Nurse / Terapis',
+  finance: 'Finance / Akuntansi',
 }
