@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarClock, Coins, Plus, UserPlus, Users } from 'luci
 import { apiGet } from '@/shared/api/client'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge } from '@/shared/components/StatusBadge'
-import { formatCurrency, formatNumber } from '@/shared/lib/formatters'
+import { formatCurrency, formatNumber, todayISO } from '@/shared/lib/formatters'
 import type { DashboardKpi } from '@/shared/types/api'
 import { Skeleton } from '@/shared/ui/skeleton'
 
@@ -17,19 +17,25 @@ type AntrianRow = {
   staff?: { nama?: string }
 }
 
+const ACTIVE_STATUSES = ['menunggu', 'dipanggil', 'diproses', 'bayar']
+
 export function DashboardPage() {
   const kpiQuery = useQuery({
     queryKey: ['dashboard-kpi'],
     queryFn: () => apiGet<DashboardKpi>('/dashboard/kpi'),
   })
 
+  const today = todayISO()
   const antrianQuery = useQuery({
-    queryKey: ['dashboard-antrian'],
-    queryFn: () => apiGet<AntrianRow[]>('/antrian', { page: 1, per_page: 8 }),
+    queryKey: ['dashboard-antrian', today],
+    queryFn: () => apiGet<AntrianRow[]>('/antrian', { page: 1, per_page: 50, tanggal: today }),
   })
 
   const kpi = kpiQuery.data?.data
-  const rows = antrianQuery.data?.data ?? []
+  // "Live" = today's queue that still needs someone to act on it.
+  const rows = (antrianQuery.data?.data ?? [])
+    .filter((r) => ACTIVE_STATUSES.includes(r.status.toLowerCase()))
+    .slice(0, 8)
 
   const cards = [
     {
@@ -92,26 +98,26 @@ export function DashboardPage() {
           Gagal memuat KPI dashboard. Periksa koneksi API.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {cards.map((card) => {
             const Icon = card.icon
             return (
               <div
                 key={card.title}
-                className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold tracking-wider text-slate-500 uppercase">{card.title}</span>
+                  <span className="text-[11px] font-semibold tracking-wider sm:text-xs text-slate-500 uppercase">{card.title}</span>
                   <span className={`rounded-md p-1.5 ${card.iconClass}`}>
                     <Icon className="h-4 w-4" />
                   </span>
                 </div>
-                <div className="mt-3 flex items-baseline justify-between gap-2">
+                <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
                   {kpiQuery.isLoading || !card.value ? (
                     <Skeleton className="h-8 w-28" />
                   ) : (
                     <span
-                      className={`kpi-val text-2xl font-bold tabular-nums ${card.danger ? 'text-rose-600' : 'text-slate-900'}`}
+                      className={`kpi-val text-xl sm:text-2xl font-bold tabular-nums ${card.danger && (kpi?.pending_queue ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900'}`}
                     >
                       {card.value}
                     </span>
@@ -166,7 +172,7 @@ export function DashboardPage() {
                 ) : (
                   rows.map((row) => (
                     <tr key={row.id} className="transition-colors hover:bg-slate-50">
-                      <td className="queue-no px-4 py-3 font-mono text-sm font-bold text-slate-900">{row.kode}</td>
+                      <td className="queue-no whitespace-nowrap px-4 py-3 font-mono text-sm font-bold text-slate-900">{row.kode}</td>
                       <td className="px-4 py-3">
                         <div className="font-bold text-slate-900">{row.pasien?.nama ?? '-'}</div>
                         <div className="font-mono text-[11px] text-slate-500">{row.pasien?.kode ?? ''}</div>
@@ -178,7 +184,7 @@ export function DashboardPage() {
                       <td className="space-x-1 px-4 py-3 text-right">
                         <Link
                           to="/perawatan"
-                          className="rounded-lg bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700"
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
                         >
                           Buka
                         </Link>

@@ -12,7 +12,7 @@ type Cabang = {
 }
 
 const columns: Column<Cabang>[] = [
-  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Cabang', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'no_telp', header: 'No. Telp', cell: (r) => <span className="font-mono">{r.no_telp || '-'}</span> },
   { key: 'alamat', header: 'Alamat', cell: (r) => r.alamat || '-' },

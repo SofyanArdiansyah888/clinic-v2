@@ -1,3 +1,5 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
+import { useConfirm } from '@/shared/components/ConfirmDialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -77,6 +79,7 @@ function calculateRegulerTotal(r: TreatmentRegulerRow): number {
 }
 
 export function PerawatanListPage() {
+  const [confirm, confirmDialog] = useConfirm()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'baru' | 'reguler' | 'paket' | 'data'>('baru')
@@ -107,12 +110,10 @@ export function PerawatanListPage() {
   const [dataStatus, setDataStatus] = useState('all')
   const [dataDokterId, setDataDokterId] = useState('')
 
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PerawatanRow | null>(null)
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   // Query Tab 1: Antrian Perawatan Baru
@@ -443,18 +444,7 @@ export function PerawatanListPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? (
-        <div className="pointer-events-none fixed top-5 right-5 z-[110] max-w-sm">
-          <div
-            className={cn(
-              'pointer-events-auto flex items-center gap-3 rounded-2xl border p-3.5 text-xs font-semibold text-white shadow-xl',
-              toast.tone === 'error' ? 'border-rose-800 bg-rose-950' : 'border-emerald-700 bg-slate-950',
-            )}
-          >
-            <span className="flex-1">{toast.message}</span>
-          </div>
-        </div>
-      ) : null}
+      {confirmDialog}
 
       {/* Header Title Bar */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -471,13 +461,13 @@ export function PerawatanListPage() {
             className="rounded-xl text-xs bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-bold shadow-md shadow-rose-600/20 active:scale-95 transition-all"
           >
             <Plus className="h-4 w-4 mr-1.5" />
-            + Perawatan Baru (SOAP)
+            Perawatan Baru (SOAP)
           </Button>
         </div>
       </div>
 
       {/* KPI Metric Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Menunggu Treatment"
           value={`${stats.waitingCount} Pasien`}
@@ -488,9 +478,9 @@ export function PerawatanListPage() {
         <KpiCard
           label="Sedang Treatment"
           value={`${stats.activeCount} Pasien`}
-          valueClass="text-rose-600"
+          valueClass="text-indigo-600"
           icon={<Stethoscope className="h-5 w-5" />}
-          iconClass="bg-rose-50 text-rose-600"
+          iconClass="bg-indigo-50 text-indigo-600"
         />
         <KpiCard
           label="Selesai SOAP"
@@ -524,7 +514,7 @@ export function PerawatanListPage() {
           <span>Perawatan Baru (Antrian)</span>
           <span
             className={cn(
-              'ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold',
+              'ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold',
               activeTab === 'baru' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700',
             )}
           >
@@ -621,7 +611,7 @@ export function PerawatanListPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="table-sticky-actions w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                   <tr>
                     <th className="w-36 px-4 py-3.5 text-center">NO ANTRIAN</th>
@@ -698,14 +688,14 @@ export function PerawatanListPage() {
                           <button
                             type="button"
                             title="Batalkan Antrian (Cancel)"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Batalkan antrian ${row.kode}? Pasien tidak akan dilayani.`,
-                                )
-                              ) {
-                                updateAntrianStatusMutation.mutate({ id: row.id, status: 'batal' })
-                              }
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: `Batalkan antrian ${row.kode}?`,
+                                description: 'Pasien tidak akan dilayani dan keluar dari antrian perawatan.',
+                                confirmLabel: 'Ya, batalkan',
+                                destructive: true,
+                              })
+                              if (ok) updateAntrianStatusMutation.mutate({ id: row.id, status: 'batal' })
                             }}
                             className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-400 transition-all hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                           >
@@ -743,7 +733,7 @@ export function PerawatanListPage() {
                 type="button"
                 disabled={submitRegulerMutation.isPending}
                 onClick={() => submitRegulerMutation.mutate()}
-                className="rounded-xl text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                className="rounded-xl text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
               >
                 <CreditCard className="h-4 w-4 mr-1.5" />
                 {submitRegulerMutation.isPending ? 'Memproses...' : 'Proses Ke Kasir Pembayaran'}
@@ -753,8 +743,8 @@ export function PerawatanListPage() {
             {/* 3 Column Selectors */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">Tanggal Treatment *</label>
-                <input
+                <label htmlFor="perawatanlistpage-f1" className="mb-1.5 block text-xs font-bold text-slate-700">Tanggal Treatment *</label>
+                <input id="perawatanlistpage-f1"
                   type="date"
                   value={regulerForm.tanggal}
                   onChange={(e) => setRegulerForm((f) => ({ ...f, tanggal: e.target.value }))}
@@ -762,16 +752,16 @@ export function PerawatanListPage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab *</label>
-                <DokterSelect
+                <label htmlFor="perawatanlistpage-f2" className="mb-1.5 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab *</label>
+                <DokterSelect id="perawatanlistpage-f2"
                   required
                   value={regulerForm.staff_id}
                   onChange={(staff_id) => setRegulerForm((f) => ({ ...f, staff_id }))}
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">Pasien / Member *</label>
-                <PasienSelect
+                <label htmlFor="perawatanlistpage-f3" className="mb-1.5 block text-xs font-bold text-slate-700">Pasien / Member *</label>
+                <PasienSelect id="perawatanlistpage-f3"
                   required
                   value={regulerForm.pasien_id}
                   onChange={(pasien_id) => setRegulerForm((f) => ({ ...f, pasien_id }))}
@@ -949,8 +939,8 @@ export function PerawatanListPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">Tanggal *</label>
-                <input
+                <label htmlFor="perawatanlistpage-f4" className="mb-1.5 block text-xs font-bold text-slate-700">Tanggal *</label>
+                <input id="perawatanlistpage-f4"
                   type="date"
                   value={paketForm.tanggal}
                   onChange={(e) => setPaketForm((f) => ({ ...f, tanggal: e.target.value }))}
@@ -958,16 +948,16 @@ export function PerawatanListPage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab *</label>
-                <DokterSelect
+                <label htmlFor="perawatanlistpage-f5" className="mb-1.5 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab *</label>
+                <DokterSelect id="perawatanlistpage-f5"
                   required
                   value={paketForm.staff_id}
                   onChange={(staff_id) => setPaketForm((f) => ({ ...f, staff_id }))}
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">Pasien / Member *</label>
-                <PasienSelect
+                <label htmlFor="perawatanlistpage-f6" className="mb-1.5 block text-xs font-bold text-slate-700">Pasien / Member *</label>
+                <PasienSelect id="perawatanlistpage-f6"
                   required
                   value={paketForm.pasien_id}
                   onChange={(pasien_id) => setPaketForm((f) => ({ ...f, pasien_id }))}
@@ -1118,8 +1108,8 @@ export function PerawatanListPage() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-500 uppercase">Filter Tanggal</label>
-                <input
+                <label htmlFor="perawatanlistpage-f7" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Filter Tanggal</label>
+                <input id="perawatanlistpage-f7"
                   type="date"
                   value={dataTanggal}
                   onChange={(e) => setDataTanggal(e.target.value)}
@@ -1128,8 +1118,8 @@ export function PerawatanListPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-500 uppercase">Filter Status</label>
-                <select
+                <label htmlFor="perawatanlistpage-f8" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Filter Status</label>
+                <select id="perawatanlistpage-f8"
                   value={dataStatus}
                   onChange={(e) => setDataStatus(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 focus:border-rose-500 focus:outline-none"
@@ -1142,8 +1132,8 @@ export function PerawatanListPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-500 uppercase">Filter Dokter</label>
-                <DokterSelect
+                <label htmlFor="perawatanlistpage-f9" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Filter Dokter</label>
+                <DokterSelect id="perawatanlistpage-f9"
                   value={dataDokterId}
                   onChange={(val) => setDataDokterId(val)}
                   placeholder="Semua Dokter..."
@@ -1151,10 +1141,10 @@ export function PerawatanListPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-500 uppercase">Pencarian</label>
+                <label htmlFor="perawatanlistpage-f10" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Pencarian</label>
                 <div className="relative">
                   <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                  <input
+                  <input id="perawatanlistpage-f10"
                     type="text"
                     value={dataSearch}
                     onChange={(e) => setDataSearch(e.target.value)}
@@ -1174,7 +1164,7 @@ export function PerawatanListPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="table-sticky-actions w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                   <tr>
                     <th className="px-4 py-3.5 text-center">KODE EMR</th>
@@ -1190,11 +1180,11 @@ export function PerawatanListPage() {
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredPerawatan.map((row) => (
                     <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
-                      <td className="px-4 py-3 text-center font-mono font-bold text-teal-700">{row.kode}</td>
+                      <td className="px-4 py-3 text-center font-mono font-bold text-rose-700">{row.kode}</td>
                       <td className="px-4 py-3 text-xs text-slate-600">{formatDate(row.tanggal)}</td>
                       <td className="px-4 py-3">
                         <div className="text-xs font-bold text-slate-900">{row.pasien?.nama || '-'}</div>
-                        <div className="font-mono text-[10px] text-slate-400">{row.pasien?.kode || '-'}</div>
+                        <div className="font-mono text-[11px] text-slate-400">{row.pasien?.kode || '-'}</div>
                       </td>
                       <td className="px-4 py-3 text-xs font-semibold text-slate-700">{row.staff?.nama || '-'}</td>
                       <td className="max-w-xs truncate px-4 py-3 text-xs text-slate-500">{row.diagnosa || '—'}</td>

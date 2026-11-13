@@ -47,7 +47,7 @@ export function NursePage() {
           <KpiGrid>
             <KpiCard label="Tindakan" value={formatNumber(d.ringkasan.tindakan)} />
             <KpiCard label="Nilai Tindakan" value={formatCurrency(d.ringkasan.nilai)} />
-            <KpiCard label="Komisi Terapis" value={formatCurrency(d.ringkasan.komisi_terapis)} valueClass="text-teal-700" />
+            <KpiCard label="Komisi Terapis" value={formatCurrency(d.ringkasan.komisi_terapis)} valueClass="text-emerald-700" />
             <KpiCard
               label="Tindakan Tanpa Terapis"
               value={formatNumber(d.ringkasan.tanpa_terapis)}

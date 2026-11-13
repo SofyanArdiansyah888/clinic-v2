@@ -202,8 +202,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         collapsed ? 'w-20' : 'w-64',
       )}
     >
-      <div className="flex h-16 items-center justify-between border-b border-slate-800/80 px-4">
-        <Link to="/" className={cn('flex min-w-0 items-center gap-3', collapsed && 'justify-center')}>
+      <div className={cn('flex h-16 items-center border-b border-slate-800/80', collapsed ? 'justify-center' : 'justify-between px-4')}>
+        <Link to="/" className={cn('flex min-w-0 items-center gap-3', collapsed && 'hidden')}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-pink-400 text-white shadow-lg shadow-rose-600/30">
             <HeartPulse className="h-5 w-5" strokeWidth={2.5} />
           </div>

@@ -81,7 +81,7 @@ export function PengaturanUmumPage() {
       <div className="mt-6">
         <Card className="p-6">
           <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-            <span className="rounded-xl bg-teal-50 p-2.5 text-teal-600 shadow-sm">
+            <span className="rounded-xl bg-rose-50 p-2.5 text-rose-600 shadow-sm">
               <Building2 className="h-5 w-5" />
             </span>
             <div>
@@ -129,7 +129,7 @@ export function PengaturanUmumPage() {
               <textarea
                 id="alamat"
                 rows={2}
-                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
                 value={klinikForm.alamat}
                 onChange={(e) => setKlinikForm({ ...klinikForm, alamat: e.target.value })}
               />
@@ -149,7 +149,7 @@ export function PengaturanUmumPage() {
               <textarea
                 id="catatanInvoice"
                 rows={2}
-                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
                 value={klinikForm.catatan_invoice}
                 onChange={(e) => setKlinikForm({ ...klinikForm, catatan_invoice: e.target.value })}
               />

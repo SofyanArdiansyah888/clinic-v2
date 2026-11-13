@@ -17,7 +17,7 @@ type Treatment = {
 }
 
 const columns: Column<Treatment>[] = [
-  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Layanan / Treatment', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'kategori', header: 'Kategori', cell: (r) => <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">{r.kategori || 'Umum'}</span> },
   { key: 'harga', header: 'Harga Tarif', cell: (r) => <span className="font-semibold text-slate-900">{formatCurrency(r.harga)}</span> },

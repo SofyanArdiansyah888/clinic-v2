@@ -1,3 +1,4 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, format, parseISO, isValid } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
@@ -24,7 +25,6 @@ import { DokterSelect } from '@/shared/components/DokterSelect'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { KpiCard } from '@/shared/components/KpiCard'
-import { cn } from '@/shared/lib/cn'
 import { Button } from '@/shared/ui/button'
 
 type PasienLite = { id: number; kode?: string; nama?: string; no_telp?: string }
@@ -89,7 +89,6 @@ export function AppointmentPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
   const [form, setForm] = useState({
     pasien_id: '',
     staff_id: '',
@@ -134,8 +133,7 @@ export function AppointmentPage() {
   }, [dayRows])
 
   function showToast(message: string, tone: 'success' | 'info' | 'error' = 'info') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   function openCreateModal() {
@@ -209,25 +207,6 @@ export function AppointmentPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? (
-        <div className="pointer-events-none fixed top-5 right-5 z-[110] max-w-sm">
-          <div
-            className={cn(
-              'pointer-events-auto flex items-center gap-3 rounded-2xl border p-3.5 text-xs font-semibold text-white shadow-xl',
-              toast.tone === 'error'
-                ? 'border-rose-800 bg-rose-950'
-                : toast.tone === 'success'
-                  ? 'border-rose-500/40 bg-slate-950'
-                  : 'border-slate-700 bg-slate-950',
-            )}
-          >
-            <span className="flex-1">{toast.message}</span>
-            <button type="button" className="text-slate-400 hover:text-white" onClick={() => setToast(null)}>
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -274,7 +253,7 @@ export function AppointmentPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Total Janji Temu"
           value={`${stats.total} Janji`}
@@ -380,7 +359,7 @@ export function AppointmentPage() {
                           <Clock3 className="h-3 w-3" />
                           {formatJam(row.jam)}
                         </div>
-                        <div className="mt-0.5 font-mono text-[10px] text-slate-400">{row.kode}</div>
+                        <div className="mt-0.5 font-mono text-[11px] text-slate-400">{row.kode}</div>
                       </td>
                       <td className="px-3 py-3">
                         <div className="text-xs font-bold text-slate-900">{row.pasien?.nama || '-'}</div>
@@ -390,7 +369,7 @@ export function AppointmentPage() {
                             {row.pasien?.no_telp || '—'}
                           </span>
                           {row.pasien?.kode ? (
-                            <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+                            <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">
                               {row.pasien.kode}
                             </span>
                           ) : null}
@@ -460,8 +439,8 @@ export function AppointmentPage() {
       >
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
-            <PasienSelect
+            <label htmlFor="appointmentpage-f1" className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
+            <PasienSelect id="appointmentpage-f1"
               required
               value={form.pasien_id}
               onChange={(pasien_id) => setForm((f) => ({ ...f, pasien_id }))}
@@ -469,8 +448,8 @@ export function AppointmentPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Dokter *</label>
-            <DokterSelect
+            <label htmlFor="appointmentpage-f2" className="mb-1 block text-xs font-bold text-slate-700">Dokter *</label>
+            <DokterSelect id="appointmentpage-f2"
               required
               value={form.staff_id}
               onChange={(staff_id) => setForm((f) => ({ ...f, staff_id }))}
@@ -479,8 +458,8 @@ export function AppointmentPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Tanggal Reservasi *</label>
-              <input
+              <label htmlFor="appointmentpage-f3" className="mb-1 block text-xs font-bold text-slate-700">Tanggal Reservasi *</label>
+              <input id="appointmentpage-f3"
                 type="date"
                 required
                 value={form.tanggal}
@@ -489,8 +468,8 @@ export function AppointmentPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-700">Jam Booking *</label>
-              <input
+              <label htmlFor="appointmentpage-f4" className="mb-1 block text-xs font-bold text-slate-700">Jam Booking *</label>
+              <input id="appointmentpage-f4"
                 type="time"
                 required
                 value={form.jam}
@@ -501,8 +480,8 @@ export function AppointmentPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Keterangan / Layanan</label>
-            <input
+            <label htmlFor="appointmentpage-f5" className="mb-1 block text-xs font-bold text-slate-700">Keterangan / Layanan</label>
+            <input id="appointmentpage-f5"
               value={form.keterangan}
               onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value }))}
               placeholder="Cth: Kontrol rutin, konsultasi, treatment laser..."

@@ -1,3 +1,4 @@
+import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, FileText, Info, Pencil, Search } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
@@ -9,7 +10,6 @@ import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
-import { PembayaranToast } from '@/features/pembayaran/components/PembayaranToast'
 
 type PaketRow = {
   id: number
@@ -33,11 +33,9 @@ export function PembatalanPaketPage() {
   const [metodeRefund, setMetodeRefund] = useState('tunai')
   const [bankId, setBankId] = useState('')
   const needsBank = metodeRefund === 'transfer' || metodeRefund === 'e_money' || metodeRefund === 'kartu_debit'
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
-    setToast({ message, tone })
-    window.setTimeout(() => setToast(null), 3200)
+    pushToast(message, tone)
   }
 
   const { data, isLoading } = useQuery({
@@ -74,7 +72,6 @@ export function PembatalanPaketPage() {
 
   return (
     <div className="space-y-6">
-      {toast ? <PembayaranToast message={toast.message} tone={toast.tone} /> : null}
 
       <div>
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Batal Paket Perawatan</h2>
@@ -197,8 +194,8 @@ export function PembatalanPaketPage() {
             </p>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nilai Refund (Rp)</label>
-            <input
+            <label htmlFor="pembatalanpaketpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nilai Refund (Rp)</label>
+            <input id="pembatalanpaketpage-f1"
               type="number"
               min={0}
               value={refund}
@@ -210,20 +207,20 @@ export function PembatalanPaketPage() {
           {Number(refund) > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Metode Refund</label>
-                <JenisPembayaranSelect value={metodeRefund} onChange={setMetodeRefund} />
+                <label htmlFor="pembatalanpaketpage-f2" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Metode Refund</label>
+                <JenisPembayaranSelect id="pembatalanpaketpage-f2" value={metodeRefund} onChange={setMetodeRefund} />
               </div>
               {needsBank ? (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Rekening Asal</label>
-                  <BankSelect value={bankId} onChange={setBankId} />
+                  <label htmlFor="pembatalanpaketpage-f3" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Rekening Asal</label>
+                  <BankSelect id="pembatalanpaketpage-f3" value={bankId} onChange={setBankId} />
                 </div>
               ) : null}
             </div>
           ) : null}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Keterangan</label>
-            <textarea
+            <label htmlFor="pembatalanpaketpage-f4" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Keterangan</label>
+            <textarea id="pembatalanpaketpage-f4"
               value={keterangan}
               onChange={(e) => setKeterangan(e.target.value)}
               rows={3}

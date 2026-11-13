@@ -54,7 +54,7 @@ function errorMessage(err: unknown, fallback: string) {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 focus:border-teal-500 focus:outline-none'
+  'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 focus:border-rose-500 focus:outline-none'
 const labelClass = 'text-[11px] font-bold uppercase tracking-wider text-slate-500'
 
 export function PaymentModal({
@@ -187,8 +187,8 @@ export function PaymentModal({
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">
-            <label className={labelClass}>Kode Promo</label>
-            <input
+            <label htmlFor="paymentmodal-f1" className={labelClass}>Kode Promo</label>
+            <input id="paymentmodal-f1"
               value={promoInput}
               onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
               placeholder="PRM-..."
@@ -196,8 +196,8 @@ export function PaymentModal({
             />
           </div>
           <div className="space-y-1.5">
-            <label className={labelClass}>Kode Voucher</label>
-            <input
+            <label htmlFor="paymentmodal-f2" className={labelClass}>Kode Voucher</label>
+            <input id="paymentmodal-f2"
               value={voucherInput}
               onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
               placeholder="VCR-..."
@@ -221,8 +221,8 @@ export function PaymentModal({
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">
-            <label className={labelClass}>Pakai Poin</label>
-            <input
+            <label htmlFor="paymentmodal-f3" className={labelClass}>Pakai Poin</label>
+            <input id="paymentmodal-f3"
               type="number"
               min={0}
               value={poin}
@@ -235,8 +235,8 @@ export function PaymentModal({
             </p>
           </div>
           <div className="space-y-1.5">
-            <label className={labelClass}>Pakai Deposit (Rp)</label>
-            <input
+            <label htmlFor="paymentmodal-f4" className={labelClass}>Pakai Deposit (Rp)</label>
+            <input id="paymentmodal-f4"
               type="number"
               min={0}
               value={deposit}
@@ -250,14 +250,14 @@ export function PaymentModal({
           </div>
         </div>
 
-        <div className="space-y-1 rounded-2xl border border-teal-100 bg-teal-50/60 p-4 text-xs">
+        <div className="space-y-1 rounded-2xl border border-rose-100 bg-rose-50/60 p-4 text-xs">
           <SummaryRow label="Subtotal" value={tagihan?.subtotal ?? target?.total ?? 0} />
           {tagihan?.diskon_promo ? <SummaryRow label="Diskon promo" value={-tagihan.diskon_promo} /> : null}
           {tagihan?.diskon_voucher ? <SummaryRow label="Diskon voucher" value={-tagihan.diskon_voucher} /> : null}
           {potonganPoin > 0 ? <SummaryRow label="Potongan poin" value={-potonganPoin} /> : null}
           {depositDipakai > 0 ? <SummaryRow label="Pakai deposit" value={-depositDipakai} /> : null}
-          <div className="flex items-center justify-between border-t border-teal-100 pt-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Sisa Bayar</span>
+          <div className="flex items-center justify-between border-t border-rose-100 pt-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Sisa Bayar</span>
             <span className="text-2xl font-extrabold text-slate-900">
               {tagihanQuery.isFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(sisaBayar)}
             </span>
@@ -268,27 +268,27 @@ export function PaymentModal({
         </div>
 
         <div className="space-y-1.5">
-          <label className={labelClass}>Staff Kasir</label>
-          <StaffSelect value={staffId} onChange={onStaffIdChange} required />
+          <label htmlFor="paymentmodal-f5" className={labelClass}>Staff Kasir</label>
+          <StaffSelect id="paymentmodal-f5" value={staffId} onChange={onStaffIdChange} required />
         </div>
 
         {sisaBayar > 0 ? (
           <>
             <div className="space-y-1.5">
-              <label className={labelClass}>Jenis Pembayaran</label>
-              <JenisPembayaranSelect value={jenisPembayaran} onChange={setJenisPembayaran} required />
+              <label htmlFor="paymentmodal-f6" className={labelClass}>Jenis Pembayaran</label>
+              <JenisPembayaranSelect id="paymentmodal-f6" value={jenisPembayaran} onChange={setJenisPembayaran} required />
             </div>
 
             {needsBank ? (
               <div className="space-y-1.5">
-                <label className={labelClass}>Rekening Tujuan</label>
-                <BankSelect value={bankId} onChange={setBankId} required />
+                <label htmlFor="paymentmodal-f7" className={labelClass}>Rekening Tujuan</label>
+                <BankSelect id="paymentmodal-f7" value={bankId} onChange={setBankId} required />
               </div>
             ) : null}
 
             <div className="space-y-1.5">
-              <label className={labelClass}>Jumlah Bayar (Rp)</label>
-              <input
+              <label htmlFor="paymentmodal-f8" className={labelClass}>Jumlah Bayar (Rp)</label>
+              <input id="paymentmodal-f8"
                 type="number"
                 value={jumlahBayar}
                 onChange={(e) => setJumlahBayar(e.target.value)}
@@ -313,7 +313,7 @@ export function PaymentModal({
             type="button"
             disabled={!canPay}
             onClick={() => payMutation.mutate()}
-            className="flex-1 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-xs font-bold text-white hover:from-teal-700 hover:to-emerald-700"
+            className="flex-1 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 text-xs font-bold text-white hover:from-rose-700 hover:to-rose-600"
           >
             {payMutation.isPending ? (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />

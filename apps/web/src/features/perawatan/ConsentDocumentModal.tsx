@@ -55,8 +55,8 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
           <p className="text-xs font-bold text-slate-800">Tambah Dokumen Baru</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Dokumen *</label>
-              <input
+              <label htmlFor="consentdocumentmodal-f1" className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Dokumen *</label>
+              <input id="consentdocumentmodal-f1"
                 value={docName}
                 onChange={(e) => setDocName(e.target.value)}
                 placeholder="misal: Informed Consent Laser"
@@ -64,8 +64,8 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">URL / Link Dokumen</label>
-              <input
+              <label htmlFor="consentdocumentmodal-f2" className="block text-[11px] font-semibold text-slate-600 mb-1">URL / Link Dokumen</label>
+              <input id="consentdocumentmodal-f2"
                 value={docUrl}
                 onChange={(e) => setDocUrl(e.target.value)}
                 placeholder="https://..."
@@ -95,7 +95,7 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
                     <FileText className="h-4 w-4 text-rose-600 shrink-0" />
                     <div className="truncate">
                       <p className="text-xs font-bold text-slate-900 truncate">{doc.name}</p>
-                      <p className="text-[10px] text-slate-400">{doc.date}</p>
+                      <p className="text-[11px] text-slate-400">{doc.date}</p>
                     </div>
                   </div>
                   <button

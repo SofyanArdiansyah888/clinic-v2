@@ -16,7 +16,7 @@ type Voucher = {
 }
 
 const columns: Column<Voucher>[] = [
-  { key: 'kode', header: 'Kode Voucher', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode Voucher', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Voucher', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'tipe', header: 'Tipe Diskon', cell: (r) => (r.tipe_diskon === 'percent' ? 'Persentase (%)' : 'Nominal (Rp)') },
   {

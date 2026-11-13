@@ -4,6 +4,7 @@ import { Download } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { DataTable, type Column } from '@/shared/components/DataTable'
+import { EmptyState } from '@/shared/components/EmptyState'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
@@ -29,11 +30,13 @@ type ReportShellProps<T> = {
   params?: Record<string, unknown>
   filters?: ReactNode
   enabled?: boolean
+  // Shown instead of the report while `enabled` is false (e.g. "pick an account first").
+  idleMessage?: string
   actions?: ReactNode
 }
 
 const inputClass =
-  'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none'
+  'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none'
 
 // Period picker + data loading shared by the report pages. The server defaults
 // and validates the range (max 1 year); the page starts on the current month.
@@ -46,6 +49,7 @@ export function ReportShell<T>({
   params,
   filters,
   enabled = true,
+  idleMessage,
   actions,
 }: ReportShellProps<T>) {
   const [periode, setPeriode] = useState<Periode>(() => PRESETS[2].range())
@@ -67,7 +71,7 @@ export function ReportShell<T>({
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4">
         {filters}
         <div className={mode === 'per' ? 'hidden' : 'space-y-1.5'}>
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-dari">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-dari">
             Dari
           </label>
           <input
@@ -80,7 +84,7 @@ export function ReportShell<T>({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-sampai">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-sampai">
             {mode === 'per' ? 'Per Tanggal' : 'Sampai'}
           </label>
           <input
@@ -103,6 +107,7 @@ export function ReportShell<T>({
         </div>
       </div>
 
+      {!enabled && idleMessage ? <EmptyState title="Pilih filter" description={idleMessage} /> : null}
       {isLoading ? <p className="text-sm text-slate-500">Memuat laporan...</p> : null}
       {isError ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{errorMessage}</div> : null}
       {data?.data ? children(data.data, periode) : null}
@@ -154,6 +159,6 @@ export function ReportTable<T>({ title, description, columns, rows, rowKey, file
   )
 }
 
-export function KpiGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>
+export function KpiGrid({ children, cols = 4 }: { children: ReactNode; cols?: 3 | 4 }) {
+  return <div className={cols === 3 ? 'grid grid-cols-2 gap-3 lg:grid-cols-3' : 'grid grid-cols-2 gap-3 lg:grid-cols-4'}>{children}</div>
 }

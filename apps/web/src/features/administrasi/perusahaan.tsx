@@ -13,7 +13,7 @@ type Perusahaan = {
 }
 
 const columns: Column<Perusahaan>[] = [
-  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Perusahaan / Mitra', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'no_telp', header: 'No. Telp', cell: (r) => <span className="font-mono">{r.no_telp || '-'}</span> },
   { key: 'email', header: 'Email', cell: (r) => r.email || '-' },

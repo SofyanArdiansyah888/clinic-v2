@@ -49,7 +49,7 @@ export function ApotekPage() {
         <>
           <KpiGrid>
             <KpiCard label="Item Terjual" value={formatNumber(d.ringkasan.item_terjual)} />
-            <KpiCard label="Nilai Penjualan Barang" value={formatCurrency(d.ringkasan.nilai_penjualan)} valueClass="text-teal-700" />
+            <KpiCard label="Nilai Penjualan Barang" value={formatCurrency(d.ringkasan.nilai_penjualan)} valueClass="text-emerald-700" />
             <KpiCard
               label="Resep Siap / Diserahkan"
               value={`${formatNumber(d.ringkasan.resep_dibayar)} / ${formatNumber(d.ringkasan.resep_diserahkan)}`}

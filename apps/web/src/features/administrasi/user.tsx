@@ -19,7 +19,7 @@ type User = {
 
 const columns: Column<User>[] = [
   { key: 'name', header: 'Nama Pengguna', cell: (r) => <span className="font-bold text-slate-900">{r.name}</span> },
-  { key: 'username', header: 'Username', cell: (r) => <span className="font-mono text-teal-700">{r.username}</span> },
+  { key: 'username', header: 'Username', cell: (r) => <span className="font-mono text-rose-700">{r.username}</span> },
   { key: 'email', header: 'Email', cell: (r) => r.email },
   { key: 'role', header: 'Peran / Role', cell: (r) => <span className="rounded bg-slate-100 px-2 py-1 font-semibold text-slate-700 uppercase text-[11px]">{r.role}</span> },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },

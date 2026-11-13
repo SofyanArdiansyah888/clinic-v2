@@ -55,8 +55,8 @@ const columns: Column<Row>[] = [
       const s = BAYAR_STYLE[r.status_bayar ?? 'belum'] ?? BAYAR_STYLE.belum
       return (
         <div className="space-y-0.5">
-          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', s.className)}>{s.label}</span>
-          {r.status_bayar !== 'lunas' ? <p className="text-[10px] text-slate-500">Sisa {formatCurrency(sisa(r))}</p> : null}
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', s.className)}>{s.label}</span>
+          {r.status_bayar !== 'lunas' ? <p className="text-[11px] text-slate-500">Sisa {formatCurrency(sisa(r))}</p> : null}
         </div>
       )
     },

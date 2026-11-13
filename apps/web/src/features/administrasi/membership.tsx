@@ -13,7 +13,7 @@ type Membership = {
 }
 
 const columns: Column<Membership>[] = [
-  { key: 'kode', header: 'Kode Member', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode Member', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'pasien', header: 'Nama Pasien', cell: (r) => <span className="font-bold text-slate-900">{r.pasien?.nama || `Pasien #${r.pasien_id}`}</span> },
   { key: 'tipe', header: 'Tier / Level Member', cell: (r) => <span className="rounded bg-amber-50 border border-amber-200 px-2 py-1 font-bold text-amber-800 uppercase text-[11px]">{r.tipe || 'Silver'}</span> },
   { key: 'points', header: 'Poin Reward', cell: (r) => <span className="font-mono font-bold text-slate-900">{r.points} pts</span> },

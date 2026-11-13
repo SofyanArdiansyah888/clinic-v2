@@ -16,7 +16,7 @@ type Promo = {
 }
 
 const columns: Column<Promo>[] = [
-  { key: 'kode', header: 'Kode Promo', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode Promo', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Promo / Program', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'tipe', header: 'Tipe Diskon', cell: (r) => (r.tipe_diskon === 'percent' ? 'Persentase (%)' : 'Nominal (Rp)') },
   {

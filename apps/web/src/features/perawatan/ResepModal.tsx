@@ -127,7 +127,7 @@ export function ResepModal({ isOpen, onClose, onSave }: ResepModalProps) {
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase text-[10px]">
+              <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase text-[11px]">
                 <tr>
                   <th className="px-3 py-2">Barang / Obat</th>
                   <th className="w-20 px-3 py-2">Qty</th>

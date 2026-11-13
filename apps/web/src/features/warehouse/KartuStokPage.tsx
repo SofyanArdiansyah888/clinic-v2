@@ -54,7 +54,7 @@ const columns: Column<Row>[] = [
 ]
 
 const inputClass =
-  'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none'
+  'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none'
 
 export function KartuStokPage() {
   const [barangId, setBarangId] = useState('')
@@ -71,8 +71,8 @@ export function KartuStokPage() {
     <div className="space-y-4">
       <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Barang</label>
-          <BarangSelect value={barangId} onChange={(v) => setBarangId(v)} placeholder="Semua barang" />
+          <label htmlFor="kartustokpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Barang</label>
+          <BarangSelect id="kartustokpage-f1" value={barangId} onChange={(v) => setBarangId(v)} placeholder="Semua barang" />
         </div>
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="ks-dari">

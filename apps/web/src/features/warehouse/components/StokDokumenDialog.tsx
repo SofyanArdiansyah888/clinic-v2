@@ -44,7 +44,7 @@ function initialLines(variant: StokDokumenVariant): Line[] {
 
 const labelClass = 'text-[11px] font-bold uppercase tracking-wider text-slate-500'
 const inputClass =
-  'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none'
+  'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none'
 
 export function StokDokumenDialog({
   open,
@@ -276,12 +276,12 @@ export function StokDokumenDialog({
           {variant === 'pembelian' ? (
             <>
               <div className="space-y-1.5">
-                <label className={labelClass}>Supplier</label>
-                <SupplierSelect value={supplierId} onChange={setSupplierId} required />
+                <label htmlFor="stokdokumendialog-f1" className={labelClass}>Supplier</label>
+                <SupplierSelect id="stokdokumendialog-f1" value={supplierId} onChange={setSupplierId} required />
               </div>
               <div className="space-y-1.5">
-                <label className={labelClass}>Staff Penerima</label>
-                <StaffSelect value={staffId} onChange={setStaffId} placeholder="Pilih staff penerima..." required />
+                <label htmlFor="stokdokumendialog-f2" className={labelClass}>Staff Penerima</label>
+                <StaffSelect id="stokdokumendialog-f2" value={staffId} onChange={setStaffId} placeholder="Pilih staff penerima..." required />
               </div>
             </>
           ) : null}
@@ -306,8 +306,8 @@ export function StokDokumenDialog({
         )}
 
         {variant === 'pembelian' ? (
-          <div className="flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-4 py-3">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Total Pembelian</span>
+          <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Total Pembelian</span>
             <span className="text-lg font-extrabold text-slate-900">{formatCurrency(total)}</span>
           </div>
         ) : null}

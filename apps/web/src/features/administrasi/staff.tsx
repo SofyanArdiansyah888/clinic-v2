@@ -24,7 +24,7 @@ type JadwalDokter = {
 }
 
 const staffColumns: Column<Staff>[] = [
-  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Staff / Dokter', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'jabatan', header: 'Jabatan / Peran', cell: (r) => r.jabatan || '-' },
   { key: 'no_telp', header: 'No. Telp', cell: (r) => <span className="font-mono">{r.no_telp || '-'}</span> },
@@ -54,7 +54,7 @@ const staffFields: FormField[] = [
 
 const jadwalColumns: Column<JadwalDokter>[] = [
   { key: 'dokter_nama', header: 'Nama Dokter', cell: (r) => <span className="font-bold text-slate-900">{r.dokter_nama}</span> },
-  { key: 'hari', header: 'Hari Praktek', cell: (r) => <span className="font-semibold text-teal-800">{r.hari}</span> },
+  { key: 'hari', header: 'Hari Praktek', cell: (r) => <span className="font-semibold text-rose-800">{r.hari}</span> },
   { key: 'jam', header: 'Jam Operasional', cell: (r) => <span className="font-mono">{r.jam_mulai} - {r.jam_selesai}</span> },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
@@ -90,7 +90,7 @@ export function StaffPage() {
           onClick={() => setActiveTab('staff')}
           className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold transition-colors ${
             activeTab === 'staff'
-              ? 'border-teal-600 text-teal-700'
+              ? 'border-rose-600 text-rose-700'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
@@ -102,7 +102,7 @@ export function StaffPage() {
           onClick={() => setActiveTab('jadwal')}
           className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold transition-colors ${
             activeTab === 'jadwal'
-              ? 'border-teal-600 text-teal-700'
+              ? 'border-rose-600 text-rose-700'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >

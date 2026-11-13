@@ -51,7 +51,7 @@ export function DmPage() {
             />
             <KpiCard label="Pasien Unik" value={formatNumber(d.ringkasan.pasien)} />
             <KpiCard label="Nilai Tindakan" value={formatCurrency(d.ringkasan.nilai)} />
-            <KpiCard label="Komisi Dokter" value={formatCurrency(d.ringkasan.komisi_dokter)} valueClass="text-teal-700" />
+            <KpiCard label="Komisi Dokter" value={formatCurrency(d.ringkasan.komisi_dokter)} valueClass="text-emerald-700" />
           </KpiGrid>
           <p className="text-xs text-slate-500">
             Nilai dan komisi hanya dari perawatan yang sudah dibayar. Komisi = komisi dokter di master Treatment × jumlah

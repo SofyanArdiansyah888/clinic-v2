@@ -33,7 +33,7 @@ export function StokDokumenPage({
   const [open, setOpen] = useState(false)
 
   const columns: Column<StokDokumenRow>[] = [
-    { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+    { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
     { key: 'tanggal', header: 'Tanggal', cell: (r) => formatDate(r.tanggal) },
     itemsColumn<StokDokumenRow>(variant),
     { key: 'keterangan', header: 'Keterangan', cell: (r) => r.keterangan || '-' },

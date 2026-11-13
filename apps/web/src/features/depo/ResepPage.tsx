@@ -34,7 +34,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key']
 
 const columns: Column<Row>[] = [
-  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'tanggal', header: 'Tanggal', cell: (r) => formatDate(r.tanggal) },
   { key: 'pasien', header: 'Pasien', cell: (r) => r.pasien?.nama || '-' },
   { key: 'dokter', header: 'Dokter', cell: (r) => r.staff?.nama || '-' },
@@ -87,7 +87,7 @@ export function ResepPage() {
             type="button"
             onClick={() => setTab(t.key)}
             className={`border-b-2 px-4 py-3 text-xs font-bold transition-colors ${
-              tab === t.key ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              tab === t.key ? 'border-rose-600 text-rose-700' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             {t.label}

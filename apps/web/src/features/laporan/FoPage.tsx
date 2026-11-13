@@ -75,7 +75,7 @@ export function FoPage() {
             <KpiCard
               label="Pendapatan Bersih"
               value={formatCurrency(d.ringkasan.pendapatan_bersih)}
-              valueClass="text-teal-700"
+              valueClass="text-emerald-700"
             />
             <KpiCard
               label="Deposit Masuk / Dipakai"

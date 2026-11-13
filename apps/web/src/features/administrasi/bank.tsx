@@ -12,7 +12,7 @@ type Bank = {
 }
 
 const columns: Column<Bank>[] = [
-  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-teal-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Bank', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
   { key: 'no_rekening', header: 'No. Rekening', cell: (r) => <span className="font-mono">{r.no_rekening || '-'}</span> },
   { key: 'atas_nama', header: 'Atas Nama', cell: (r) => r.atas_nama || '-' },

@@ -74,7 +74,7 @@ export function DepositPage() {
         </div>
         <Link
           to="/pembayaran/deposit"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-700 hover:bg-teal-100"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100"
         >
           <Wallet className="h-3.5 w-3.5" />
           Input Transaksi Baru
@@ -84,7 +84,7 @@ export function DepositPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <p className="text-xs font-medium text-slate-500">Total Transaksi</p>
-          <h3 className="mt-1 text-xl font-extrabold text-teal-600">{stats.count}</h3>
+          <h3 className="mt-1 text-xl font-extrabold text-rose-600">{stats.count}</h3>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <p className="text-xs font-medium text-slate-500">Total Nilai</p>
@@ -102,7 +102,7 @@ export function DepositPage() {
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-teal-600" />
+            <History className="h-4 w-4 text-rose-600" />
             <h3 className="text-sm font-extrabold text-slate-900">Log Transaksi Deposit</h3>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -110,12 +110,12 @@ export function DepositPage() {
               type="date"
               value={tanggal}
               onChange={(e) => setTanggal(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-teal-500 focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-rose-500 focus:outline-none"
             />
             <select
               value={jenis}
               onChange={(e) => setJenis(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-teal-500 focus:outline-none"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-rose-500 focus:outline-none"
             >
               {JENIS_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -130,7 +130,7 @@ export function DepositPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Cari pasien / kode..."
-                className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
               />
             </div>
           </div>
@@ -166,7 +166,7 @@ export function DepositPage() {
                 {rows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3 text-xs text-slate-600">{formatDate(row.tanggal)}</td>
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-teal-700">{row.kode}</td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-rose-700">{row.kode}</td>
                     <td className="px-4 py-3 text-xs font-semibold text-slate-800">{row.pasien?.nama || '-'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={JENIS_LABELS[row.jenis] || row.jenis} />

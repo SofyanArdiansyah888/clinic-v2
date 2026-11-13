@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/client'
 import { DataTable, type Column } from '@/shared/components/DataTable'
 import { Dialog } from '@/shared/components/Dialog'
@@ -157,6 +157,17 @@ export function ResourceListPage<T extends { id: number | string }>({
 
   const activeEditFields = editFields ?? createFields
 
+  // Search as you type (debounced), matching the other list pages; Enter applies immediately.
+  useEffect(() => {
+    const next = searchInput.trim()
+    if (next === search) return
+    const id = window.setTimeout(() => {
+      setPage(1)
+      setSearch(next)
+    }, 350)
+    return () => window.clearTimeout(id)
+  }, [searchInput, search])
+
   function onSubmitSearch(e: FormEvent) {
     e.preventDefault()
     setPage(1)
@@ -278,7 +289,7 @@ export function ResourceListPage<T extends { id: number | string }>({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-teal-600"
+                className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-rose-600"
                 onClick={() => handleOpenEdit(row)}
                 title="Edit Data"
               >
@@ -324,19 +335,18 @@ export function ResourceListPage<T extends { id: number | string }>({
 
       <Card className="mt-6 overflow-hidden">
         <div className="border-b border-slate-200 bg-white p-3.5">
-          <form onSubmit={onSubmitSearch} className="flex flex-col gap-3 md:flex-row">
-            <div className="relative flex-1">
+          <form onSubmit={onSubmitSearch} role="search">
+            <div className="relative">
               <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-slate-400" />
               <Input
+                type="search"
+                aria-label={`Cari ${title.toLowerCase()}`}
                 className="h-10 pl-9"
-                placeholder="Cari data..."
+                placeholder="Ketik untuk mencari..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
-            <Button type="submit" variant="secondary" className="h-10">
-              Cari
-            </Button>
           </form>
         </div>
 
@@ -377,7 +387,7 @@ export function ResourceListPage<T extends { id: number | string }>({
                 {field.type === 'select' ? (
                   <select
                     id={`create-${field.name}`}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-teal-500"
+                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-rose-500"
                     value={formValues[field.name] ?? ''}
                     onChange={(e) =>
                       setFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
@@ -393,7 +403,7 @@ export function ResourceListPage<T extends { id: number | string }>({
                 ) : field.type === 'textarea' ? (
                   <textarea
                     id={`create-${field.name}`}
-                    className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                    className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
                     placeholder={field.placeholder}
                     required={field.required}
                     value={formValues[field.name] ?? ''}
@@ -454,7 +464,7 @@ export function ResourceListPage<T extends { id: number | string }>({
                 {field.type === 'select' ? (
                   <select
                     id={`edit-${field.name}`}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-teal-500"
+                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-rose-500"
                     value={editFormValues[field.name] ?? ''}
                     onChange={(e) =>
                       setEditFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
@@ -470,7 +480,7 @@ export function ResourceListPage<T extends { id: number | string }>({
                 ) : field.type === 'textarea' ? (
                   <textarea
                     id={`edit-${field.name}`}
-                    className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                    className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
                     placeholder={field.placeholder}
                     required={field.required}
                     value={editFormValues[field.name] ?? ''}
