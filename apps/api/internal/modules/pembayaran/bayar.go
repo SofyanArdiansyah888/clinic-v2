@@ -420,10 +420,8 @@ func (s *Service) createPaketRecords(tx *gorm.DB, pw *perawatan.Perawatan, staff
 		if !strings.Contains(strings.ToLower(tr.Kategori), "paket") {
 			continue
 		}
+		// Durasi is minutes per visit, not a session count, so it is no fallback here.
 		sesi := tr.SesiPaket
-		if sesi <= 0 {
-			sesi = tr.Durasi
-		}
 		if sesi <= 0 {
 			sesi = 1
 		}

@@ -10,6 +10,7 @@ type Treatment = {
   kategori?: string
   harga: number
   durasi?: number
+  sesi_paket?: number
   komisi_dokter?: number
   komisi_terapis?: number
   deskripsi?: string
@@ -22,6 +23,11 @@ const columns: Column<Treatment>[] = [
   { key: 'kategori', header: 'Kategori', cell: (r) => <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">{r.kategori || 'Umum'}</span> },
   { key: 'harga', header: 'Harga Tarif', cell: (r) => <span className="font-semibold text-slate-900">{formatCurrency(r.harga)}</span> },
   { key: 'durasi', header: 'Durasi', cell: (r) => (r.durasi ? `${r.durasi} menit` : '-') },
+  {
+    key: 'sesi',
+    header: 'Sesi Paket',
+    cell: (r) => (r.kategori?.toLowerCase().includes('paket') ? `${r.sesi_paket || 1}x` : '-'),
+  },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
@@ -38,10 +44,13 @@ const formFields: FormField[] = [
       { label: 'Body Treatment & Slimming', value: 'Body' },
       { label: 'Konsultasi Medis', value: 'Konsultasi' },
       { label: 'Tindakan Bedah Ringan', value: 'Tindakan' },
+      // Treatments in this category are sold as a package of sessions (see Jumlah Sesi Paket).
+      { label: 'Paket Perawatan (beberapa sesi)', value: 'Paket' },
     ],
   },
   { name: 'harga', label: 'Harga Tarif (Rp)', type: 'number', required: true },
   { name: 'durasi', label: 'Durasi Pengerjaan (Menit)', type: 'number', placeholder: '45' },
+  { name: 'sesi_paket', label: 'Jumlah Sesi Paket (khusus kategori Paket)', type: 'number', placeholder: '5' },
   { name: 'komisi_dokter', label: 'Komisi Dokter (Rp)', type: 'number', placeholder: '0' },
   { name: 'komisi_terapis', label: 'Komisi Beautician/Terapis (Rp)', type: 'number', placeholder: '0' },
   { name: 'deskripsi', label: 'Deskripsi & Catatan Treatment', type: 'textarea' },

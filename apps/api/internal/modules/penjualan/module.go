@@ -1,6 +1,7 @@
 package penjualan
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -69,6 +70,14 @@ type ListFilters struct {
 }
 
 type Handler struct{ svc *Service }
+
+func fail(c *gin.Context, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		response.NotFound(c, "penjualan tidak ditemukan")
+		return
+	}
+	response.BadRequest(c, err.Error(), nil)
+}
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
@@ -183,6 +192,9 @@ func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 	}
 
 	for i, d := range req.Details {
+		if d.Qty < 1 {
+			return nil, fmt.Errorf("qty baris %d harus minimal 1", i+1)
+		}
 		jenis := d.JenisPenjualan
 		if jenis == "" {
 			if d.TreatmentID > 0 {
@@ -273,7 +285,14 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !validStatus[req.Status] {
+		return nil, fmt.Errorf("status penjualan %q tidak dikenal", req.Status)
+	}
+	if item.Status == "cancelled" && req.Status != "cancelled" {
+		return nil, errors.New("penjualan yang sudah dibatalkan tidak bisa diaktifkan lagi")
+	}
 	wasPaid := item.Status == "paid"
+	cancelling := item.Status != "cancelled" && req.Status == "cancelled"
 	item.Status = req.Status
 	if req.JenisPembayaran != "" {
 		item.JenisPembayaran = req.JenisPembayaran
@@ -288,6 +307,11 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 		if err := tx.Omit(clause.Associations).Save(item).Error; err != nil {
 			return err
 		}
+		if cancelling {
+			if err := s.returnStock(tx, item.ID, item.Kode, "Pembatalan penjualan "+item.Kode); err != nil {
+				return err
+			}
+		}
 		// Taking a paid sale out of paid undoes its journal.
 		if wasPaid && item.Status != "paid" {
 			return finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Pembatalan penjualan "+item.Kode)
@@ -300,6 +324,25 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	return s.Get(id)
 }
 
+var validStatus = map[string]bool{"draft": true, "confirmed": true, "paid": true, "cancelled": true}
+
+// returnStock puts back the barang taken out when the penjualan was created.
+func (s *Service) returnStock(tx *gorm.DB, penjualanID uint, kode, ket string) error {
+	var details []PenjualanDetail
+	if err := tx.Where("penjualan_id = ? AND barang_id IS NOT NULL", penjualanID).Find(&details).Error; err != nil {
+		return err
+	}
+	for _, d := range details {
+		if d.BarangID == nil || d.Qty <= 0 {
+			continue
+		}
+		if err := warehouse.ApplyStockMove(tx, s.gen, *d.BarangID, d.Qty, "masuk", kode, ket, time.Now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item Penjualan
@@ -308,6 +351,11 @@ func (s *Service) Delete(id uint) error {
 		}
 		if err := finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Hapus penjualan "+item.Kode); err != nil {
 			return err
+		}
+		if item.Status != "cancelled" {
+			if err := s.returnStock(tx, item.ID, item.Kode, "Hapus penjualan "+item.Kode); err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("penjualan_id = ?", id).Delete(&PenjualanDetail{}).Error; err != nil {
 			return err
@@ -352,7 +400,7 @@ func (h *Handler) Store(c *gin.Context) {
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err := h.svc.Delete(uint(id)); err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.OK(c, nil, "deleted")
@@ -367,7 +415,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 	}
 	item, err := h.svc.UpdateStatus(uint(id), req)
 	if err != nil {
-		response.Internal(c, err.Error())
+		fail(c, err)
 		return
 	}
 	response.OK(c, item, "status updated")
