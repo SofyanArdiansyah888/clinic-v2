@@ -14,7 +14,11 @@ export async function uploadImage(file: File, folder = 'foto-sebelum'): Promise<
   form.append('file', file)
   form.append('folder', folder)
 
-  const { data } = await api.post<ApiResponse<UploadObject>>('/uploads', form)
+  // The shared client defaults to application/json, which makes axios serialize FormData to
+  // JSON; send it as multipart (axios adds the boundary) so the API receives the file.
+  const { data } = await api.post<ApiResponse<UploadObject>>('/uploads', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 
   if (!data.success || !data.data) {
     throw new Error(data.message || 'Upload gagal')

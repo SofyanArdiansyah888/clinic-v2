@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "qa": "playwright test -c playwright.qa.config.ts",
+    "qa:report": "playwright show-report qa-report"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",

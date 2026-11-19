@@ -9,8 +9,8 @@ import { Label } from '@/shared/ui/label'
 export function LoginPage() {
   const login = useAuthStore((s) => s.login)
   const navigate = useNavigate()
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('admin123')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)

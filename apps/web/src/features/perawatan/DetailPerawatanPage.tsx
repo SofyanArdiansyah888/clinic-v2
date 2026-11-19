@@ -200,6 +200,22 @@ export function DetailPerawatanPage() {
       })
   }, [queryAntrianId, perawatanId, queryClient])
 
+  // Opened from the queue: the antrian already names the patient's dokter, so use it.
+  const { data: antrianData } = useQuery({
+    queryKey: ['antrian', 'detail', queryAntrianId],
+    queryFn: () => apiGet<{ pasien_id: number; staff_id: number }>(`/antrian/${queryAntrianId}`),
+    enabled: Boolean(queryAntrianId) && !perawatanId,
+  })
+  useEffect(() => {
+    const a = antrianData?.data
+    if (!a) return
+    setForm((f) => ({
+      ...f,
+      staff_id: f.staff_id || (a.staff_id ? String(a.staff_id) : ''),
+      pasien_id: f.pasien_id || (a.pasien_id ? String(a.pasien_id) : ''),
+    }))
+  }, [antrianData])
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const pasienId = Number(form.pasien_id)

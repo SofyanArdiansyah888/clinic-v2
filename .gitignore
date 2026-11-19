@@ -11,3 +11,6 @@ apps/api/storage
 coverage
 playwright-report
 test-results
+.env.qa
+qa-report
+qa-results

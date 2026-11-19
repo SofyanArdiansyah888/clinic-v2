@@ -229,6 +229,17 @@ func (s *Service) syncNested(tx *gorm.DB, perawatanID uint, req UpsertRequest) e
 				PerawatanID: perawatanID, AntrianID: r.AntrianID, PasienID: r.PasienID,
 				StaffID: r.StaffID, Kode: kode, Tanggal: tanggal, Status: status, IsActive: true,
 			}
+			// A resep written inside a perawatan belongs to that perawatan's pasien, dokter and
+			// antrian; the EMR form doesn't send them per resep, so default them here.
+			if resep.PasienID == nil || *resep.PasienID == 0 {
+				resep.PasienID = uintPtr(req.PasienID)
+			}
+			if resep.StaffID == nil || *resep.StaffID == 0 {
+				resep.StaffID = uintPtr(req.StaffID)
+			}
+			if resep.AntrianID == nil {
+				resep.AntrianID = req.AntrianID
+			}
 			if err := tx.Create(&resep).Error; err != nil {
 				return err
 			}
@@ -491,4 +502,11 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		r.GET("", h.IndexResep)
 		r.PATCH("/:id/serahkan", h.SerahkanResep)
 	}
+}
+
+func uintPtr(v uint) *uint {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }
