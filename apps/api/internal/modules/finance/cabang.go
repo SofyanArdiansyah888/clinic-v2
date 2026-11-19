@@ -18,6 +18,7 @@ var sourceCabangSQL = map[string]string{
 	SourcePenjualan:          "SELECT cabang_id FROM penjualans WHERE id = ?",
 	SourceDeposit:            "SELECT cabang_id FROM deposit_transaksis WHERE id = ?",
 	SourcePaket:              "SELECT cabang_id FROM paket_perawatans WHERE id = ?",
+	SourcePaketPemakaian:     "SELECT cabang_id FROM paket_pemakaians WHERE id = ?",
 	SourcePembelian:          "SELECT cabang_id FROM pembelians WHERE id = ?",
 	SourcePelunasanPembelian: "SELECT p.cabang_id FROM pembelian_pembayarans b JOIN pembelians p ON p.id = b.pembelian_id WHERE b.id = ?",
 	SourceStokOpname:         "SELECT cabang_id FROM stok_opnames WHERE id = ?",
