@@ -124,6 +124,30 @@
     background-color: oklch(10% 0.04 265 / 0.7);
   }
 
+  /* Coloured numbers and labels (text-*-500/600) are tuned for white backgrounds;
+     lift them to the 400 tone so they stay readable on dark cards. */
+  [data-theme='dark'] :is(.text-rose-500, .text-rose-600) {
+    color: var(--color-rose-400);
+  }
+  [data-theme='dark'] :is(.text-emerald-500, .text-emerald-600) {
+    color: oklch(76.5% 0.177 163.2);
+  }
+  [data-theme='dark'] :is(.text-amber-500, .text-amber-600) {
+    color: oklch(82.8% 0.189 84.4);
+  }
+  [data-theme='dark'] :is(.text-indigo-500, .text-indigo-600) {
+    color: oklch(67.3% 0.182 276.9);
+  }
+  [data-theme='dark'] :is(.text-red-500, .text-red-600) {
+    color: oklch(70.4% 0.191 22.2);
+  }
+  [data-theme='dark'] :is(.text-sky-500, .text-sky-600, .text-blue-500, .text-blue-600) {
+    color: oklch(74.6% 0.16 232.7);
+  }
+  [data-theme='dark'] :is(.text-violet-500, .text-violet-600) {
+    color: oklch(70.2% 0.183 293.5);
+  }
+
   /* Always-dark UI (sidebar, toasts): restore Tailwind's default ramps inside it. */
   [data-theme='dark'] .ui-dark-island {
     --color-slate-50: oklch(98.4% 0.003 247.858);
