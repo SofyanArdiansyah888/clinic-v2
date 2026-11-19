@@ -8,11 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type Repository struct{ db *gorm.DB }
@@ -22,6 +22,14 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -65,8 +73,8 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
-func (s *Service) applyStockMove(tx *gorm.DB, barangID uint, qty int, tipe, referensi, ket string, tanggal time.Time) error {
-	return ApplyStockMove(tx, s.gen, barangID, qty, tipe, referensi, ket, tanggal)
+func (s *Service) applyStockMove(tx *gorm.DB, cabangID, barangID uint, qty int, tipe, referensi, ket string, tanggal time.Time) error {
+	return ApplyStockMove(tx, s.gen, cabangID, barangID, qty, tipe, referensi, ket, tanggal)
 }
 
 // "input"/"output" are accepted only for documents saved before the API settled on masuk/keluar.
@@ -79,42 +87,46 @@ func balik(tipe string) string {
 	return "masuk"
 }
 
-// ApplyStockMove changes a barang's stock and records the movement in kartu stok.
-// It refuses to take stock below zero.
-func ApplyStockMove(tx *gorm.DB, gen *generator.Service, barangID uint, qty int, tipe, referensi, ket string, tanggal time.Time) error {
-	var b barang.Barang
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, barangID).Error; err != nil {
-		return fmt.Errorf("barang #%d tidak ditemukan", barangID)
-	}
-	masuk, keluar := 0, 0
-	newStok := b.StokAktual
-	if isMasuk(tipe) {
-		masuk = qty
-		newStok += qty
-	} else {
-		keluar = qty
-		if b.StokAktual < qty {
-			return fmt.Errorf("stok %s (%s) tidak cukup: tersedia %d, dibutuhkan %d", b.Nama, b.Kode, b.StokAktual, qty)
-		}
-		newStok -= qty
-	}
-	if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
+// ApplyStockMove changes a barang's stock in one branch and records the movement in that
+// branch's kartu stok. It refuses to take stock below zero. Every stock change goes here.
+func ApplyStockMove(tx *gorm.DB, gen *generator.Service, cabangID, barangID uint, qty int, tipe, referensi, ket string, tanggal time.Time) error {
+	var n int64
+	if err := tx.Model(&barang.Barang{}).Where("id = ?", barangID).Count(&n).Error; err != nil {
 		return err
 	}
-	kstKode, err := gen.Generate("KST")
+	if n == 0 {
+		return fmt.Errorf("barang #%d tidak ditemukan", barangID)
+	}
+	masuk, keluar, delta := 0, 0, qty
+	if isMasuk(tipe) {
+		masuk = qty
+	} else {
+		keluar, delta = qty, -qty
+	}
+	saldo, err := barang.AddStok(tx, barangID, cabangID, delta)
 	if err != nil {
 		return err
 	}
-	return tx.Create(&KartuStok{
-		Kode: kstKode, BarangID: barangID, Tanggal: tanggal, Keterangan: ket,
-		QtyMasuk: masuk, QtyKeluar: keluar, Saldo: newStok, Referensi: referensi, IsActive: true,
-	}).Error
+	return catatKartu(tx, gen, KartuStok{
+		CabangID: cabangID, BarangID: barangID, Tanggal: tanggal, Keterangan: ket,
+		QtyMasuk: masuk, QtyKeluar: keluar, Saldo: saldo, Referensi: referensi,
+	})
+}
+
+// catatKartu writes one kartu stok row, numbered per branch.
+func catatKartu(tx *gorm.DB, gen *generator.Service, k KartuStok) error {
+	kode, err := gen.GenerateCabang("KST", k.CabangID)
+	if err != nil {
+		return err
+	}
+	k.Kode, k.IsActive = kode, true
+	return tx.Create(&k).Error
 }
 
 // ── Konversi Stok ──
 
 func (s *Service) ListKonversi(p pagination.Params, f DokumenFilter) ([]KonversiStok, pagination.Meta, error) {
-	q := f.apply(s.repo.db.Model(&KonversiStok{}).Preload("Details.Barang"), tblKonversi)
+	q := f.apply(s.cab.Scope(s.repo.db.Model(&KonversiStok{}), "konversi_stoks.cabang_id").Preload("Details.Barang"), tblKonversi)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR keterangan ILIKE ?", like, like)
@@ -126,14 +138,18 @@ func (s *Service) ListKonversi(p pagination.Params, f DokumenFilter) ([]Konversi
 
 func (s *Service) GetKonversi(id uint) (*KonversiStok, error) {
 	var item KonversiStok
-	if err := s.repo.db.Preload("Details.Barang").First(&item, id).Error; err != nil {
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Details.Barang").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
 func (s *Service) CreateKonversi(req HeaderRequest) (*KonversiStok, error) {
-	kode, err := s.gen.Generate("KVS")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("KVS", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +159,7 @@ func (s *Service) CreateKonversi(req HeaderRequest) (*KonversiStok, error) {
 	}
 	var id uint
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
-		item := &KonversiStok{Kode: kode, Tanggal: tanggal, Keterangan: req.Keterangan, IsActive: true}
+		item := &KonversiStok{Kode: kode, CabangID: cabangID, Tanggal: tanggal, Keterangan: req.Keterangan, IsActive: true}
 		if req.IsActive != nil {
 			item.IsActive = *req.IsActive
 		}
@@ -158,7 +174,7 @@ func (s *Service) CreateKonversi(req HeaderRequest) (*KonversiStok, error) {
 			}).Error; err != nil {
 				return err
 			}
-			if err := s.applyStockMove(tx, d.BarangID, d.Qty, d.Tipe, kode, "Konversi "+kode, tanggal); err != nil {
+			if err := s.applyStockMove(tx, cabangID, d.BarangID, d.Qty, d.Tipe, kode, "Konversi "+kode, tanggal); err != nil {
 				return err
 			}
 		}
@@ -174,11 +190,11 @@ func (s *Service) CreateKonversi(req HeaderRequest) (*KonversiStok, error) {
 func (s *Service) DeleteKonversi(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item KonversiStok
-		if err := tx.Preload("Details").First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Preload("Details").First(&item, id).Error; err != nil {
 			return err
 		}
 		for _, d := range item.Details {
-			if err := s.applyStockMove(tx, d.BarangID, d.Qty, balik(d.Tipe), item.Kode, "Hapus konversi "+item.Kode, time.Now()); err != nil {
+			if err := s.applyStockMove(tx, item.CabangID, d.BarangID, d.Qty, balik(d.Tipe), item.Kode, "Hapus konversi "+item.Kode, time.Now()); err != nil {
 				return err
 			}
 		}
@@ -192,7 +208,7 @@ func (s *Service) DeleteKonversi(id uint) error {
 // ── Produksi Barang ──
 
 func (s *Service) ListProduksi(p pagination.Params, f DokumenFilter) ([]ProduksiBarang, pagination.Meta, error) {
-	q := f.apply(s.repo.db.Model(&ProduksiBarang{}).Preload("Details.Barang"), tblProduksi)
+	q := f.apply(s.cab.Scope(s.repo.db.Model(&ProduksiBarang{}), "produksi_barangs.cabang_id").Preload("Details.Barang"), tblProduksi)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR keterangan ILIKE ?", like, like)
@@ -204,14 +220,18 @@ func (s *Service) ListProduksi(p pagination.Params, f DokumenFilter) ([]Produksi
 
 func (s *Service) GetProduksi(id uint) (*ProduksiBarang, error) {
 	var item ProduksiBarang
-	if err := s.repo.db.Preload("Details.Barang").First(&item, id).Error; err != nil {
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Details.Barang").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
 func (s *Service) CreateProduksi(req HeaderRequest) (*ProduksiBarang, error) {
-	kode, err := s.gen.Generate("PRB")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("PRB", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +241,7 @@ func (s *Service) CreateProduksi(req HeaderRequest) (*ProduksiBarang, error) {
 	}
 	var id uint
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
-		item := &ProduksiBarang{Kode: kode, Tanggal: tanggal, Keterangan: req.Keterangan, IsActive: true}
+		item := &ProduksiBarang{Kode: kode, CabangID: cabangID, Tanggal: tanggal, Keterangan: req.Keterangan, IsActive: true}
 		if req.IsActive != nil {
 			item.IsActive = *req.IsActive
 		}
@@ -236,7 +256,7 @@ func (s *Service) CreateProduksi(req HeaderRequest) (*ProduksiBarang, error) {
 			}).Error; err != nil {
 				return err
 			}
-			if err := s.applyStockMove(tx, d.BarangID, d.Qty, d.Tipe, kode, "Produksi "+kode, tanggal); err != nil {
+			if err := s.applyStockMove(tx, cabangID, d.BarangID, d.Qty, d.Tipe, kode, "Produksi "+kode, tanggal); err != nil {
 				return err
 			}
 		}
@@ -252,11 +272,11 @@ func (s *Service) CreateProduksi(req HeaderRequest) (*ProduksiBarang, error) {
 func (s *Service) DeleteProduksi(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item ProduksiBarang
-		if err := tx.Preload("Details").First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Preload("Details").First(&item, id).Error; err != nil {
 			return err
 		}
 		for _, d := range item.Details {
-			if err := s.applyStockMove(tx, d.BarangID, d.Qty, balik(d.Tipe), item.Kode, "Hapus produksi "+item.Kode, time.Now()); err != nil {
+			if err := s.applyStockMove(tx, item.CabangID, d.BarangID, d.Qty, balik(d.Tipe), item.Kode, "Hapus produksi "+item.Kode, time.Now()); err != nil {
 				return err
 			}
 		}
@@ -270,7 +290,7 @@ func (s *Service) DeleteProduksi(id uint) error {
 // ── Stok Opname ──
 
 func (s *Service) ListOpname(p pagination.Params, f DokumenFilter) ([]StokOpname, pagination.Meta, error) {
-	q := f.apply(s.repo.db.Model(&StokOpname{}).Preload("Details.Barang"), tblOpname)
+	q := f.apply(s.cab.Scope(s.repo.db.Model(&StokOpname{}), "stok_opnames.cabang_id").Preload("Details.Barang"), tblOpname)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR keterangan ILIKE ?", like, like)
@@ -282,14 +302,18 @@ func (s *Service) ListOpname(p pagination.Params, f DokumenFilter) ([]StokOpname
 
 func (s *Service) GetOpname(id uint) (*StokOpname, error) {
 	var item StokOpname
-	if err := s.repo.db.Preload("Details.Barang").First(&item, id).Error; err != nil {
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Details.Barang").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
 func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
-	kode, err := s.gen.Generate("STO")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("STO", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +323,7 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 	}
 	var id uint
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
-		item := &StokOpname{Kode: kode, Tanggal: tanggal, Keterangan: req.Keterangan, IsActive: true}
+		item := &StokOpname{Kode: kode, CabangID: cabangID, Tanggal: tanggal, Keterangan: req.Keterangan, IsActive: true}
 		if req.IsActive != nil {
 			item.IsActive = *req.IsActive
 		}
@@ -310,12 +334,15 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 		var nilaiLebih, nilaiKurang float64
 		for i, d := range req.Details {
 			var b barang.Barang
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
+			if err := tx.First(&b, d.BarangID).Error; err != nil {
 				return err
 			}
 			// Stok sistem is read under lock here, not taken from the client, so the
 			// selisih reflects movements that happened while the count was in progress.
-			sistem := b.StokAktual
+			sistem, err := barang.LockStok(tx, d.BarangID, cabangID)
+			if err != nil {
+				return err
+			}
 			fisik := *d.StokFisik
 			selisih := fisik - sistem
 			dk := fmt.Sprintf("%s-D%03d", kode, i+1)
@@ -326,11 +353,7 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 			}).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&b).Update("stok_aktual", fisik).Error; err != nil {
-				return err
-			}
-			kstKode, err := s.gen.Generate("KST")
-			if err != nil {
+			if err := barang.SetStok(tx, d.BarangID, cabangID, fisik); err != nil {
 				return err
 			}
 			masuk, keluar := 0, 0
@@ -341,10 +364,10 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 				keluar = -selisih
 				nilaiKurang += float64(-selisih) * b.HargaBeli
 			}
-			if err := tx.Create(&KartuStok{
-				Kode: kstKode, BarangID: b.ID, Tanggal: tanggal, Keterangan: "Stok Opname " + kode,
-				QtyMasuk: masuk, QtyKeluar: keluar, Saldo: fisik, Referensi: kode, IsActive: true,
-			}).Error; err != nil {
+			if err := catatKartu(tx, s.gen, KartuStok{
+				CabangID: cabangID, BarangID: b.ID, Tanggal: tanggal, Keterangan: "Stok Opname " + kode,
+				QtyMasuk: masuk, QtyKeluar: keluar, Saldo: fisik, Referensi: kode,
+			}); err != nil {
 				return err
 			}
 		}
@@ -372,7 +395,7 @@ func (s *Service) CreateOpname(req OpnameRequest) (*StokOpname, error) {
 func (s *Service) DeleteOpname(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item StokOpname
-		if err := tx.Preload("Details").First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Preload("Details").First(&item, id).Error; err != nil {
 			return err
 		}
 		if err := finance.Reverse(tx, s.gen, finance.SourceStokOpname, item.ID, time.Now(), "Hapus stok opname "+item.Kode); err != nil {
@@ -386,7 +409,7 @@ func (s *Service) DeleteOpname(id uint) error {
 			if d.Selisih < 0 {
 				tipe, qty = "masuk", -d.Selisih
 			}
-			if err := s.applyStockMove(tx, d.BarangID, qty, tipe, item.Kode, "Hapus stok opname "+item.Kode, time.Now()); err != nil {
+			if err := s.applyStockMove(tx, item.CabangID, d.BarangID, qty, tipe, item.Kode, "Hapus stok opname "+item.Kode, time.Now()); err != nil {
 				return err
 			}
 		}
@@ -414,7 +437,7 @@ func (s *Service) ListKartuStok(p pagination.Params, f KartuStokFilter) ([]Kartu
 
 func (s *Service) GetKartuStok(id uint) (*KartuStok, error) {
 	var item KartuStok
-	if err := s.repo.db.First(&item, id).Error; err != nil {
+	if err := s.cab.Scope(s.repo.db, "cabang_id").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -428,7 +451,7 @@ func (h *Handler) IndexKonversi(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	items, meta, err := h.svc.ListKonversi(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).ListKonversi(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -438,7 +461,7 @@ func (h *Handler) IndexKonversi(c *gin.Context) {
 
 func (h *Handler) ShowKonversi(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.GetKonversi(uint(id))
+	item, err := h.svc.For(c).GetKonversi(uint(id))
 	if err != nil {
 		response.NotFound(c, "konversi stok not found")
 		return
@@ -452,7 +475,7 @@ func (h *Handler) StoreKonversi(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.CreateKonversi(req)
+	item, err := h.svc.For(c).CreateKonversi(req)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -462,7 +485,7 @@ func (h *Handler) StoreKonversi(c *gin.Context) {
 
 func (h *Handler) DestroyKonversi(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.DeleteKonversi(uint(id)); err != nil {
+	if err := h.svc.For(c).DeleteKonversi(uint(id)); err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -475,7 +498,7 @@ func (h *Handler) IndexProduksi(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	items, meta, err := h.svc.ListProduksi(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).ListProduksi(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -485,7 +508,7 @@ func (h *Handler) IndexProduksi(c *gin.Context) {
 
 func (h *Handler) ShowProduksi(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.GetProduksi(uint(id))
+	item, err := h.svc.For(c).GetProduksi(uint(id))
 	if err != nil {
 		response.NotFound(c, "produksi barang not found")
 		return
@@ -499,7 +522,7 @@ func (h *Handler) StoreProduksi(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.CreateProduksi(req)
+	item, err := h.svc.For(c).CreateProduksi(req)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -509,7 +532,7 @@ func (h *Handler) StoreProduksi(c *gin.Context) {
 
 func (h *Handler) DestroyProduksi(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.DeleteProduksi(uint(id)); err != nil {
+	if err := h.svc.For(c).DeleteProduksi(uint(id)); err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -522,7 +545,7 @@ func (h *Handler) IndexOpname(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	items, meta, err := h.svc.ListOpname(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).ListOpname(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -532,7 +555,7 @@ func (h *Handler) IndexOpname(c *gin.Context) {
 
 func (h *Handler) ShowOpname(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.GetOpname(uint(id))
+	item, err := h.svc.For(c).GetOpname(uint(id))
 	if err != nil {
 		response.NotFound(c, "stok opname not found")
 		return
@@ -546,7 +569,7 @@ func (h *Handler) StoreOpname(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.CreateOpname(req)
+	item, err := h.svc.For(c).CreateOpname(req)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -556,7 +579,7 @@ func (h *Handler) StoreOpname(c *gin.Context) {
 
 func (h *Handler) DestroyOpname(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.DeleteOpname(uint(id)); err != nil {
+	if err := h.svc.For(c).DeleteOpname(uint(id)); err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -565,7 +588,7 @@ func (h *Handler) DestroyOpname(c *gin.Context) {
 
 func (h *Handler) IndexKartuStok(c *gin.Context) {
 	barangID, _ := strconv.ParseUint(c.Query("barang_id"), 10, 64)
-	items, meta, err := h.svc.ListKartuStok(pagination.FromContext(c), KartuStokFilter{
+	items, meta, err := h.svc.For(c).ListKartuStok(pagination.FromContext(c), KartuStokFilter{
 		BarangID: uint(barangID), Dari: c.Query("dari"), Sampai: c.Query("sampai"),
 	})
 	if err != nil {
@@ -577,7 +600,7 @@ func (h *Handler) IndexKartuStok(c *gin.Context) {
 
 func (h *Handler) ShowKartuStok(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.GetKartuStok(uint(id))
+	item, err := h.svc.For(c).GetKartuStok(uint(id))
 	if err != nil {
 		response.NotFound(c, "kartu stok not found")
 		return
@@ -612,6 +635,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		so.GET("/:id", h.ShowOpname)
 		so.DELETE("/:id", h.DestroyOpname)
 	}
+	registerTransfer(rg, h)
 	kst := rg.Group("/kartu-stok")
 	{
 		kst.GET("", h.IndexKartuStok)

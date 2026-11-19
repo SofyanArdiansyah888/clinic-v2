@@ -52,7 +52,7 @@ type DokumenSummary struct {
 
 func (s *Service) dokumenSummary(t dokumenTable, f DokumenFilter, search string) (DokumenSummary, error) {
 	var out DokumenSummary
-	headers := f.apply(s.repo.db.Table(t.header), t)
+	headers := f.apply(s.cab.Scope(s.repo.db.Table(t.header), t.header+".cabang_id"), t)
 	if search != "" {
 		like := "%" + search + "%"
 		headers = headers.Where(t.header+".kode ILIKE ? OR "+t.header+".keterangan ILIKE ?", like, like)
@@ -85,7 +85,7 @@ func (h *Handler) dokumenSummaryHandler(t dokumenTable) gin.HandlerFunc {
 			response.BadRequest(c, err.Error(), nil)
 			return
 		}
-		out, err := h.svc.dokumenSummary(t, f, c.Query("search"))
+		out, err := h.svc.For(c).dokumenSummary(t, f, c.Query("search"))
 		if err != nil {
 			response.Internal(c, err.Error())
 			return
@@ -103,7 +103,7 @@ type KartuStokSummary struct {
 }
 
 func (s *Service) kartuStokQuery(f KartuStokFilter, search string) *gorm.DB {
-	q := s.repo.db.Model(&KartuStok{})
+	q := s.cab.Scope(s.repo.db.Model(&KartuStok{}), "cabang_id")
 	if f.BarangID > 0 {
 		q = q.Where("barang_id = ?", f.BarangID)
 	}
@@ -128,7 +128,7 @@ func (h *Handler) SummaryKartuStok(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	out, err := h.svc.KartuStokSummary(KartuStokFilter{BarangID: filter.UintQuery(c, "barang_id"), Dari: r.Dari, Sampai: r.Sampai}, c.Query("search"))
+	out, err := h.svc.For(c).KartuStokSummary(KartuStokFilter{BarangID: filter.UintQuery(c, "barang_id"), Dari: r.Dari, Sampai: r.Sampai}, c.Query("search"))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

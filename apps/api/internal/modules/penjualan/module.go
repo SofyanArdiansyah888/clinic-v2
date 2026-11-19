@@ -291,11 +291,8 @@ func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 				return nil, fmt.Errorf("barang_id required for barang detail")
 			}
 			var b barang.Barang
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
+			if err := tx.First(&b, d.BarangID).Error; err != nil {
 				return nil, err
-			}
-			if b.StokAktual < d.Qty {
-				return nil, fmt.Errorf("stok %s (%s) tidak cukup: tersedia %d, dibutuhkan %d", b.Nama, b.Kode, b.StokAktual, d.Qty)
 			}
 			if harga == 0 {
 				harga = b.HargaJual
@@ -305,20 +302,8 @@ func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 			}
 			bid := d.BarangID
 			detail.BarangID = &bid
-			newStok := b.StokAktual - d.Qty
-			if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
-				return nil, err
-			}
-			kstKode, err := s.gen.Generate("KST")
-			if err != nil {
-				return nil, err
-			}
-			ks := warehouse.KartuStok{
-				Kode: kstKode, BarangID: b.ID, Tanggal: tanggal,
-				Keterangan: "Penjualan " + kode, QtyMasuk: 0, QtyKeluar: d.Qty,
-				Saldo: newStok, Referensi: kode, IsActive: true,
-			}
-			if err := tx.Create(&ks).Error; err != nil {
+			// Sold from the stock of the branch making the sale.
+			if err := warehouse.ApplyStockMove(tx, s.gen, cabangID, b.ID, d.Qty, "keluar", kode, "Penjualan "+kode, tanggal); err != nil {
 				return nil, err
 			}
 		}
@@ -366,7 +351,7 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 			return err
 		}
 		if cancelling {
-			if err := s.returnStock(tx, item.ID, item.Kode, "Pembatalan penjualan "+item.Kode); err != nil {
+			if err := s.returnStock(tx, item.CabangID, item.ID, item.Kode, "Pembatalan penjualan "+item.Kode); err != nil {
 				return err
 			}
 		}
@@ -385,7 +370,7 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 var validStatus = map[string]bool{"draft": true, "confirmed": true, "paid": true, "cancelled": true}
 
 // returnStock puts back the barang taken out when the penjualan was created.
-func (s *Service) returnStock(tx *gorm.DB, penjualanID uint, kode, ket string) error {
+func (s *Service) returnStock(tx *gorm.DB, cabangID, penjualanID uint, kode, ket string) error {
 	var details []PenjualanDetail
 	if err := tx.Where("penjualan_id = ? AND barang_id IS NOT NULL", penjualanID).Find(&details).Error; err != nil {
 		return err
@@ -394,7 +379,7 @@ func (s *Service) returnStock(tx *gorm.DB, penjualanID uint, kode, ket string) e
 		if d.BarangID == nil || d.Qty <= 0 {
 			continue
 		}
-		if err := warehouse.ApplyStockMove(tx, s.gen, *d.BarangID, d.Qty, "masuk", kode, ket, time.Now()); err != nil {
+		if err := warehouse.ApplyStockMove(tx, s.gen, cabangID, *d.BarangID, d.Qty, "masuk", kode, ket, time.Now()); err != nil {
 			return err
 		}
 	}
@@ -411,7 +396,7 @@ func (s *Service) Delete(id uint) error {
 			return err
 		}
 		if item.Status != "cancelled" {
-			if err := s.returnStock(tx, item.ID, item.Kode, "Hapus penjualan "+item.Kode); err != nil {
+			if err := s.returnStock(tx, item.CabangID, item.ID, item.Kode, "Hapus penjualan "+item.Kode); err != nil {
 				return err
 			}
 		}

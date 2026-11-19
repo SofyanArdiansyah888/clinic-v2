@@ -186,7 +186,7 @@ func (s *Service) Create(req UpsertRequest) (*Pembelian, error) {
 
 		for i, d := range req.Details {
 			var b barang.Barang
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&b, d.BarangID).Error; err != nil {
+			if err := tx.First(&b, d.BarangID).Error; err != nil {
 				return err
 			}
 			harga := d.HargaBeli
@@ -203,20 +203,8 @@ func (s *Service) Create(req UpsertRequest) (*Pembelian, error) {
 			if err := tx.Create(&detail).Error; err != nil {
 				return err
 			}
-			newStok := b.StokAktual + d.Qty
-			if err := tx.Model(&b).Update("stok_aktual", newStok).Error; err != nil {
-				return err
-			}
-			kstKode, err := s.gen.Generate("KST")
-			if err != nil {
-				return err
-			}
-			ks := warehouse.KartuStok{
-				Kode: kstKode, BarangID: b.ID, Tanggal: tanggal,
-				Keterangan: "Pembelian " + kode, QtyMasuk: d.Qty, QtyKeluar: 0,
-				Saldo: newStok, Referensi: kode, IsActive: true,
-			}
-			if err := tx.Create(&ks).Error; err != nil {
+			// Goods are received into the branch that bought them.
+			if err := warehouse.ApplyStockMove(tx, s.gen, cabangID, b.ID, d.Qty, "masuk", kode, "Pembelian "+kode, tanggal); err != nil {
 				return err
 			}
 		}
@@ -330,7 +318,7 @@ func (s *Service) Delete(id uint) error {
 			return err
 		}
 		for _, d := range item.Details {
-			if err := warehouse.ApplyStockMove(tx, s.gen, d.BarangID, d.Qty, "keluar", item.Kode, "Hapus pembelian "+item.Kode, time.Now()); err != nil {
+			if err := warehouse.ApplyStockMove(tx, s.gen, item.CabangID, d.BarangID, d.Qty, "keluar", item.Kode, "Hapus pembelian "+item.Kode, time.Now()); err != nil {
 				return err
 			}
 		}

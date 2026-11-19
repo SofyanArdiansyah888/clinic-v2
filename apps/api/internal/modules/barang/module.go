@@ -1,9 +1,11 @@
 package barang
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -17,6 +19,37 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
+}
+
+// failWrite answers stock rule errors with 400 and anything else with 500.
+func failWrite(c *gin.Context, err error) {
+	var bad stokError
+	if errors.Is(err, ErrCabangStok) || errors.As(err, &bad) {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	response.Internal(c, err.Error())
+}
+
+type stokError struct{ error }
+
+// setStok applies a stock value typed on the barang form to the active branch.
+func (s *Service) setStok(tx *gorm.DB, barangID uint, stok int) error {
+	if stok < 0 {
+		return stokError{errors.New("stok tidak boleh negatif")}
+	}
+	if s.cab.ID == 0 {
+		return ErrCabangStok
+	}
+	return SetStok(tx, barangID, s.cab.ID, stok)
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -55,10 +88,9 @@ func filtersFromContext(c *gin.Context) ListFilters {
 	return ListFilters{Kategori: c.Query("kategori"), Status: c.Query("status"), Stok: c.Query("stok")}
 }
 
-const (
-	sqlHabis   = "stok_aktual <= 0"
-	sqlMenipis = "stok_aktual > 0 AND stok_aktual <= stok_minimal"
-)
+// sqlHabis and sqlMenipis classify stock given its SQL expression (see StokSQL).
+func sqlHabis(stok string) string   { return stok + " <= 0" }
+func sqlMenipis(stok string) string { return stok + " > 0 AND " + stok + " <= stok_minimal" }
 
 // applyMasterFilters applies the kategori and status filters shared by the list and its summary.
 func applyMasterFilters(q *gorm.DB, f ListFilters, search string) *gorm.DB {
@@ -80,16 +112,20 @@ func applyMasterFilters(q *gorm.DB, f ListFilters, search string) *gorm.DB {
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Barang, pagination.Meta, error) {
 	q := applyMasterFilters(s.repo.db.Model(&Barang{}), f, p.Search)
+	stok := StokSQL(s.cab)
 	switch f.Stok {
 	case "habis":
-		q = q.Where(sqlHabis)
+		q = q.Where(sqlHabis(stok))
 	case "menipis":
-		q = q.Where(sqlMenipis)
+		q = q.Where(sqlMenipis(stok))
 	case "aman":
-		q = q.Where("stok_aktual > stok_minimal")
+		q = q.Where(stok + " > stok_minimal")
 	}
 	var items []Barang
 	meta, err := pagination.Paginate(q, p, &items)
+	if err == nil {
+		err = FillStok(s.repo.db, s.cab, items)
+	}
 	return items, meta, err
 }
 
@@ -115,12 +151,13 @@ func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
 		Habis     int64
 		NilaiStok float64
 	}
+	stok := StokSQL(s.cab)
 	err := applyMasterFilters(s.repo.db.Model(&Barang{}), f, search).
 		Select(`COUNT(*) AS total,
 			COUNT(*) FILTER (WHERE is_active) AS aktif,
-			COUNT(*) FILTER (WHERE ` + sqlMenipis + `) AS menipis,
-			COUNT(*) FILTER (WHERE ` + sqlHabis + `) AS habis,
-			COALESCE(SUM(GREATEST(stok_aktual, 0) * harga_beli), 0) AS nilai_stok`).
+			COUNT(*) FILTER (WHERE ` + sqlMenipis(stok) + `) AS menipis,
+			COUNT(*) FILTER (WHERE ` + sqlHabis(stok) + `) AS habis,
+			COALESCE(SUM(GREATEST(` + stok + `, 0) * harga_beli), 0) AS nilai_stok`).
 		Scan(&counts).Error
 	if err != nil {
 		return out, err
@@ -137,7 +174,11 @@ func (s *Service) Get(id uint) (*Barang, error) {
 	if err := s.repo.db.First(&item, id).Error; err != nil {
 		return nil, err
 	}
-	return &item, nil
+	list := []Barang{item}
+	if err := FillStok(s.repo.db, s.cab, list); err != nil {
+		return nil, err
+	}
+	return &list[0], nil
 }
 
 func (s *Service) Create(req UpsertRequest) (*Barang, error) {
@@ -148,15 +189,28 @@ func (s *Service) Create(req UpsertRequest) (*Barang, error) {
 	item := &Barang{
 		Kode: kode, Nama: req.Nama, Kategori: req.Kategori, Satuan: req.Satuan,
 		HargaBeli: req.HargaBeli, HargaJual: req.HargaJual, StokMinimal: req.StokMinimal,
-		StokAktual: req.StokAktual, LokasiBarang: req.LokasiBarang, IsActive: true,
+		LokasiBarang: req.LokasiBarang, IsActive: true,
 	}
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}
-	if err := s.repo.db.Create(item).Error; err != nil {
+	// Opening stock belongs to the active branch.
+	if req.StokAktual != 0 && s.cab.ID == 0 {
+		return nil, ErrCabangStok
+	}
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(item).Error; err != nil {
+			return err
+		}
+		if req.StokAktual == 0 {
+			return nil
+		}
+		return s.setStok(tx, item.ID, req.StokAktual)
+	})
+	if err != nil {
 		return nil, err
 	}
-	return item, nil
+	return s.Get(item.ID)
 }
 
 func (s *Service) Update(id uint, req UpsertRequest) (*Barang, error) {
@@ -170,35 +224,49 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Barang, error) {
 	item.HargaBeli = req.HargaBeli
 	item.HargaJual = req.HargaJual
 	item.StokMinimal = req.StokMinimal
-	item.StokAktual = req.StokAktual
 	item.LokasiBarang = req.LokasiBarang
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}
-	if err := s.repo.db.Save(item).Error; err != nil {
-		return nil, err
-	}
-	return item, nil
-}
-
-func (s *Service) UpdateStock(id uint, stok int) (*Barang, error) {
-	item, err := s.Get(id)
+	// The form shows the active branch's stock; a changed value adjusts that branch.
+	// With all branches selected it shows the total, which cannot be edited.
+	changed := !s.cab.All && req.StokAktual != item.StokAktual
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("stok_aktual").Save(item).Error; err != nil {
+			return err
+		}
+		if !changed {
+			return nil
+		}
+		return s.setStok(tx, id, req.StokAktual)
+	})
 	if err != nil {
 		return nil, err
 	}
-	item.StokAktual = stok
-	if err := s.repo.db.Save(item).Error; err != nil {
+	return s.Get(id)
+}
+
+func (s *Service) UpdateStock(id uint, stok int) (*Barang, error) {
+	if _, err := s.Get(id); err != nil {
 		return nil, err
 	}
-	return item, nil
+	if err := s.repo.db.Transaction(func(tx *gorm.DB) error { return s.setStok(tx, id, stok) }); err != nil {
+		return nil, err
+	}
+	return s.Get(id)
 }
 
 func (s *Service) Delete(id uint) error {
-	return s.repo.db.Delete(&Barang{}, id).Error
+	return s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("barang_id = ?", id).Delete(&Stok{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Barang{}, id).Error
+	})
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -207,7 +275,7 @@ func (h *Handler) Index(c *gin.Context) {
 }
 
 func (h *Handler) Summary(c *gin.Context) {
-	out, err := h.svc.Summary(filtersFromContext(c), c.Query("search"))
+	out, err := h.svc.For(c).Summary(filtersFromContext(c), c.Query("search"))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -217,7 +285,7 @@ func (h *Handler) Summary(c *gin.Context) {
 
 func (h *Handler) Show(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.Get(uint(id))
+	item, err := h.svc.For(c).Get(uint(id))
 	if err != nil {
 		response.NotFound(c, "barang not found")
 		return
@@ -231,9 +299,9 @@ func (h *Handler) Store(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Create(req)
+	item, err := h.svc.For(c).Create(req)
 	if err != nil {
-		response.Internal(c, err.Error())
+		failWrite(c, err)
 		return
 	}
 	response.Created(c, item, "created")
@@ -246,9 +314,9 @@ func (h *Handler) Update(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Update(uint(id), req)
+	item, err := h.svc.For(c).Update(uint(id), req)
 	if err != nil {
-		response.Internal(c, err.Error())
+		failWrite(c, err)
 		return
 	}
 	response.OK(c, item, "updated")
@@ -270,9 +338,9 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStock(uint(id), req.StokAktual)
+	item, err := h.svc.For(c).UpdateStock(uint(id), req.StokAktual)
 	if err != nil {
-		response.Internal(c, err.Error())
+		failWrite(c, err)
 		return
 	}
 	response.OK(c, item, "stock updated")

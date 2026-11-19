@@ -85,6 +85,7 @@ var policy = []rule{
 	{write, "/konversi-stok", []string{RoleAdmin, RoleApoteker}},
 	{write, "/produksi-barang", []string{RoleAdmin, RoleApoteker}},
 	{write, "/stok-opname", []string{RoleAdmin, RoleApoteker}},
+	{write, "/transfer-stok", []string{RoleAdmin, RoleApoteker}},
 }
 
 func matches(r rule, method, path string) bool {

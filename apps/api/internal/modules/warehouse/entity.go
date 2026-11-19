@@ -9,6 +9,7 @@ import (
 type KartuStok struct {
 	ID         uint           `gorm:"primaryKey" json:"id"`
 	Kode       string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID   uint           `gorm:"not null;default:0;index" json:"cabang_id"`
 	BarangID   uint           `gorm:"not null;index" json:"barang_id"`
 	Tanggal    time.Time      `gorm:"type:date;not null" json:"tanggal"`
 	Keterangan string         `gorm:"type:text" json:"keterangan"`
@@ -27,6 +28,7 @@ func (KartuStok) TableName() string { return "kartu_stoks" }
 type KonversiStok struct {
 	ID         uint                 `gorm:"primaryKey" json:"id"`
 	Kode       string               `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID   uint                 `gorm:"not null;default:0;index" json:"cabang_id"`
 	Tanggal    time.Time            `gorm:"type:date;not null" json:"tanggal"`
 	Keterangan string               `gorm:"type:text" json:"keterangan"`
 	IsActive   bool                 `gorm:"default:true" json:"is_active"`
@@ -55,6 +57,7 @@ func (KonversiStokDetail) TableName() string { return "konversi_stok_details" }
 type ProduksiBarang struct {
 	ID         uint                   `gorm:"primaryKey" json:"id"`
 	Kode       string                 `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID   uint                   `gorm:"not null;default:0;index" json:"cabang_id"`
 	Tanggal    time.Time              `gorm:"type:date;not null" json:"tanggal"`
 	Keterangan string                 `gorm:"type:text" json:"keterangan"`
 	IsActive   bool                   `gorm:"default:true" json:"is_active"`
@@ -83,6 +86,7 @@ func (ProduksiBarangDetail) TableName() string { return "produksi_barang_details
 type StokOpname struct {
 	ID         uint               `gorm:"primaryKey" json:"id"`
 	Kode       string             `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID   uint               `gorm:"not null;default:0;index" json:"cabang_id"`
 	Tanggal    time.Time          `gorm:"type:date;not null" json:"tanggal"`
 	Keterangan string             `gorm:"type:text" json:"keterangan"`
 	IsActive   bool               `gorm:"default:true" json:"is_active"`

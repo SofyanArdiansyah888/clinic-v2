@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"gorm.io/gorm"
 )
 
@@ -115,7 +116,14 @@ func EnsureDefaults(db *gorm.DB) error {
 		SELECT s.id, ? FROM staffs s WHERE NOT EXISTS (SELECT 1 FROM staff_cabangs sc WHERE sc.staff_id = s.id)`, utama.ID).Error; err != nil {
 		return err
 	}
-	return backfillTransaksi(db, utama.ID)
+	if err := backfillTransaksi(db, utama.ID); err != nil {
+		return err
+	}
+	// Stock from before multi-branch is the main branch's stock.
+	if db.Migrator().HasTable("barang_stoks") {
+		return barang.BackfillStok(db, utama.ID)
+	}
+	return nil
 }
 
 // TransaksiTables hold one branch's records in cabang_id; rows from before multi-branch
@@ -123,6 +131,7 @@ func EnsureDefaults(db *gorm.DB) error {
 var TransaksiTables = []string{
 	"antrians", "appointments", "jadwal_dokters", "perawatans", "penjualans",
 	"deposit_transaksis", "paket_perawatans", "pembelians", "kasir_shifts",
+	"kartu_stoks", "konversi_stoks", "produksi_barangs", "stok_opnames",
 }
 
 func backfillTransaksi(db *gorm.DB, utamaID uint) error {
