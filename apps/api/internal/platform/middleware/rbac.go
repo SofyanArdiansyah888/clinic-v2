@@ -64,6 +64,9 @@ var policy = []rule{
 	{write, "/voucher/validate", []string{RoleAdmin, RoleStaff}},
 
 	// Clinical; FO opens the perawatan when registering a visit.
+	// A signed consent is never edited; only admin or a doctor may cancel one.
+	{write, "/perawatan-consent/:cid/batal", []string{RoleAdmin, RoleDoctor}},
+	{write, "/perawatan-consent", []string{RoleAdmin, RoleStaff, RoleDoctor, RoleNurse}},
 	{del, "/perawatan", []string{RoleAdmin, RoleDoctor}},
 	{write, "/perawatan", []string{RoleAdmin, RoleStaff, RoleDoctor, RoleNurse}},
 

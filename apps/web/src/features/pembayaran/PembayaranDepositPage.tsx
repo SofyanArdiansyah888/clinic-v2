@@ -1,5 +1,5 @@
 import { toast as pushToast } from '@/shared/components/Toaster'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CreditCard, History, Loader2, Users } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
@@ -15,6 +15,7 @@ import { Field } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
+import { DepositSidePanel } from './components/DepositSidePanel'
 
 const JENIS_OPTIONS = [
   { value: 'pembayaran_deposit', label: 'Pembayaran Deposit' },
@@ -39,6 +40,7 @@ export function PembayaranDepositPage() {
     staff_id: '',
   })
   const validation = useFormValidation()
+  const queryClient = useQueryClient()
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
     pushToast(message, tone)
@@ -67,13 +69,14 @@ export function PembayaranDepositPage() {
       return res
     },
     onSuccess: () => {
+      // The history, balance and membership next to the form show the new transaction.
+      for (const key of ['deposit-riwayat', 'deposit-saldo', 'membership']) void queryClient.invalidateQueries({ queryKey: [key] })
       setLastSuccessJenis(form.jenis)
       showToast('Pembayaran deposit berhasil dicatat!', 'success')
       validation.reset()
       setForm((f) => ({
         ...f,
         kwitansi: '',
-        pasien_id: '',
         treatment_id: '',
         jenis_pembayaran: '',
         bank_id: '',
@@ -110,11 +113,12 @@ export function PembayaranDepositPage() {
         </div>
       ) : null}
 
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
       <FieldErrorsContext.Provider value={validation.errors}>
         <form
           {...validation.formProps}
           onSubmit={onSubmit}
-          className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm"
+          className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm"
         >
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <h3 className="text-sm font-bold text-slate-900">Form Transaksi</h3>
@@ -211,6 +215,9 @@ export function PembayaranDepositPage() {
           </div>
         </form>
       </FieldErrorsContext.Provider>
+
+      <DepositSidePanel pasienId={form.pasien_id} />
+      </div>
     </div>
 
   )

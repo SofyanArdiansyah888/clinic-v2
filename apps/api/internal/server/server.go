@@ -119,6 +119,7 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 
 		jadwaldokter.RegisterRoutes(protected, db)
 		informedconsent.RegisterRoutes(protected, db)
+		informedconsent.RegisterConsentRoutes(protected, db)
 		pengaturan.RegisterRoutes(protected, db)
 		laporan.RegisterRoutes(protected, db)
 		finance.RegisterRoutes(protected, db, gen)

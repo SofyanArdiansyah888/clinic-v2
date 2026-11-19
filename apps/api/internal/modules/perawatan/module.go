@@ -126,7 +126,7 @@ func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
 
 func (s *Service) preload(q *gorm.DB) *gorm.DB {
 	return q.Preload("Pasien").Preload("Staff").Preload("Treatment").
-		Preload("Tindakans").Preload("Reseps.Barangs")
+		Preload("Tindakans.Treatment").Preload("Reseps.Barangs")
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Perawatan, pagination.Meta, error) {

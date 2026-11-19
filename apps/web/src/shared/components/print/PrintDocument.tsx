@@ -1,17 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { apiGet } from '@/shared/api/client'
 import { useAuthStore } from '@/features/auth/store'
 import { formatDateTime } from '@/shared/lib/formatters'
-
-type Klinik = { nama?: string; alamat?: string; telepon?: string; email?: string }
-
-function useKlinik() {
-  return useQuery({
-    queryKey: ['pengaturan', 'klinik'],
-    queryFn: () => apiGet<Klinik>('/pengaturan/klinik'),
-    staleTime: 10 * 60_000,
-  })
-}
+import { useKlinik, type Klinik } from './useKlinik'
 
 /** Letterhead + report title, shown only on paper (Save as PDF). */
 export function PrintHeader({ title, periode }: { title: string; periode: string }) {
@@ -48,6 +37,20 @@ export function PrintFooter() {
       <p>
         Dicetak oleh {user?.name || user?.username || '-'} pada {formatDateTime(new Date())}
       </p>
+    </div>
+  )
+}
+
+/** Letterhead for standalone print pages (kwitansi, consent), visible on screen and paper. */
+export function KopSurat({ klinik, compact = false }: { klinik?: Klinik; compact?: boolean }) {
+  const fallback = useKlinik().data?.data
+  const k = klinik ?? fallback
+  const kontak = [k?.telepon, k?.email].filter(Boolean).join(' · ')
+  return (
+    <div className={compact ? 'border-b border-dashed border-slate-500 pb-1.5 text-center' : 'border-b-2 border-slate-900 pb-2'}>
+      <p className={compact ? 'text-sm font-extrabold text-slate-900' : 'text-lg font-extrabold text-slate-900'}>{k?.nama || 'Klinik'}</p>
+      {k?.alamat ? <p className="text-[10px] leading-tight text-slate-600">{k.alamat}</p> : null}
+      {kontak ? <p className="text-[10px] leading-tight text-slate-600">{kontak}</p> : null}
     </div>
   )
 }

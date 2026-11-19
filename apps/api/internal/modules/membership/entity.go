@@ -6,6 +6,9 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 )
 
+// NilaiPoin is the rupiah value of one membership point when redeemed at the cashier.
+const NilaiPoin = 1.0
+
 type Membership struct {
 	ID        uint          `gorm:"primaryKey" json:"id"`
 	Kode      string        `gorm:"size:50;uniqueIndex;not null" json:"kode"`

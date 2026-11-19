@@ -14,6 +14,9 @@ const PAGE_ACCESS: [prefix: string, roles: Role[]][] = [
   ['/depo', FARMASI],
   ['/warehouse', FARMASI],
   ['/data-transaksi/penjualan', ['admin', 'staff', 'apoteker']],
+  // Print pages opened in a new tab from the kasir / data penjualan and the EMR.
+  ['/cetak/kwitansi', ['admin', 'staff', 'apoteker']],
+  ['/cetak/consent', KLINIS],
   ['/data-transaksi/pembelian', ['admin', 'apoteker', 'finance']],
   ['/data-transaksi/deposit', FO],
   ['/administrasi/pasien', FO],

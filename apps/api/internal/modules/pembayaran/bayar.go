@@ -18,8 +18,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// NilaiPoin is the rupiah value of one membership point when redeemed at the cashier.
-const NilaiPoin = 1.0
+// NilaiPoin is the rupiah value of one membership point (see membership.NilaiPoin).
+const NilaiPoin = membership.NilaiPoin
 
 const (
 	jenisTopUpDeposit     = "pembayaran_deposit"
@@ -44,6 +44,8 @@ type BayarRequest struct {
 	BankID          *uint   `json:"bank_id"`
 	JumlahBayar     float64 `json:"jumlah_bayar"`
 	Tanggal         string  `json:"tanggal"`
+	// UserID is the signed-in account (from the JWT), filled by the handler.
+	UserID uint `json:"-"`
 }
 
 type TagihanItem struct {

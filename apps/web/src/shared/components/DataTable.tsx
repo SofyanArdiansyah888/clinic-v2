@@ -18,6 +18,8 @@ type DataTableProps<T> = {
   emptyDescription?: string
   rowKey: (row: T) => string | number
   className?: string
+  /** For narrow side panels: no 640px minimum width and no sticky last column. */
+  compact?: boolean
 }
 
 export function DataTable<T>({
@@ -28,6 +30,7 @@ export function DataTable<T>({
   emptyDescription,
   rowKey,
   className,
+  compact,
 }: DataTableProps<T>) {
   if (loading) {
     return (
@@ -43,7 +46,12 @@ export function DataTable<T>({
 
   return (
     <div className={cn('overflow-x-auto', className)}>
-      <table className="ui-table table-sticky-actions w-full min-w-[640px] border-collapse text-left text-[13px]">
+      <table
+        className={cn(
+          'ui-table w-full border-collapse text-left text-[13px]',
+          !compact && 'table-sticky-actions min-w-[640px]',
+        )}
+      >
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
             {columns.map((col) => (

@@ -28,11 +28,13 @@ import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { ResepModal, type ResepItem } from './ResepModal'
 import { ConsentDocumentModal } from './ConsentDocumentModal'
+import { savePendingConsents, type PendingConsent, type PerawatanConsent } from './consent'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type PerawatanTindakanItem = {
   treatment_id: number
   nama_treatment?: string
+  treatment?: { nama?: string }
   tanggal?: string
   jumlah: number
   beautician_id?: number | null
@@ -136,6 +138,8 @@ export function DetailPerawatanPage() {
   const [reseps, setReseps] = useState<PerawatanResepItem[]>([])
   const [resepModalOpen, setResepModalOpen] = useState(false)
   const [consentModalOpen, setConsentModalOpen] = useState(false)
+  // Consents signed before a new perawatan is saved; posted once it has an id.
+  const [pendingConsents, setPendingConsents] = useState<PendingConsent[]>([])
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const validation = useFormValidation()
@@ -148,6 +152,15 @@ export function DetailPerawatanPage() {
     queryFn: () => apiGet<PerawatanDetailResponse>(`/perawatan/${perawatanId}`),
     enabled: Boolean(perawatanId),
   })
+
+  const { data: consentData } = useQuery({
+    queryKey: ['perawatan-consent', perawatanId],
+    queryFn: () => apiGet<PerawatanConsent[]>(`/perawatan/${perawatanId}/consent`),
+    enabled: Boolean(perawatanId),
+  })
+  const consentCount = perawatanId
+    ? (consentData?.data ?? []).filter((c) => c.status === 'aktif').length
+    : pendingConsents.length
 
   // Prefill form from existing treatment
   useEffect(() => {
@@ -288,7 +301,15 @@ export function DetailPerawatanPage() {
       if (perawatanId) {
         return apiPut(`/perawatan/${perawatanId}`, payload)
       }
-      return apiPost('/perawatan', payload)
+      const created = await apiPost<{ id: number }>('/perawatan', payload)
+      if (created.data?.id && pendingConsents.length > 0) {
+        const failed = await savePendingConsents(created.data.id, pendingConsents)
+        if (failed > 0) {
+          showToast(`${failed} informed consent gagal disimpan; buka EMR ini dan tanda tangani ulang.`, 'error')
+        }
+        setPendingConsents([])
+      }
+      return created
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['perawatan'] })
@@ -871,6 +892,13 @@ export function DetailPerawatanPage() {
               >
                 <FileText />
                 Informed Consent
+                {consentCount > 0 ? (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700" data-testid="consent-count">
+                    {consentCount}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Belum ada</span>
+                )}
               </Button>
             </div>
 
@@ -910,6 +938,16 @@ export function DetailPerawatanPage() {
         <ConsentDocumentModal
           isOpen={consentModalOpen}
           onClose={() => setConsentModalOpen(false)}
+          perawatanId={perawatanId}
+          preview={{
+            nama_pasien: existingPerawatan?.data?.pasien?.nama,
+            kode_pasien: existingPerawatan?.data?.pasien?.kode,
+            nama_dokter: existingPerawatan?.data?.staff?.nama,
+            tanggal: formatDate(new Date(), 'd MMMM yyyy'),
+            treatment: [...new Set(tindakans.map((t) => t.nama_treatment || t.treatment?.nama).filter(Boolean))].join(', ') || undefined,
+          }}
+          pending={pendingConsents}
+          onPendingChange={setPendingConsents}
         />
 
         <Dialog

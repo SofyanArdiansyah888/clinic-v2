@@ -55,6 +55,8 @@ import { LabaRugiPage } from '@/features/finance/LabaRugiPage'
 import { HighlightsPage } from '@/features/finance/HighlightsPage'
 import { MajalahPage } from '@/features/majalah/MajalahPage'
 import { NeracaPage } from '@/features/finance/NeracaPage'
+import { KwitansiPrintPage } from '@/features/pembayaran/KwitansiPrintPage'
+import { ConsentPrintPage } from '@/features/perawatan/ConsentPrintPage'
 
 
 function requireAuth() {
@@ -97,6 +99,29 @@ const appRoute = createRoute({
     }
   },
   component: AppLayout,
+})
+
+// Print pages open in their own tab without the app chrome, so they hang off the root.
+function requirePrintAccess(pathname: string) {
+  useAuthStore.getState().hydrate()
+  requireAuth()
+  if (!canAccess(useAuthStore.getState().user?.role, pathname)) {
+    throw redirect({ to: '/' })
+  }
+}
+
+const cetakKwitansiRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/cetak/kwitansi/$id',
+  beforeLoad: ({ location }) => requirePrintAccess(location.pathname),
+  component: KwitansiPrintPage,
+})
+
+const cetakConsentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/cetak/consent/$id',
+  beforeLoad: ({ location }) => requirePrintAccess(location.pathname),
+  component: ConsentPrintPage,
 })
 
 const dashboardRoute = createRoute({
@@ -378,6 +403,8 @@ const majalahRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  cetakKwitansiRoute,
+  cetakConsentRoute,
   appRoute.addChildren([
     dashboardRoute,
     kunjunganRoute,

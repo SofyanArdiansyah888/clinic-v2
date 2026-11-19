@@ -8,7 +8,15 @@ async function pick(page: Page, id: string, label: string | RegExp) {
 
 // Full visit: patient queued at front office -> perawatan sent to cashier -> paid in the UI
 // by the kasir -> journal, FO report and resep queue all reflect it.
-test('kunjungan sampai pembayaran perawatan lewat UI kasir', async ({ page }) => {
+test('kunjungan sampai pembayaran perawatan lewat UI kasir', async ({ page, context }) => {
+  // Print pages call window.print() once loaded; count the calls instead of opening a dialog.
+  await context.addInitScript(() => {
+    const w = window as unknown as { __printed: number }
+    w.__printed = 0
+    window.print = () => {
+      w.__printed++
+    }
+  })
   const admin = await api('admin')
   const id = uniq()
   const staffList = await apiData<{ id: number; nama: string }[]>(admin, 'get', '/staff?per_page=1')
@@ -48,6 +56,20 @@ test('kunjungan sampai pembayaran perawatan lewat UI kasir', async ({ page }) =>
   await expect(page.getByText(/Kembalian\s*Rp\s*35\.000/)).toBeVisible()
   await page.getByRole('button', { name: /Bayar & Selesai/ }).click()
   await expect(row).toHaveCount(0, { timeout: 10000 })
+
+  // The modal stays open on a success panel; the receipt opens in its own tab and prints itself.
+  await expect(page.getByText('Pembayaran berhasil', { exact: true })).toBeVisible()
+  const invoice = (await page.getByTestId('paid-invoice').textContent())!.trim()
+  expect(invoice).not.toBe('')
+  await expect(page.getByText(/Kembalian\s*Rp\s*35\.000/)).toBeVisible()
+  const [popup] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Cetak Kwitansi' }).click()])
+  await expect(popup.getByText('KWITANSI', { exact: true })).toBeVisible()
+  await expect(popup.getByText(invoice)).toBeVisible()
+  await expect(popup.getByText(/Dua ratus enam puluh lima ribu rupiah/)).toBeVisible()
+  await expect.poll(() => popup.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1)
+  await popup.close()
+  await page.getByRole('button', { name: 'Selesai' }).click()
+  await expect(page.getByText('Pembayaran berhasil', { exact: true })).toHaveCount(0)
   expect(problems, problems.join('\n')).toEqual([])
 
   // Back office checks.

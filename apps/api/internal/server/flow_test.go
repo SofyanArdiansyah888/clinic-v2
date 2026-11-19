@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -461,5 +462,176 @@ func TestDashboardTrenPerRole(t *testing.T) {
 	}
 	if r := e.call("admin", "GET", "/dashboard/tren?hari=99", nil); r.Code != http.StatusBadRequest {
 		t.Errorf("tren hari=99 = %d, want 400", r.Code)
+	}
+}
+
+func TestKwitansiPenjualan(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	e.must("PUT", "/pengaturan/klinik", map[string]any{"nama": "Klinik Uji", "catatan_invoice": "Barang yang sudah dibeli tidak dapat dikembalikan", "garansi": "Garansi 7 hari"}, nil)
+	e.must("POST", "/pembayaran/deposit", map[string]any{"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "jenis": "pembayaran_deposit", "jumlah": 50000, "jenis_pembayaran": "tunai"}, nil)
+	e.must("POST", "/pembayaran/deposit", map[string]any{"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "jenis": "pendaftaran_member", "jumlah": 30000, "jenis_pembayaran": "tunai"}, nil)
+	var promo, voucher struct{ Kode string }
+	e.must("POST", "/promo", map[string]any{"nama": "Promo 10%", "tipe_diskon": "percent", "nilai_diskon": 10}, &promo)
+	e.must("POST", "/voucher", map[string]any{"nama": "Voucher 20rb", "tipe_diskon": "nominal", "nilai_diskon": 20000, "min_pembelian": 100000}, &voucher)
+
+	pw := e.perawatan(f)
+	r := e.call("staff", "POST", "/pembayaran/bayar", map[string]any{
+		"source_type": "perawatan", "source_id": pw, "promo_kode": promo.Kode, "voucher_kode": voucher.Kode,
+		"poin_dipakai": 10000, "deposit_dipakai": 40000, "staff_id": f.staff, "jenis_pembayaran": "tunai", "jumlah_bayar": 300000, "tanggal": tanggal,
+	})
+	if r.Code != http.StatusOK {
+		t.Fatalf("bayar: %d %s", r.Code, r.Message)
+	}
+	var pj struct {
+		ID        uint   `json:"id"`
+		NoInvoice string `json:"no_invoice"`
+	}
+	_ = json.Unmarshal(r.Data, &pj)
+
+	var k struct {
+		NoInvoice      string  `json:"no_invoice"`
+		Status         string  `json:"status"`
+		PasienNama     string  `json:"pasien_nama"`
+		KasirNama      string  `json:"kasir_nama"`
+		JenisBayar     string  `json:"jenis_pembayaran"`
+		Subtotal       float64 `json:"subtotal"`
+		PromoKode      string  `json:"promo_kode"`
+		DiskonPromo    float64 `json:"diskon_promo"`
+		VoucherKode    string  `json:"voucher_kode"`
+		DiskonVoucher  float64 `json:"diskon_voucher"`
+		Total          float64 `json:"total"`
+		PoinDipakai    int     `json:"poin_dipakai"`
+		PotonganPoin   float64 `json:"potongan_poin"`
+		DepositDipakai float64 `json:"deposit_dipakai"`
+		SisaBayar      float64 `json:"sisa_bayar"`
+		JumlahBayar    float64 `json:"jumlah_bayar"`
+		Kembalian      float64 `json:"kembalian"`
+		Items          []struct {
+			Nama     string  `json:"nama"`
+			Subtotal float64 `json:"subtotal"`
+		} `json:"items"`
+		Klinik struct {
+			Nama           string `json:"nama"`
+			CatatanInvoice string `json:"catatan_invoice"`
+			Garansi        string `json:"garansi"`
+		} `json:"klinik"`
+	}
+	r = e.call("staff", "GET", fmt.Sprintf("/penjualan/%d/kwitansi", pj.ID), nil)
+	if r.Code != http.StatusOK {
+		t.Fatalf("kwitansi: %d %s", r.Code, r.Message)
+	}
+	_ = json.Unmarshal(r.Data, &k)
+	// 370.000 - promo 37.000 - voucher 20.000 = 313.000; less 10.000 poin and 40.000 deposit = 263.000; paid 300.000.
+	if k.NoInvoice != pj.NoInvoice || k.Status != "paid" || k.PasienNama != "Pasien Uji" || k.KasirNama != "Dokter Uji" || k.JenisBayar != "tunai" {
+		t.Errorf("kwitansi header = %+v", k)
+	}
+	if k.Subtotal != 370000 || k.DiskonPromo != 37000 || k.DiskonVoucher != 20000 || k.Total != 313000 {
+		t.Errorf("kwitansi totals: subtotal %v promo %v voucher %v total %v", k.Subtotal, k.DiskonPromo, k.DiskonVoucher, k.Total)
+	}
+	if k.PromoKode != promo.Kode || k.VoucherKode != voucher.Kode {
+		t.Errorf("kwitansi codes = %q/%q, want %q/%q", k.PromoKode, k.VoucherKode, promo.Kode, voucher.Kode)
+	}
+	if k.PoinDipakai != 10000 || k.PotonganPoin != 10000 || k.DepositDipakai != 40000 || k.SisaBayar != 263000 || k.JumlahBayar != 300000 || k.Kembalian != 37000 {
+		t.Errorf("kwitansi pembayaran: poin %d/%v deposit %v sisa %v bayar %v kembalian %v", k.PoinDipakai, k.PotonganPoin, k.DepositDipakai, k.SisaBayar, k.JumlahBayar, k.Kembalian)
+	}
+	if len(k.Items) != 2 || k.Items[0].Nama != "Facial Uji" || k.Items[1].Nama != "Obat Uji" || k.Items[1].Subtotal != 20000 {
+		t.Errorf("kwitansi items = %+v", k.Items)
+	}
+	if k.Klinik.Nama != "Klinik Uji" || k.Klinik.CatatanInvoice == "" || k.Klinik.Garansi != "Garansi 7 hari" {
+		t.Errorf("kwitansi klinik = %+v", k.Klinik)
+	}
+
+	// A sale still waiting at the cashier has no receipt yet.
+	unpaid := e.penjualanLangsung(f, 1)
+	if r := e.call("staff", "GET", fmt.Sprintf("/penjualan/%d/kwitansi", unpaid), nil); r.Code != http.StatusConflict {
+		t.Errorf("kwitansi unpaid = %d (%s), want 409", r.Code, r.Message)
+	}
+	// Dropping an unpaid sale does not turn it into a receipt.
+	e.must("PATCH", fmt.Sprintf("/penjualan/%d/status", unpaid), map[string]any{"status": "cancelled"}, nil)
+	if r := e.call("staff", "GET", fmt.Sprintf("/penjualan/%d/kwitansi", unpaid), nil); r.Code != http.StatusConflict {
+		t.Errorf("kwitansi cancelled-unpaid = %d, want 409", r.Code)
+	}
+	// A voided paid sale stays printable, with its cancelled status for the DIBATALKAN stamp.
+	e.must("PATCH", fmt.Sprintf("/penjualan/%d/status", pj.ID), map[string]any{"status": "cancelled"}, nil)
+	r = e.call("staff", "GET", fmt.Sprintf("/penjualan/%d/kwitansi", pj.ID), nil)
+	_ = json.Unmarshal(r.Data, &k)
+	if r.Code != http.StatusOK || k.Status != "cancelled" {
+		t.Errorf("kwitansi voided = %d status %q, want 200 cancelled", r.Code, k.Status)
+	}
+	if r := e.call("staff", "GET", "/penjualan/999999/kwitansi", nil); r.Code != http.StatusNotFound {
+		t.Errorf("kwitansi unknown = %d, want 404", r.Code)
+	}
+}
+
+func TestInformedConsentPerawatan(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	pw := e.perawatan(f)
+	var tpl struct{ ID uint }
+	e.must("POST", "/template-informed-consent", map[string]any{
+		"judul": "Persetujuan {treatment}", "kategori": "Umum",
+		"isi": "Saya {nama_pasien} ({kode_pasien}) setuju menjalani {treatment} oleh {nama_dokter} pada {tanggal}.",
+	}, &tpl)
+
+	body := map[string]any{"template_id": tpl.ID, "nama_penandatangan": "Pasien Uji", "ttd_pasien_url": "/api/uploads/files/ttd/a.png", "dokter_id": f.staff, "ttd_dokter_url": "/api/uploads/files/ttd/b.png", "saksi": "Perawat Jaga"}
+	path := fmt.Sprintf("/perawatan/%d/consent", pw)
+	if r := e.call("apoteker", "POST", path, body); r.Code != http.StatusForbidden {
+		t.Errorf("apoteker POST consent = %d, want 403", r.Code)
+	}
+	r := e.call("nurse", "POST", path, body)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("nurse POST consent: %d %s", r.Code, r.Message)
+	}
+	type consent struct {
+		ID          uint   `json:"id"`
+		Judul       string `json:"judul"`
+		Isi         string `json:"isi"`
+		Status      string `json:"status"`
+		Hubungan    string `json:"hubungan"`
+		AlasanBatal string `json:"alasan_batal"`
+	}
+	var c consent
+	_ = json.Unmarshal(r.Data, &c)
+	want := "Saya Pasien Uji (PAS-T1) setuju menjalani Facial Uji oleh Dokter Uji pada "
+	if c.Judul != "Persetujuan Facial Uji" || !strings.HasPrefix(c.Isi, want) || strings.Contains(c.Isi, "{") || c.Status != "aktif" || c.Hubungan != "Pasien sendiri" {
+		t.Fatalf("consent = %+v", c)
+	}
+
+	// Editing the template later must not change what was signed.
+	e.must("PUT", fmt.Sprintf("/template-informed-consent/%d", tpl.ID), map[string]any{"judul": "Baru", "isi": "Isi baru {nama_pasien}"}, nil)
+	var list []consent
+	e.must("GET", path, nil, &list)
+	if len(list) != 1 || list[0].Isi != c.Isi || list[0].Judul != c.Judul {
+		t.Fatalf("consent after template edit = %+v", list)
+	}
+
+	if r := e.call("nurse", "POST", path, map[string]any{"template_id": tpl.ID, "nama_penandatangan": "X"}); r.Code != http.StatusBadRequest {
+		t.Errorf("consent without signature = %d, want 400", r.Code)
+	}
+	if r := e.call("staff", "POST", "/perawatan/999999/consent", body); r.Code != http.StatusNotFound {
+		t.Errorf("consent on unknown perawatan = %d, want 404", r.Code)
+	}
+
+	batal := fmt.Sprintf("/perawatan-consent/%d/batal", c.ID)
+	if r := e.call("nurse", "POST", batal, map[string]any{"alasan": "salah template"}); r.Code != http.StatusForbidden {
+		t.Errorf("nurse batal consent = %d, want 403", r.Code)
+	}
+	if r := e.call("doctor", "POST", batal, map[string]any{}); r.Code != http.StatusBadRequest {
+		t.Errorf("batal without alasan = %d, want 400", r.Code)
+	}
+	r = e.call("doctor", "POST", batal, map[string]any{"alasan": "salah template"})
+	if r.Code != http.StatusOK {
+		t.Fatalf("doctor batal consent: %d %s", r.Code, r.Message)
+	}
+	_ = json.Unmarshal(r.Data, &c)
+	if c.Status != "dibatalkan" || c.AlasanBatal != "salah template" {
+		t.Errorf("consent after batal = %+v", c)
+	}
+	if r := e.call("doctor", "POST", batal, map[string]any{"alasan": "lagi"}); r.Code != http.StatusBadRequest {
+		t.Errorf("double batal = %d, want 400", r.Code)
+	}
+	if r := e.call("finance", "GET", fmt.Sprintf("/perawatan-consent/%d", c.ID), nil); r.Code != http.StatusOK {
+		t.Errorf("GET consent = %d", r.Code)
 	}
 }

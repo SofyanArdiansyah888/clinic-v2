@@ -9,3 +9,10 @@ export const JENIS_PEMBAYARAN = [
 export function jenisPembayaranLabel(value: string) {
   return JENIS_PEMBAYARAN.find((o) => o.value === value)?.label ?? (value === '-' || !value ? 'Lainnya' : value)
 }
+
+/** Payment method as printed on receipts and lists, including bills settled fully by deposit/poin. */
+export function metodeLabel(value?: string) {
+  if (!value) return '-'
+  if (value === 'deposit_poin') return 'Deposit / Poin'
+  return jenisPembayaranLabel(value)
+}

@@ -121,7 +121,7 @@ func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Penjualan, pagination.Meta, error) {
-	q := s.repo.db.Model(&Penjualan{}).Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment")
+	q := s.repo.db.Model(&Penjualan{}).Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").Preload("Details.Barang")
 	q = applyListFilters(q, f)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
@@ -135,7 +135,7 @@ func (s *Service) List(p pagination.Params, f ListFilters) ([]Penjualan, paginat
 func (s *Service) Get(id uint) (*Penjualan, error) {
 	var item Penjualan
 	if err := s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").
-		Preload("Details.Treatment").First(&item, id).Error; err != nil {
+		Preload("Details.Treatment").Preload("Details.Barang").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -441,6 +441,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.GET("", h.Index)
 		g.POST("", h.Store)
 		g.GET("/:id", h.Show)
+		g.GET("/:id/kwitansi", h.Kwitansi)
 		g.DELETE("/:id", h.Destroy)
 		g.PATCH("/:id/status", h.UpdateStatus)
 	}

@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { CreditCard, Loader2, Tag } from 'lucide-react'
+import { CheckCircle2, CreditCard, Loader2, Printer, Tag } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
@@ -11,6 +11,7 @@ import { Field, FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
+import { openPrintTab } from '@/shared/lib/print'
 
 export type PaymentLineItem = {
   nama: string
@@ -36,6 +37,13 @@ type Tagihan = {
   poin_tersedia: number
   nilai_poin: number
   saldo_deposit: number
+}
+
+type PaidPenjualan = {
+  id: number
+  no_invoice: string
+  kembalian: number
+  jumlah_bayar: number
 }
 
 type PaymentModalProps = {
@@ -76,11 +84,13 @@ export function PaymentModal({
   const [kode, setKode] = useState({ promo: '', voucher: '' })
   const [poin, setPoin] = useState('')
   const [deposit, setDeposit] = useState('')
+  const [paid, setPaid] = useState<PaidPenjualan | null>(null)
   const validation = useFormValidation()
 
   useEffect(() => {
     if (target) {
       validation.reset()
+      setPaid(null)
       setJenisPembayaran('')
       setBankId('')
       setPromoInput('')
@@ -96,7 +106,7 @@ export function PaymentModal({
   // subtracted locally for a live preview and re-checked by the server on payment.
   const tagihanQuery = useQuery({
     queryKey: ['pembayaran-tagihan', target?.sourceType, target?.sourceId, kode.promo, kode.voucher],
-    enabled: open && !!target,
+    enabled: open && !!target && !paid,
     retry: false,
     queryFn: async () => {
       const res = await apiPost<Tagihan>('/pembayaran/tagihan', {
@@ -128,7 +138,7 @@ export function PaymentModal({
       const jumlah = Number(jumlahBayar) || 0
       if (sisaBayar > 0 && jumlah < sisaBayar) throw new Error('Jumlah bayar kurang dari sisa tagihan')
 
-      const res = await apiPost('/pembayaran/bayar', {
+      const res = await apiPost<PaidPenjualan>('/pembayaran/bayar', {
         source_type: target.sourceType,
         source_id: target.sourceId,
         staff_id: Number(staffId),
@@ -146,9 +156,11 @@ export function PaymentModal({
       }
       return res
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
+      // Stay open on a success panel so the kasir can print the receipt.
+      setPaid(res.data ?? null)
       onSuccess()
-      onClose()
+      if (!res.data) onClose()
     },
     onError: (err) => {
       onError(errorMessage(err, 'Gagal memproses pembayaran'))
@@ -187,6 +199,31 @@ export function PaymentModal({
       description={target ? `${target.label} — ${target.pasienNama || 'Pasien'}` : undefined}
       className="max-w-4xl"
     >
+      {paid ? (
+        <div className="space-y-5 py-2 text-center">
+          <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+          <div>
+            <p className="text-lg font-bold text-slate-900">Pembayaran berhasil</p>
+            <p className="font-mono text-sm font-bold text-rose-700" data-testid="paid-invoice">
+              {paid.no_invoice}
+            </p>
+          </div>
+          {paid.kembalian > 0 ? (
+            <p className="mx-auto w-fit rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+              Kembalian {formatCurrency(paid.kembalian)}
+            </p>
+          ) : null}
+          <div className="mx-auto flex max-w-sm gap-2">
+            <Button type="button" variant="outline" onClick={() => openPrintTab(`/cetak/kwitansi/${paid.id}`)} className="flex-1">
+              <Printer />
+              Cetak Kwitansi
+            </Button>
+            <Button type="button" onClick={onClose} className="flex-1">
+              Selesai
+            </Button>
+          </div>
+        </div>
+      ) : (
       <FieldErrorsContext.Provider value={validation.errors}>
         {/* Left: what is billed and what reduces it. Right: what is paid, by whom, and the action. */}
         <form {...validation.formProps} onSubmit={onSubmit} className="grid gap-5 md:grid-cols-[1.1fr_1fr]">
@@ -338,6 +375,7 @@ export function PaymentModal({
           </div>
         </form>
       </FieldErrorsContext.Provider>
+      )}
     </Dialog>
 
   )

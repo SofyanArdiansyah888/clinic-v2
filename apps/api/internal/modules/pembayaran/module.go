@@ -15,6 +15,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
+	"github.com/scaleup/clinic-v2/api/internal/platform/middleware"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
@@ -49,6 +50,8 @@ type DepositRequest struct {
 	JenisPembayaran string  `json:"jenis_pembayaran" binding:"required"`
 	BankID          *uint   `json:"bank_id"`
 	Keterangan      string  `json:"keterangan"`
+	// UserID is the signed-in account (from the JWT), filled by the handler.
+	UserID uint `json:"-"`
 }
 
 type BatalPaketRequest struct {
@@ -57,6 +60,8 @@ type BatalPaketRequest struct {
 	JenisPembayaran string  `json:"jenis_pembayaran"`
 	BankID          *uint   `json:"bank_id"`
 	Tanggal         string  `json:"tanggal"`
+	// UserID is the signed-in account (from the JWT), filled by the handler.
+	UserID uint `json:"-"`
 }
 
 type PerawatanQueueItem struct {
@@ -220,7 +225,12 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 	return s.GetDeposit(createdID)
 }
 
+// DefaultMemberTier is the tier a new member starts on; admin can change it later.
+const DefaultMemberTier = "Silver"
+
 // linkMembership creates or extends the pasien's membership for member payments.
+// The tier is a membership level (Bronze/Silver/Gold/Platinum), never the payment type:
+// registration starts on DefaultMemberTier and an extension keeps the current tier.
 func (s *Service) linkMembership(tx *gorm.DB, req DepositRequest, item *DepositTransaksi) error {
 	{
 		jenis := strings.ToLower(req.Jenis)
@@ -229,7 +239,6 @@ func (s *Service) linkMembership(tx *gorm.DB, req DepositRequest, item *DepositT
 				var mem membership.Membership
 				if err := tx.Where("pasien_id = ? AND is_active = ?", req.PasienID, true).
 					Order("id DESC").First(&mem).Error; err == nil {
-					mem.Tipe = req.Jenis
 					mem.Points += int(req.Jumlah)
 					if err := tx.Save(&mem).Error; err != nil {
 						return err
@@ -245,7 +254,7 @@ func (s *Service) linkMembership(tx *gorm.DB, req DepositRequest, item *DepositT
 			}
 			mem := membership.Membership{
 				Kode: memKode, PasienID: req.PasienID,
-				Tipe: req.Jenis, Points: int(req.Jumlah), IsActive: true,
+				Tipe: DefaultMemberTier, Points: int(req.Jumlah), IsActive: true,
 			}
 			if err := tx.Create(&mem).Error; err != nil {
 				return err
@@ -421,6 +430,7 @@ func (h *Handler) Bayar(c *gin.Context) {
 	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
 		return
 	}
+	req.UserID = c.GetUint(middleware.ContextUserID)
 	item, err := h.svc.Bayar(req)
 	if errors.Is(err, ErrSudahDibayar) {
 		response.Fail(c, http.StatusConflict, err.Error(), nil)
@@ -498,6 +508,7 @@ func (h *Handler) Deposit(c *gin.Context) {
 	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
 		return
 	}
+	req.UserID = c.GetUint(middleware.ContextUserID)
 	item, err := h.svc.CreateDeposit(req)
 	if err != nil {
 		response.BadRequest(c, "deposit failed", err.Error())
@@ -519,6 +530,7 @@ func (h *Handler) BatalPaket(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var req BatalPaketRequest
 	_ = c.ShouldBindJSON(&req)
+	req.UserID = c.GetUint(middleware.ContextUserID)
 	item, err := h.svc.BatalPaket(uint(id), req)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)

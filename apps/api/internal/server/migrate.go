@@ -67,6 +67,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&promo.Promo{},
 		&jadwaldokter.JadwalDokter{},
 		&informedconsent.Template{},
+		&informedconsent.PerawatanConsent{},
 		&pengaturan.Klinik{},
 		&finance.Akun{},
 		&finance.AkunMapping{},
@@ -78,6 +79,13 @@ func AutoMigrate(db *gorm.DB) error {
 	// AutoMigrate never relaxes NOT NULL. barang_id became optional when treatment
 	// lines were added to penjualan_details, so older databases need it altered.
 	if err := db.Migrator().AlterColumn(&penjualan.PenjualanDetail{}, "BarangID"); err != nil {
+		return err
+	}
+	// Deposit payments used to store the payment type as the member tier; reset those
+	// to the default tier (idempotent).
+	if err := db.Model(&membership.Membership{}).
+		Where("tipe IN ?", []string{"pendaftaran_member", "perpanjangan_member"}).
+		Update("tipe", pembayaran.DefaultMemberTier).Error; err != nil {
 		return err
 	}
 	// The default chart of accounts and transaction mapping must exist before any
