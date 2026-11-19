@@ -107,9 +107,12 @@ export function LoginPage() {
                 {!loading ? <ArrowRight /> : null}
               </Button>
 
-              <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-[11px] text-rose-800">
-                Demo: <span className="font-semibold">admin / admin123</span>
-              </p>
+              {/* Seed credentials help local development only; never ship them on staging/production. */}
+              {import.meta.env.DEV ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-[11px] text-rose-800">
+                  Demo: <span className="font-semibold">admin / admin123</span>
+                </p>
+              ) : null}
             </form>
           </FieldErrorsContext.Provider>
         </div>
