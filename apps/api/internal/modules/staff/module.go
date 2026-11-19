@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,8 @@ type UpsertRequest struct {
 	NoTelp   string `json:"no_telp"`
 	Email    string `json:"email"`
 	IsActive *bool  `json:"is_active"`
+	// CabangIDs: omitted keeps the current branches; a new record without it joins the main branch.
+	CabangIDs *[]uint `json:"cabang_ids"`
 }
 
 type Handler struct {
@@ -51,6 +54,9 @@ func (s *Service) List(p pagination.Params) ([]Staff, pagination.Meta, error) {
 	}
 	var items []Staff
 	meta, err := pagination.Paginate(q, p, &items)
+	if err == nil {
+		err = s.fillCabang(items)
+	}
 	return items, meta, err
 }
 
@@ -59,7 +65,11 @@ func (s *Service) Get(id uint) (*Staff, error) {
 	if err := s.repo.db.First(&item, id).Error; err != nil {
 		return nil, err
 	}
-	return &item, nil
+	list := []Staff{item}
+	if err := s.fillCabang(list); err != nil {
+		return nil, err
+	}
+	return &list[0], nil
 }
 
 func (s *Service) Create(req UpsertRequest) (*Staff, error) {
@@ -68,7 +78,7 @@ func (s *Service) Create(req UpsertRequest) (*Staff, error) {
 		return nil, err
 	}
 	item := &Staff{Kode: kode, IsActive: true}
-	
+
 	item.Nama = req.Nama
 	item.Jabatan = req.Jabatan
 	item.NoTelp = req.NoTelp
@@ -76,10 +86,21 @@ func (s *Service) Create(req UpsertRequest) (*Staff, error) {
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}
+	if err := s.checkCabang(true, req.CabangIDs); err != nil {
+		return nil, err
+	}
 	if err := s.repo.db.Create(item).Error; err != nil {
 		return nil, err
 	}
-	return item, nil
+	ids := req.CabangIDs
+	if ids == nil {
+		def := []uint{branch.UtamaID(s.repo.db)}
+		ids = &def
+	}
+	if err := branch.StaffLinks.Set(s.repo.db, item.ID, *ids); err != nil {
+		return nil, err
+	}
+	return s.Get(item.ID)
 }
 
 func (s *Service) Update(id uint, req UpsertRequest) (*Staff, error) {
@@ -87,7 +108,7 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Staff, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	item.Nama = req.Nama
 	item.Jabatan = req.Jabatan
 	item.NoTelp = req.NoTelp
@@ -95,10 +116,18 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Staff, error) {
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}
+	if err := s.checkCabang(true, req.CabangIDs); err != nil {
+		return nil, err
+	}
 	if err := s.repo.db.Save(item).Error; err != nil {
 		return nil, err
 	}
-	return item, nil
+	if req.CabangIDs != nil {
+		if err := branch.StaffLinks.Set(s.repo.db, item.ID, *req.CabangIDs); err != nil {
+			return nil, err
+		}
+	}
+	return s.Get(item.ID)
 }
 
 func (s *Service) Delete(id uint) error {
@@ -131,6 +160,10 @@ func (h *Handler) Store(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Create(req)
+	if branch.IsRequestError(err) {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -146,6 +179,10 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Update(uint(id), req)
+	if branch.IsRequestError(err) {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -172,4 +209,31 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.PUT("/:id", h.Update)
 		g.DELETE("/:id", h.Destroy)
 	}
+}
+
+// fillCabang loads the linked branch ids of each record.
+func (s *Service) fillCabang(items []Staff) error {
+	ids := make([]uint, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+	}
+	m, err := branch.StaffLinks.IDs(s.repo.db, ids)
+	for i := range items {
+		items[i].CabangIDs = m[items[i].ID]
+		if items[i].CabangIDs == nil {
+			items[i].CabangIDs = []uint{}
+		}
+	}
+	return err
+}
+
+// checkCabang validates requested branches before anything is written.
+func (s *Service) checkCabang(needOne bool, ids *[]uint) error {
+	if ids == nil {
+		return nil
+	}
+	if needOne && len(*ids) == 0 {
+		return branch.ErrMinimalSatu
+	}
+	return branch.Validate(s.repo.db, *ids)
 }

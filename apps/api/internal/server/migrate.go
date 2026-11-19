@@ -41,6 +41,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&bank.Bank{},
 		&perusahaan.Perusahaan{},
 		&cabang.Cabang{},
+		&cabang.UserCabang{},
+		&cabang.StaffCabang{},
 		&barang.Barang{},
 		&antrian.Antrian{},
 		&appointment.Appointment{},
@@ -93,6 +95,10 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := db.Model(&membership.Membership{}).
 		Where("tipe IN ?", []string{"pendaftaran_member", "perpanjangan_member"}).
 		Update("tipe", pembayaran.DefaultMemberTier).Error; err != nil {
+		return err
+	}
+	// Multi-branch: a main branch exists and users/staff without a branch belong to it.
+	if err := cabang.EnsureDefaults(db); err != nil {
 		return err
 	}
 	// The default chart of accounts and transaction mapping must exist before any

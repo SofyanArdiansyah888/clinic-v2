@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Field } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
+import { CabangBadges } from '@/shared/components/CabangBadges'
 
 type User = {
   id: number
@@ -19,6 +20,7 @@ type User = {
   role: string
   is_active: boolean
   staff_id?: number | null
+  cabang_ids?: number[]
 }
 
 function StaffName({ id }: { id?: number | null }) {
@@ -45,6 +47,11 @@ const columns: Column<User>[] = [
         <span className="text-[11px] font-semibold text-amber-700">Belum terhubung</span>
       ),
   },
+  {
+    key: 'cabang',
+    header: 'Cabang',
+    cell: (r) => (r.role === 'admin' ? <span className="text-[11px] text-slate-500">Semua cabang</span> : <CabangBadges ids={r.cabang_ids} emptyText="Belum ada" />),
+  },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
@@ -66,6 +73,7 @@ const createFields: FormField[] = [
       { label: 'Finance / Akuntansi', value: 'finance' },
     ],
   },
+  { name: 'cabang_ids', label: 'Cabang yang boleh diakses (admin otomatis semua)', type: 'cabang-multi' },
   {
     name: 'staff_id',
     label: 'Terhubung ke Staff',
@@ -91,6 +99,7 @@ const editFields: FormField[] = [
       { label: 'Finance / Akuntansi', value: 'finance' },
     ],
   },
+  { name: 'cabang_ids', label: 'Cabang yang boleh diakses (admin otomatis semua)', type: 'cabang-multi' },
   {
     name: 'staff_id',
     label: 'Terhubung ke Staff',

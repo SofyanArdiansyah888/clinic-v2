@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/cabang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/staff"
@@ -53,6 +54,10 @@ func newEnv(t *testing.T) *env {
 			t.Fatal(err)
 		}
 		e.tok[role] = tok
+	}
+	// Like startup: accounts without a branch work in the main branch.
+	if err := cabang.EnsureDefaults(db); err != nil {
+		t.Fatal(err)
 	}
 	return e
 }

@@ -17,7 +17,9 @@ type User struct {
 	IsActive bool           `gorm:"default:true" json:"is_active"`
 	// StaffID links the login to the employee it acts as; non-admin transactions are
 	// recorded under this staff only.
-	StaffID   *uint     `gorm:"index" json:"staff_id"`
+	StaffID *uint `gorm:"index" json:"staff_id"`
+	// CabangIDs are the branches this record belongs to (filled from the link table).
+	CabangIDs []uint    `gorm:"-" json:"cabang_ids"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

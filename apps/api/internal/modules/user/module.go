@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,8 @@ type UpsertRequest struct {
 	IsActive *bool          `json:"is_active"`
 	// StaffID: omitted keeps the current link, 0 removes it, any other id links that staff.
 	StaffID *uint `json:"staff_id"`
+	// CabangIDs: omitted keeps the current branches; a new record without it joins the main branch.
+	CabangIDs *[]uint `json:"cabang_ids"`
 }
 
 type PasswordRequest struct {
@@ -56,6 +59,9 @@ func (s *Service) List(p pagination.Params) ([]User, pagination.Meta, error) {
 	}
 	var items []User
 	meta, err := pagination.Paginate(q, p, &items)
+	if err == nil {
+		err = s.fillCabang(items)
+	}
 	return items, meta, err
 }
 
@@ -64,7 +70,11 @@ func (s *Service) Get(id uint) (*User, error) {
 	if err := s.repo.db.First(&item, id).Error; err != nil {
 		return nil, err
 	}
-	return &item, nil
+	list := []User{item}
+	if err := s.fillCabang(list); err != nil {
+		return nil, err
+	}
+	return &list[0], nil
 }
 
 func (s *Service) FindByLogin(login string) (*User, error) {
@@ -102,10 +112,21 @@ func (s *Service) Create(req UpsertRequest) (*User, error) {
 	if err := s.applyStaff(item, req.StaffID); err != nil {
 		return nil, err
 	}
+	if err := s.checkCabang(req.Role != "" && req.Role != "admin" || req.Role == "" && item.Role != "admin", req.CabangIDs); err != nil {
+		return nil, err
+	}
 	if err := s.repo.db.Create(item).Error; err != nil {
 		return nil, err
 	}
-	return item, nil
+	ids := req.CabangIDs
+	if ids == nil {
+		def := []uint{branch.UtamaID(s.repo.db)}
+		ids = &def
+	}
+	if err := branch.UserLinks.Set(s.repo.db, item.ID, *ids); err != nil {
+		return nil, err
+	}
+	return s.Get(item.ID)
 }
 
 func (s *Service) Update(id uint, req UpsertRequest) (*User, error) {
@@ -135,10 +156,18 @@ func (s *Service) Update(id uint, req UpsertRequest) (*User, error) {
 	if err := s.applyStaff(item, req.StaffID); err != nil {
 		return nil, err
 	}
+	if err := s.checkCabang(req.Role != "" && req.Role != "admin" || req.Role == "" && item.Role != "admin", req.CabangIDs); err != nil {
+		return nil, err
+	}
 	if err := s.repo.db.Save(item).Error; err != nil {
 		return nil, err
 	}
-	return item, nil
+	if req.CabangIDs != nil {
+		if err := branch.UserLinks.Set(s.repo.db, item.ID, *req.CabangIDs); err != nil {
+			return nil, err
+		}
+	}
+	return s.Get(item.ID)
 }
 
 func (s *Service) UpdatePassword(id uint, password string) error {
@@ -179,6 +208,10 @@ func (h *Handler) Store(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Create(req)
+	if branch.IsRequestError(err) {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -194,6 +227,10 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Update(uint(id), req)
+	if branch.IsRequestError(err) {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -254,4 +291,31 @@ func (s *Service) applyStaff(item *User, staffID *uint) error {
 	id := *staffID
 	item.StaffID = &id
 	return nil
+}
+
+// fillCabang loads the linked branch ids of each record.
+func (s *Service) fillCabang(items []User) error {
+	ids := make([]uint, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+	}
+	m, err := branch.UserLinks.IDs(s.repo.db, ids)
+	for i := range items {
+		items[i].CabangIDs = m[items[i].ID]
+		if items[i].CabangIDs == nil {
+			items[i].CabangIDs = []uint{}
+		}
+	}
+	return err
+}
+
+// checkCabang validates requested branches before anything is written.
+func (s *Service) checkCabang(needOne bool, ids *[]uint) error {
+	if ids == nil {
+		return nil
+	}
+	if needOne && len(*ids) == 0 {
+		return branch.ErrMinimalSatu
+	}
+	return branch.Validate(s.repo.db, *ids)
 }

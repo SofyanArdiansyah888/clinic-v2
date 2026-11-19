@@ -18,7 +18,7 @@ func Seed(db *gorm.DB) error {
 	var count int64
 	db.Model(&user.User{}).Count(&count)
 	if count > 0 {
-		return nil
+		return cabang.EnsureDefaults(db)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
@@ -57,5 +57,5 @@ func Seed(db *gorm.DB) error {
 	}
 
 	log.Println("seed: admin/admin123 and sample master data created")
-	return nil
+	return cabang.EnsureDefaults(db)
 }

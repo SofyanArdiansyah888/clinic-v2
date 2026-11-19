@@ -19,6 +19,7 @@ import { useMemo, useState, type ElementType } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useAuthStore } from '@/features/auth/store'
 import { canAccess, ROLE_LABEL } from '@/shared/lib/access'
+import { CabangSwitcher } from '@/shared/components/CabangSwitcher'
 import { cn } from '@/shared/lib/cn'
 
 type NavItem = { label: string; to: string; badge?: string; badgeTone?: 'amber' | 'rose' }
@@ -229,6 +230,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         </button>
       </div>
 
+      <CabangSwitcher collapsed={collapsed} />
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
         {nav.map((section) => (

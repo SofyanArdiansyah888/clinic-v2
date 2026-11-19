@@ -35,6 +35,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/user"
 	"github.com/scaleup/clinic-v2/api/internal/modules/voucher"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/jwt"
 	"github.com/scaleup/clinic-v2/api/internal/platform/middleware"
@@ -89,7 +90,8 @@ func New(cfg *config.Config, db *gorm.DB, jm *jwt.Manager, gen *generator.Servic
 	}
 
 	protected := api.Group("")
-	protected.Use(middleware.Auth(jm), middleware.Authorize())
+	// branch.Middleware resolves the active cabang (X-Cabang-ID) after the user is known.
+	protected.Use(middleware.Auth(jm), middleware.Authorize(), branch.Middleware(db))
 	{
 		auth.RegisterProtectedRoutes(protected, db, jm)
 		generate.RegisterRoutes(protected, gen)

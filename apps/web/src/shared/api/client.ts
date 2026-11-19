@@ -4,6 +4,25 @@ import type { ApiResponse } from '@/shared/types/api'
 
 const ACCESS_KEY = 'clinic_access_token'
 const REFRESH_KEY = 'clinic_refresh_token'
+// Active branch for this browser: a cabang id, or 'all' (admin, combined reports).
+const CABANG_KEY = 'clinic_cabang'
+
+export function getCabang(): string | null {
+  try {
+    return localStorage.getItem(CABANG_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setCabang(value: string | null) {
+  try {
+    if (value) localStorage.setItem(CABANG_KEY, value)
+    else localStorage.removeItem(CABANG_KEY)
+  } catch {
+    // Storage blocked: the server falls back to the default branch.
+  }
+}
 
 export function getAccessToken() {
   return localStorage.getItem(ACCESS_KEY)
@@ -21,6 +40,8 @@ export function setTokens(access: string, refresh: string) {
 export function clearTokens() {
   localStorage.removeItem(ACCESS_KEY)
   localStorage.removeItem(REFRESH_KEY)
+  // The next account starts on its own default branch.
+  setCabang(null)
 }
 
 export const api = axios.create({
@@ -32,6 +53,10 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  const cabang = getCabang()
+  if (cabang) {
+    config.headers['X-Cabang-ID'] = cabang
   }
   return config
 })

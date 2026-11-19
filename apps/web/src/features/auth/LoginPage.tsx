@@ -56,8 +56,8 @@ export function LoginPage() {
             <p className="mb-6 text-xs text-slate-300">Rekam medis, antrian, depo, dan kasir.</p>
           </div>
           <div className="relative z-10 border-t border-slate-800 pt-4">
-            <p className="text-[11px] font-semibold text-rose-300">Cabang Aktif</p>
-            <p className="text-xs text-slate-200">Klinik Utama Sehat — Jakarta Selatan</p>
+            <p className="text-[11px] font-semibold text-rose-300">Multi-cabang</p>
+            <p className="text-xs text-slate-200">Pilih cabang aktif di menu samping setelah masuk.</p>
           </div>
         </div>
 

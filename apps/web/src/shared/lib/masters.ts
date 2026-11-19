@@ -64,6 +64,7 @@ export const MASTERS = {
       },
       { name: 'no_telp', label: 'No. Telepon', type: 'tel' },
       { name: 'email', label: 'Email', type: 'email' },
+      { name: 'cabang_ids', label: 'Bertugas di cabang', type: 'cabang-multi' },
     ],
   },
   treatment: {

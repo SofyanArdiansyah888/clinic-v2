@@ -5,6 +5,7 @@ import { MASTERS } from '@/shared/lib/masters'
 import { Tabs } from '@/shared/ui/tabs'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
+import { CabangBadges } from '@/shared/components/CabangBadges'
 
 type Staff = {
   id: number
@@ -14,6 +15,7 @@ type Staff = {
   no_telp?: string
   email?: string
   is_active: boolean
+  cabang_ids?: number[]
 }
 
 type JadwalDokter = {
@@ -31,6 +33,7 @@ const staffColumns: Column<Staff>[] = [
   { key: 'jabatan', header: 'Jabatan', cell: (r) => r.jabatan || '-' },
   { key: 'no_telp', header: 'No. Telp', cell: (r) => <span className="font-mono">{r.no_telp || '-'}</span> },
   { key: 'email', header: 'Email', cell: (r) => r.email || '-' },
+  { key: 'cabang', header: 'Cabang', cell: (r) => <CabangBadges ids={r.cabang_ids} /> },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 

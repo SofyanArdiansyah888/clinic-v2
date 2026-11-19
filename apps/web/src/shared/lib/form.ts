@@ -4,7 +4,7 @@ export type FormField = {
   name: string
   label: string
   /** currency: rupiah with thousand separators; staff: pick a staff record (sent as id, 0 = none). */
-  type?: 'text' | 'email' | 'number' | 'currency' | 'staff' | 'tel' | 'date' | 'password' | 'select' | 'textarea'
+  type?: 'text' | 'email' | 'number' | 'currency' | 'staff' | 'boolean' | 'cabang-multi' | 'tel' | 'date' | 'password' | 'select' | 'textarea'
   placeholder?: string
   required?: boolean
   options?: { label: string; value: string }[]
@@ -24,7 +24,9 @@ export function initialFormValues(fields: FormField[], defaults?: FormValues): F
   const values: FormValues = {}
   for (const field of fields) {
     // Only required dates start at today; optional ones (tanggal lahir, masa berlaku) stay empty.
-    if (field.type === 'date' && field.required && !field.placeholder) {
+    if (field.type === 'boolean') {
+      values[field.name] = 'false'
+    } else if (field.type === 'date' && field.required && !field.placeholder) {
       values[field.name] = todayISO()
     } else {
       values[field.name] = field.options?.[0]?.value ?? ''
@@ -40,6 +42,9 @@ export function buildFormBody(fields: FormField[], values: FormValues) {
       const raw = values[field.name] ?? ''
       if (field.type === 'number' || field.type === 'currency' || field.type === 'staff') return [field.name, raw === '' ? 0 : Number(raw)]
       if (field.type === 'date') return [field.name, toApiDate(raw)]
+      if (field.type === 'boolean') return [field.name, raw === 'true']
+      // No branch ticked: omit, so the server keeps the current branches (or uses the main one).
+      if (field.type === 'cabang-multi') return [field.name, raw ? raw.split(',').map(Number).filter(Boolean) : undefined]
       return [field.name, raw]
     }),
   )

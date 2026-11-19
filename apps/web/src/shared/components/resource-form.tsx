@@ -2,6 +2,7 @@ import { Input } from '@/shared/ui/input'
 import { Field } from '@/shared/ui/field'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
 import { StaffSelect } from '@/shared/components/StaffSelect'
+import { CabangChecklist } from '@/shared/components/CabangChecklist'
 import { WIDE_FORM, type FormField, type FormValues } from '@/shared/lib/form'
 
 // Same look as <Input>, for inputs rendered without it.
@@ -57,6 +58,18 @@ export function ResourceFormFields({ fields, values, onChange, idPrefix }: Resou
                 value={value}
                 onValueChange={(raw) => set(field.name, raw)}
               />
+            ) : field.type === 'boolean' ? (
+              <select
+                id={id}
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-rose-500"
+                value={value || 'false'}
+                onChange={(e) => set(field.name, e.target.value)}
+              >
+                <option value="false">Tidak</option>
+                <option value="true">Ya</option>
+              </select>
+            ) : field.type === 'cabang-multi' ? (
+              <CabangChecklist id={id} value={value} onChange={(v) => set(field.name, v)} />
             ) : field.type === 'staff' ? (
               <StaffSelect
                 id={id}
