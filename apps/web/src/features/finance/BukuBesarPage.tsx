@@ -52,11 +52,11 @@ export function BukuBesarPage() {
   return (
     <ReportShell<BukuBesar>
       title="Buku Besar"
-      description="Mutasi satu akun dengan saldo awal dan saldo berjalan."
+      description="Mutasi dan saldo berjalan per akun"
       endpoint="/finance/laporan/buku-besar"
       params={{ akun_id: akunId }}
       enabled={!!akunId}
-      idleMessage="Pilih akun di atas untuk melihat mutasi dan saldo berjalannya."
+      idleMessage="Pilih akun untuk melihat mutasinya."
       filters={
         <div className="w-full space-y-1.5 sm:w-80">
           <label htmlFor="bb-akun" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Akun</label>

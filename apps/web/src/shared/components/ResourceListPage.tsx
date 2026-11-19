@@ -10,17 +10,13 @@ import type { PaginationMeta } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { todayISO } from '@/shared/lib/formatters'
+import { FormAlert } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
+import { ResourceFormFields } from '@/shared/components/resource-form'
+import { apiErrorMessage, buildFormBody, initialFormValues, type FormField } from '@/shared/lib/form'
 
-export type FormField = {
-  name: string
-  label: string
-  type?: 'text' | 'email' | 'number' | 'tel' | 'date' | 'password' | 'select' | 'textarea'
-  placeholder?: string
-  required?: boolean
-  options?: { label: string; value: string }[]
-}
+export type { FormField }
+
 
 type ResourceListPageProps<T extends { id: number | string }> = {
   title: string
@@ -42,13 +38,6 @@ type ResourceListPageProps<T extends { id: number | string }> = {
   onDeleteClick?: (row: T) => void
   extraActions?: ReactNode
   filterParams?: Record<string, string | number | undefined>
-}
-
-// The API decodes dates into time.Time, which only accepts RFC3339; a plain
-// <input type="date"> value (YYYY-MM-DD) is sent as midnight UTC of that day.
-function toApiDate(raw: string): string | null {
-  if (raw === '') return null
-  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00Z` : raw
 }
 
 export function ResourceListPage<T extends { id: number | string }>({
@@ -81,12 +70,14 @@ export function ResourceListPage<T extends { id: number | string }>({
   const [open, setOpen] = useState(false)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
+  const createValidation = useFormValidation()
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false)
   const [editingRow, setEditingRow] = useState<T | null>(null)
   const [editFormValues, setEditFormValues] = useState<Record<string, string>>({})
   const [editFormError, setEditFormError] = useState<string | null>(null)
+  const editValidation = useFormValidation()
 
   // Delete state
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -118,10 +109,7 @@ export function ResourceListPage<T extends { id: number | string }>({
       setFormError(null)
     },
     onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Gagal menyimpan data'
-      setFormError(message)
+      setFormError(apiErrorMessage(err, 'Gagal menyimpan data'))
     },
   })
 
@@ -136,10 +124,7 @@ export function ResourceListPage<T extends { id: number | string }>({
       setEditFormError(null)
     },
     onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Gagal memperbarui data'
-      setEditFormError(message)
+      setEditFormError(apiErrorMessage(err, 'Gagal memperbarui data'))
     },
   })
 
@@ -152,10 +137,7 @@ export function ResourceListPage<T extends { id: number | string }>({
       setDeleteError(null)
     },
     onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Gagal menghapus data'
-      setDeleteError(message)
+      setDeleteError(apiErrorMessage(err, 'Gagal menghapus data'))
     },
   })
 
@@ -183,17 +165,9 @@ export function ResourceListPage<T extends { id: number | string }>({
 
   function openCreate() {
     if (!enableCreate || !createFields?.length) return
-    const initial: Record<string, string> = {}
-    for (const field of createFields) {
-      // Only required dates start at today; optional ones (tanggal lahir, masa berlaku) stay empty.
-      if (field.type === 'date' && field.required && !field.placeholder) {
-        initial[field.name] = todayISO()
-      } else {
-        initial[field.name] = field.options?.[0]?.value ?? ''
-      }
-    }
-    setFormValues(initial)
+    setFormValues(initialFormValues(createFields))
     setFormError(null)
+    createValidation.reset()
     setOpen(true)
   }
 
@@ -202,18 +176,7 @@ export function ResourceListPage<T extends { id: number | string }>({
     if (!createFields?.length) return
     const body = transformCreateBody
       ? transformCreateBody(formValues)
-      : Object.fromEntries(
-          createFields.map((field) => {
-            const raw = formValues[field.name] ?? ''
-            if (field.type === 'number') {
-              return [field.name, raw === '' ? 0 : Number(raw)]
-            }
-            if (field.type === 'date') {
-              return [field.name, toApiDate(raw)]
-            }
-            return [field.name, raw]
-          }),
-        )
+      : buildFormBody(createFields, formValues)
     createMutation.mutate(body)
   }
 
@@ -241,6 +204,7 @@ export function ResourceListPage<T extends { id: number | string }>({
     }
     setEditFormValues(initial)
     setEditFormError(null)
+    editValidation.reset()
     setEditOpen(true)
   }
 
@@ -250,18 +214,7 @@ export function ResourceListPage<T extends { id: number | string }>({
     const fieldsToUse = activeEditFields ?? []
     const body = transformEditBody
       ? transformEditBody(editFormValues, editingRow)
-      : Object.fromEntries(
-          fieldsToUse.map((field) => {
-            const raw = editFormValues[field.name] ?? ''
-            if (field.type === 'number') {
-              return [field.name, raw === '' ? 0 : Number(raw)]
-            }
-            if (field.type === 'date') {
-              return [field.name, toApiDate(raw)]
-            }
-            return [field.name, raw]
-          }),
-        )
+      : buildFormBody(fieldsToUse, editFormValues)
     updateMutation.mutate({ id: editingRow.id, body })
   }
 
@@ -296,8 +249,7 @@ export function ResourceListPage<T extends { id: number | string }>({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-rose-600"
+                size="icon-sm"
                 onClick={() => handleOpenEdit(row)}
                 title="Edit Data"
               >
@@ -307,9 +259,8 @@ export function ResourceListPage<T extends { id: number | string }>({
             {enableDelete ? (
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                variant="ghost-danger"
+                size="icon-sm"
                 onClick={() => handleOpenDelete(row)}
                 title="Hapus Data"
               >
@@ -388,61 +339,20 @@ export function ResourceListPage<T extends { id: number | string }>({
         }
       >
         {createFields?.length ? (
-          <form onSubmit={onCreateSubmit} className="space-y-4">
-            {createFields.map((field) => (
-              <div key={field.name} className="space-y-1.5">
-                <Label htmlFor={`create-${field.name}`}>{field.label}</Label>
-                {field.type === 'select' ? (
-                  <select
-                    id={`create-${field.name}`}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-rose-500"
-                    value={formValues[field.name] ?? ''}
-                    onChange={(e) =>
-                      setFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                    required={field.required}
-                  >
-                    {(field.options ?? []).map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === 'textarea' ? (
-                  <textarea
-                    id={`create-${field.name}`}
-                    className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    value={formValues[field.name] ?? ''}
-                    onChange={(e) =>
-                      setFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                  />
-                ) : (
-                  <Input
-                    id={`create-${field.name}`}
-                    type={field.type ?? 'text'}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    value={formValues[field.name] ?? ''}
-                    onChange={(e) =>
-                      setFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                  />
-                )}
+          <FieldErrorsContext.Provider value={createValidation.errors}>
+            <form {...createValidation.formProps} onSubmit={onCreateSubmit} className="space-y-4">
+              <ResourceFormFields fields={createFields} values={formValues} onChange={setFormValues} idPrefix="create" />
+              <FormAlert>{formError}</FormAlert>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Batal
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? 'Menyimpan...' : 'Simpan'}
+                </Button>
               </div>
-            ))}
-            {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Batal
-              </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Menyimpan...' : 'Simpan'}
-              </Button>
-            </div>
-          </form>
+            </form>
+          </FieldErrorsContext.Provider>
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -465,61 +375,25 @@ export function ResourceListPage<T extends { id: number | string }>({
         description={`Ubah detail data ${title.toLowerCase()}`}
       >
         {activeEditFields?.length ? (
-          <form onSubmit={onEditSubmit} className="space-y-4">
-            {activeEditFields.map((field) => (
-              <div key={field.name} className="space-y-1.5">
-                <Label htmlFor={`edit-${field.name}`}>{field.label}</Label>
-                {field.type === 'select' ? (
-                  <select
-                    id={`edit-${field.name}`}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs focus:ring-2 focus:ring-rose-500"
-                    value={editFormValues[field.name] ?? ''}
-                    onChange={(e) =>
-                      setEditFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                    required={field.required}
-                  >
-                    {(field.options ?? []).map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === 'textarea' ? (
-                  <textarea
-                    id={`edit-${field.name}`}
-                    className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    value={editFormValues[field.name] ?? ''}
-                    onChange={(e) =>
-                      setEditFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                  />
-                ) : (
-                  <Input
-                    id={`edit-${field.name}`}
-                    type={field.type ?? 'text'}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    value={editFormValues[field.name] ?? ''}
-                    onChange={(e) =>
-                      setEditFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                  />
-                )}
+          <FieldErrorsContext.Provider value={editValidation.errors}>
+            <form {...editValidation.formProps} onSubmit={onEditSubmit} className="space-y-4">
+              <ResourceFormFields
+                fields={activeEditFields}
+                values={editFormValues}
+                onChange={setEditFormValues}
+                idPrefix="edit"
+              />
+              <FormAlert>{editFormError}</FormAlert>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                  Batal
+                </Button>
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </Button>
               </div>
-            ))}
-            {editFormError ? <p className="text-sm text-destructive">{editFormError}</p> : null}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
-                Batal
-              </Button>
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
-              </Button>
-            </div>
-          </form>
+            </form>
+          </FieldErrorsContext.Provider>
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">

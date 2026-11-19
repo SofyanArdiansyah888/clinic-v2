@@ -37,26 +37,26 @@ type NavSection = {
 
 const NAV: NavSection[] = [
   {
-    title: 'Operasional Utama',
+    title: 'Operasional',
     items: [
-      { label: 'Dashboard KPI', icon: LayoutDashboard, to: '/' },
+      { label: 'Dashboard', icon: LayoutDashboard, to: '/' },
       {
         label: 'Resepsionis',
         icon: ClipboardList,
         children: [
-          { label: 'Kunjungan / Antrian', to: '/resepsionis/kunjungan' },
+          { label: 'Kunjungan', to: '/resepsionis/kunjungan' },
           { label: 'Appointment', to: '/resepsionis/appointment' },
         ],
       },
       { label: 'Perawatan', icon: Stethoscope, to: '/perawatan' },
       {
-        label: 'Kasir & Pembayaran',
+        label: 'Kasir',
         icon: CreditCard,
         children: [
           { label: 'Perawatan', to: '/pembayaran/perawatan' },
           { label: 'Produk', to: '/pembayaran/produk' },
           { label: 'Deposit & Member', to: '/pembayaran/deposit' },
-          { label: 'Batal Paket Perawatan', to: '/pembayaran/pembatalan' },
+          { label: 'Batal Paket', to: '/pembayaran/pembatalan' },
         ],
       },
     ],
@@ -73,10 +73,10 @@ const NAV: NavSection[] = [
         ],
       },
       {
-        label: 'Warehouse & Stok',
+        label: 'Gudang',
         icon: Warehouse,
         children: [
-          { label: 'Gudang / Barang', to: '/warehouse/barang' },
+          { label: 'Barang', to: '/warehouse/barang' },
           { label: 'Stok Opname', to: '/warehouse/stok-opname' },
           { label: 'Produksi', to: '/warehouse/produksi' },
           { label: 'Konversi', to: '/warehouse/konversi' },
@@ -95,7 +95,7 @@ const NAV: NavSection[] = [
     ],
   },
   {
-    title: 'Administrasi & Laporan',
+    title: 'Administrasi',
     items: [
       {
         label: 'Administrasi',
@@ -113,19 +113,20 @@ const NAV: NavSection[] = [
           { label: 'Membership', to: '/administrasi/membership' },
           { label: 'Voucher', to: '/administrasi/voucher' },
           { label: 'Promo', to: '/administrasi/promo' },
-          { label: 'Template Informed Consent', to: '/administrasi/template-informed-consent' },
+          { label: 'Template Consent', to: '/administrasi/template-informed-consent' },
         ],
       },
       {
         label: 'Keuangan',
         icon: Landmark,
         children: [
+          { label: 'Financial Highlights', to: '/finance/highlights' },
           { label: 'Jurnal Umum', to: '/finance/jurnal' },
           { label: 'Buku Besar', to: '/finance/buku-besar' },
           { label: 'Neraca Saldo', to: '/finance/neraca-saldo' },
           { label: 'Laba Rugi', to: '/finance/laba-rugi' },
           { label: 'Neraca', to: '/finance/neraca' },
-          { label: 'Daftar Akun (COA)', to: '/finance/akun' },
+          { label: 'Daftar Akun', to: '/finance/akun' },
           { label: 'Pengaturan Akun', to: '/finance/pengaturan-akun' },
         ],
       },
@@ -133,6 +134,7 @@ const NAV: NavSection[] = [
         label: 'Laporan',
         icon: FileBarChart,
         children: [
+          { label: 'Majalah Kinerja', to: '/laporan/majalah' },
           { label: 'FO', to: '/laporan/fo' },
           { label: 'Apotek', to: '/laporan/apotek' },
           { label: 'Nurse', to: '/laporan/nurse' },
@@ -209,43 +211,21 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           </div>
           {!collapsed ? (
             <div className="min-w-0">
-              <h1 className="flex items-center gap-1.5 truncate text-base leading-tight font-extrabold text-white">
-                Clinic OS
-                <span className="rounded bg-gradient-to-r from-amber-400 to-rose-400 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-slate-950 uppercase">
-                  Klinik
-                </span>
-              </h1>
-              <p className="text-[11px] font-medium text-rose-300/80">Sistem Operasional Klinik</p>
+              <h1 className="truncate text-base leading-tight font-bold text-white">Clinic OS</h1>
             </div>
           ) : null}
         </Link>
         <button
           type="button"
           onClick={onToggle}
-          className="hidden rounded-lg p-1.5 text-slate-400 hover:bg-slate-900 hover:text-white md:block"
+          className="hidden rounded-lg p-2 text-slate-400 hover:bg-slate-900 hover:text-white md:block"
           title={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+          aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
         >
-          {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
       </div>
 
-      {!collapsed ? (
-        <div className="border-b border-slate-800/60 p-4">
-          <label className="mb-1.5 block text-[11px] font-bold tracking-wider text-slate-400 uppercase">
-            Unit Cabang
-          </label>
-          <button
-            type="button"
-            className="group flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2.5 text-left transition-colors hover:bg-slate-800/90"
-          >
-            <div className="min-w-0 truncate">
-              <p className="truncate text-xs font-bold text-white">Klinik Utama Sehat</p>
-              <p className="truncate text-[11px] text-slate-400">Jakarta Selatan (Cabang 01)</p>
-            </div>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-white" />
-          </button>
-        </div>
-      ) : null}
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
         {nav.map((section) => (
@@ -306,7 +286,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                       {!collapsed ? (
                         <ChevronDown
                           className={cn(
-                            'h-2.5 w-2.5 transition-transform',
+                            'h-3.5 w-3.5 transition-transform',
                             groupActive ? 'text-rose-400' : 'text-slate-600',
                             open && 'rotate-180',
                           )}
@@ -367,14 +347,15 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         {!collapsed ? (
           <button
             type="button"
-            title="Keluar / Logout"
+            title="Keluar"
+            aria-label="Keluar"
             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-900 hover:text-rose-400"
             onClick={() => {
               logout()
               window.location.href = '/login'
             }}
           >
-            <LogOut className="h-3.5 w-3.5" />
+            <LogOut className="h-4 w-4" />
           </button>
         ) : null}
       </div>
@@ -388,6 +369,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               window.location.href = '/login'
             }}
             title="Keluar"
+            aria-label="Keluar"
           >
             <LogOut className="h-4 w-4" />
           </button>

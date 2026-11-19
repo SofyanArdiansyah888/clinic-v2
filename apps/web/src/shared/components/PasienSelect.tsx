@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useQuickCreate } from '@/shared/components/useQuickCreate'
 
 type PasienLite = {
   id: number
@@ -45,19 +46,27 @@ export function PasienSelect({
     [data?.data],
   )
 
+  const quick = useQuickCreate<PasienLite>('pasien', {
+    onCreated: (row) => onChange(String(row.id)),
+  })
+
   return (
-    <SearchableSelect
-      id={id}
-      value={value}
-      onChange={onChange}
-      options={options}
-      loading={isLoading}
-      disabled={disabled}
-      required={required}
-      className={className}
-      placeholder={placeholder}
-      searchPlaceholder="Cari nama, kode RM, atau no. telp..."
-      emptyText="Pasien tidak ditemukan"
-    />
+    <>
+      <SearchableSelect
+        {...quick.selectProps}
+        id={id}
+        value={value}
+        onChange={onChange}
+        options={options}
+        loading={isLoading}
+        disabled={disabled}
+        required={required}
+        className={className}
+        placeholder={placeholder}
+        searchPlaceholder="Cari nama, kode RM, atau no. telp..."
+        emptyText="Pasien tidak ditemukan"
+      />
+      {quick.dialog}
+    </>
   )
 }

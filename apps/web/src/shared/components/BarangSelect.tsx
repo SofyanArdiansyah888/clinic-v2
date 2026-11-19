@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useQuickCreate } from '@/shared/components/useQuickCreate'
 import { formatCurrency } from '@/shared/lib/formatters'
 
 export type BarangLite = {
@@ -74,19 +75,27 @@ export function BarangSelect({
     onChange(val, found)
   }
 
+  const quick = useQuickCreate<BarangLite>('barang', {
+    onCreated: (row) => onChange(String(row.id), row),
+  })
+
   return (
-    <SearchableSelect
-      id={id}
-      value={value}
-      onChange={handleChange}
-      options={options}
-      loading={isLoading}
-      disabled={disabled}
-      required={required}
-      className={className}
-      placeholder={placeholder}
-      searchPlaceholder="Cari nama atau kode barang/obat..."
-      emptyText="Barang / Obat tidak ditemukan"
-    />
+    <>
+      <SearchableSelect
+        {...quick.selectProps}
+        id={id}
+        value={value}
+        onChange={handleChange}
+        options={options}
+        loading={isLoading}
+        disabled={disabled}
+        required={required}
+        className={className}
+        placeholder={placeholder}
+        searchPlaceholder="Cari nama atau kode barang/obat..."
+        emptyText="Barang / Obat tidak ditemukan"
+      />
+      {quick.dialog}
+    </>
   )
 }

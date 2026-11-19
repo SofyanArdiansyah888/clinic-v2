@@ -18,24 +18,24 @@ type Membership = {
 const columns: Column<Membership>[] = [
   { key: 'kode', header: 'Kode Member', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'pasien', header: 'Nama Pasien', cell: (r) => <span className="font-bold text-slate-900">{r.pasien?.nama || `Pasien #${r.pasien_id}`}</span> },
-  { key: 'tipe', header: 'Tier / Level Member', cell: (r) => <span className="rounded bg-amber-50 border border-amber-200 px-2 py-1 font-bold text-amber-800 uppercase text-[11px]">{r.tipe || 'Silver'}</span> },
-  { key: 'points', header: 'Poin Reward', cell: (r) => <span className="font-mono font-bold text-slate-900">{r.points} pts</span> },
-  { key: 'status', header: 'Status Active', cell: (r) => <StatusBadge status={r.is_active} /> },
+  { key: 'tipe', header: 'Tier', cell: (r) => <span className="rounded bg-amber-50 border border-amber-200 px-2 py-1 font-bold text-amber-800 uppercase text-[11px]">{r.tipe || 'Silver'}</span> },
+  { key: 'points', header: 'Poin', cell: (r) => <span className="font-mono font-bold text-slate-900">{r.points} pts</span> },
+  { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
 const otherFields: FormField[] = [
   {
     name: 'tipe',
-    label: 'Tier / Level Member',
+    label: 'Tier',
     type: 'select',
     options: [
-      { label: 'Bronze Member', value: 'Bronze' },
-      { label: 'Silver Member', value: 'Silver' },
-      { label: 'Gold Member', value: 'Gold' },
-      { label: 'Platinum VIP', value: 'Platinum' },
+      { label: 'Bronze', value: 'Bronze' },
+      { label: 'Silver', value: 'Silver' },
+      { label: 'Gold', value: 'Gold' },
+      { label: 'Platinum', value: 'Platinum' },
     ],
   },
-  { name: 'points', label: 'Saldo Poin Reward', type: 'number', placeholder: '0' },
+  { name: 'points', label: 'Poin', type: 'number', placeholder: '0' },
 ]
 
 type PasienLite = { id: number; nama?: string; kode?: string }
@@ -65,8 +65,8 @@ export function MembershipPage() {
 
   return (
     <ResourceListPage<Membership>
-      title="Membership & Keanggotaan Pasien"
-      description="Pengaturan level keanggotaan member, akumulasi poin reward, dan keuntungan pasien"
+      title="Membership"
+      description="Tier dan poin member pasien"
       endpoint="/membership"
       queryKey="membership"
       columns={columns}

@@ -17,9 +17,9 @@ export function PageHeader({ title, description, actions, className }: PageHeade
         className,
       )}
     >
-      <div>
+      <div className="min-w-0">
         <h2 className="text-xl font-bold tracking-tight text-slate-900">{title}</h2>
-        {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
+        {description ? <p className="mt-0.5 truncate text-xs text-slate-500">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2 self-start">{actions}</div> : null}
     </div>

@@ -63,7 +63,7 @@ test('TC-FLOW-01 kunjungan pasien baru sampai obat diserahkan', async ({ page })
     await resep.getByRole('button', { name: 'Masukkan ke Resep' }).click()
     await expect(page.getByText(f.barang.nama).first()).toBeVisible()
 
-    await tab(page, /Tindakan Medis/).click()
+    await tab(page, /^Tindakan/).click()
     await page.getByRole('button', { name: 'Tambah Tindakan' }).click()
     await chooseByPlaceholder(page, page, 'Cari & pilih treatment...', f.treatment.nama)
     await chooseByPlaceholder(page, page, 'Cari & pilih beautician...', f.beautician.nama)

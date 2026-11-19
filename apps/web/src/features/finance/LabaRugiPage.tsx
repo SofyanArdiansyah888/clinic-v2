@@ -18,7 +18,7 @@ export function LabaRugiPage() {
   return (
     <ReportShell<LabaRugi>
       title="Laba Rugi"
-      description="Pendapatan setelah diskon dan refund, dikurangi HPP dan beban pada periode terpilih."
+      description="Pendapatan bersih dikurangi HPP dan beban"
       endpoint="/finance/laporan/laba-rugi"
     >
       {(d) => (
@@ -33,7 +33,7 @@ export function LabaRugiPage() {
             />
           </KpiGrid>
           <StatementCard
-            title={`Laporan Laba Rugi ${formatDate(d.dari)} – ${formatDate(d.sampai)}`}
+            title={`Laba Rugi ${formatDate(d.dari)} – ${formatDate(d.sampai)}`}
             csv={{
               filename: `laba_rugi_${d.dari}_${d.sampai}`,
               headers: ['Bagian', 'Kode', 'Akun', 'Saldo'],

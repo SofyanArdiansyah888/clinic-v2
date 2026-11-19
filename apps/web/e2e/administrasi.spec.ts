@@ -7,7 +7,7 @@ type Fill = Record<string, string | ((id: string) => string)>
 // then make sure it shows in the table and the request succeeded.
 const PAGES: { path: string; button: string; fill: Fill; shows: string }[] = [
   { path: '/administrasi/pasien', button: 'Tambah Pasien', fill: { nama: (id) => `Pasien UI ${id}`, no_telp: '081234567' }, shows: 'nama' },
-  { path: '/administrasi/staff', button: 'Tambah Staff / Dokter', fill: { nama: (id) => `Staff UI ${id}` }, shows: 'nama' },
+  { path: '/administrasi/staff', button: 'Tambah Staff', fill: { nama: (id) => `Staff UI ${id}` }, shows: 'nama' },
   { path: '/administrasi/treatment', button: 'Tambah Treatment', fill: { nama: (id) => `Treatment UI ${id}`, harga: '150000' }, shows: 'nama' },
   { path: '/administrasi/supplier', button: 'Tambah Supplier', fill: { nama: (id) => `Supplier UI ${id}` }, shows: 'nama' },
   { path: '/administrasi/bank', button: 'Tambah Bank', fill: { nama: (id) => `Bank UI ${id}`, no_rekening: '1234567890' }, shows: 'nama' },

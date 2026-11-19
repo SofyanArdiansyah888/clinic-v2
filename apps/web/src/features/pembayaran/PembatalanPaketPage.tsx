@@ -1,14 +1,17 @@
 import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, FileText, Info, Pencil, Search } from 'lucide-react'
-import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Search } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { apiGet, apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
 import { Dialog } from '@/shared/components/Dialog'
+import { EmptyState } from '@/shared/components/EmptyState'
 import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
+import { Field, FormAlert } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 
 type PaketRow = {
@@ -33,6 +36,7 @@ export function PembatalanPaketPage() {
   const [metodeRefund, setMetodeRefund] = useState('tunai')
   const [bankId, setBankId] = useState('')
   const needsBank = metodeRefund === 'transfer' || metodeRefund === 'e_money' || metodeRefund === 'kartu_debit'
+  const validation = useFormValidation()
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
     pushToast(message, tone)
@@ -62,56 +66,37 @@ export function PembatalanPaketPage() {
       setBankId('')
       showToast('Paket perawatan berhasil dibatalkan', 'success')
     },
-    onError: (err) =>
-      showToast(
-        (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
-          (err instanceof Error ? err.message : 'Gagal membatalkan paket'),
-        'error',
-      ),
   })
+  const cancelError = cancelMutation.error
+    ? ((cancelMutation.error as { response?: { data?: { message?: string } } }).response?.data?.message ??
+      (cancelMutation.error instanceof Error ? cancelMutation.error.message : 'Gagal membatalkan paket'))
+    : null
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!cancelTarget) return
+    cancelMutation.mutate({
+      id: cancelTarget.id,
+      keterangan,
+      refund: Number(refund) || 0,
+    })
+  }
 
   return (
     <div className="space-y-6">
+      <PageHeader title="Batal Paket" description="Paket treatment dengan sisa sesi" />
 
-      <div>
-        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Batal Paket Perawatan</h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Pembatalan paket treatment yang masih memiliki sisa sesi belum terpakai.
-        </p>
-      </div>
-
-      <div className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
-        <div className="text-xs text-orange-900">
-          <p className="font-bold">Alur: Beli Paket → Bayar di Kasir → Batal jika perlu refund</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-4 text-orange-800">
-            <li>Pasien beli paket di Perawatan → tab Treatment Paket → Proses Ke Kasir</li>
-            <li>Bayar di Kasir → tab Perawatan Paket — sistem membuat record paket aktif dengan total sesi</li>
-            <li>Jika pasien ingin batalkan sisa sesi, daftar muncul di halaman ini untuk refund/kompensasi</li>
-          </ol>
-          <Link
-            to="/pembayaran/perawatan"
-            className="mt-2 inline-block font-bold text-orange-700 hover:underline"
-          >
-            Ke Kasir Perawatan Paket →
-          </Link>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-orange-500" />
-            <h3 className="text-sm font-extrabold text-slate-900">Paket dengan Sisa Perawatan</h3>
-          </div>
+          <h3 className="text-sm font-bold text-slate-900">Paket Aktif</h3>
           <div className="relative w-full sm:w-72">
             <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari pasien / kode paket..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-orange-400 focus:outline-none"
+              placeholder="Cari pasien / kode"
+              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
         </div>
@@ -119,22 +104,16 @@ export function PembatalanPaketPage() {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Memuat data paket...</div>
         ) : rows.length === 0 ? (
-          <div className="space-y-2 p-12 text-center">
-            <p className="text-sm font-bold text-slate-700">Belum ada paket dengan sisa sesi</p>
-            <p className="text-xs text-slate-500">
-              Paket muncul setelah pembayaran paket treatment di kasir. Pastikan treatment master memiliki kategori
-              &quot;paket&quot;.
-            </p>
-          </div>
+          <EmptyState title="Belum ada paket" description="Paket muncul setelah dibayar di kasir." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <tr>
-                  <th className="px-4 py-3">Tanggal Beli</th>
+                  <th className="px-4 py-3">Tgl Beli</th>
                   <th className="px-4 py-3">Pasien</th>
                   <th className="px-4 py-3">Dokter</th>
-                  <th className="px-4 py-3">Paket Perawatan</th>
+                  <th className="px-4 py-3">Paket</th>
                   <th className="px-4 py-3">Sisa Sesi</th>
                   <th className="px-4 py-3">Nilai</th>
                   <th className="px-4 py-3">Status</th>
@@ -148,7 +127,7 @@ export function PembatalanPaketPage() {
                     <td className="px-4 py-3 text-xs font-semibold text-slate-800">{row.pasien?.nama || '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">{row.staff?.nama || '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-700">{row.treatment?.nama || row.kode}</td>
-                    <td className="px-4 py-3 text-xs font-bold text-orange-600">
+                    <td className="px-4 py-3 text-xs font-bold text-rose-600">
                       {row.sisa_sesi} / {row.total_sesi}
                     </td>
                     <td className="px-4 py-3 text-xs font-bold">{formatCurrency(row.harga_total ?? 0)}</td>
@@ -159,14 +138,15 @@ export function PembatalanPaketPage() {
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
                         onClick={() => {
                           setCancelTarget(row)
                           setRefund('')
                           setKeterangan('')
+                          cancelMutation.reset()
+                          validation.reset()
                         }}
-                        className="h-8 rounded-lg bg-orange-500 text-[11px] font-bold text-white hover:bg-orange-600"
                       >
-                        <Pencil className="mr-1 h-3 w-3" />
                         Batalkan
                       </Button>
                     </td>
@@ -181,75 +161,59 @@ export function PembatalanPaketPage() {
       <Dialog
         open={Boolean(cancelTarget)}
         onClose={() => setCancelTarget(null)}
-        title="Konfirmasi Pembatalan Paket"
+        title="Batalkan Paket"
         description={cancelTarget ? `${cancelTarget.pasien?.nama} — ${cancelTarget.treatment?.nama || cancelTarget.kode}` : undefined}
       >
-        <div className="space-y-4 p-5">
-          <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <p className="text-xs text-amber-900">
-              Paket dengan <strong>{cancelTarget?.sisa_sesi}</strong> sisa sesi dari{' '}
-              <strong>{cancelTarget?.total_sesi}</strong> akan ditandai dibatalkan. Catat nilai refund jika ada
-              pengembalian dana ke pasien.
+        <FieldErrorsContext.Provider value={validation.errors}>
+          <form {...validation.formProps} onSubmit={onSubmit} className="space-y-4 p-5">
+            <p className="text-xs text-slate-500">
+              Sisa <strong className="text-slate-900">{cancelTarget?.sisa_sesi}</strong> dari{' '}
+              <strong className="text-slate-900">{cancelTarget?.total_sesi}</strong> sesi akan dibatalkan.
             </p>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="pembatalanpaketpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nilai Refund (Rp)</label>
-            <input id="pembatalanpaketpage-f1"
-              type="number"
-              min={0}
-              value={refund}
-              onChange={(e) => setRefund(e.target.value)}
-              placeholder="0 jika tanpa refund"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-orange-400 focus:outline-none"
-            />
-          </div>
-          {Number(refund) > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label htmlFor="pembatalanpaketpage-f2" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Metode Refund</label>
-                <JenisPembayaranSelect id="pembatalanpaketpage-f2" value={metodeRefund} onChange={setMetodeRefund} />
+            <Field label="Refund (Rp)" htmlFor="pembatalanpaketpage-f1">
+              <input id="pembatalanpaketpage-f1"
+                type="number"
+                min={0}
+                value={refund}
+                onChange={(e) => setRefund(e.target.value)}
+                placeholder="0 jika tanpa refund"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-rose-500 focus:outline-none"
+              />
+            </Field>
+            {Number(refund) > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Metode Refund" htmlFor="pembatalanpaketpage-f2" required>
+                  <JenisPembayaranSelect id="pembatalanpaketpage-f2" value={metodeRefund} onChange={setMetodeRefund} required />
+                </Field>
+                {needsBank ? (
+                  <Field label="Rekening Asal" htmlFor="pembatalanpaketpage-f3">
+                    <BankSelect id="pembatalanpaketpage-f3" value={bankId} onChange={setBankId} />
+                  </Field>
+                ) : null}
               </div>
-              {needsBank ? (
-                <div className="space-y-1.5">
-                  <label htmlFor="pembatalanpaketpage-f3" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Rekening Asal</label>
-                  <BankSelect id="pembatalanpaketpage-f3" value={bankId} onChange={setBankId} />
-                </div>
-              ) : null}
+            ) : null}
+            <Field label="Keterangan" htmlFor="pembatalanpaketpage-f4">
+              <textarea id="pembatalanpaketpage-f4"
+                value={keterangan}
+                onChange={(e) => setKeterangan(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-rose-500 focus:outline-none"
+                placeholder="Alasan pembatalan"
+              />
+            </Field>
+            <FormAlert>{cancelError}</FormAlert>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} className="flex-1">
+                Batal
+              </Button>
+              <Button type="submit" variant="destructive" disabled={cancelMutation.isPending} className="flex-1">
+                Batalkan Paket
+              </Button>
             </div>
-          ) : null}
-          <div className="space-y-1.5">
-            <label htmlFor="pembatalanpaketpage-f4" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Keterangan</label>
-            <textarea id="pembatalanpaketpage-f4"
-              value={keterangan}
-              onChange={(e) => setKeterangan(e.target.value)}
-              rows={3}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-orange-400 focus:outline-none"
-              placeholder="Alasan pembatalan..."
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} className="flex-1 rounded-xl text-xs">
-              Batal
-            </Button>
-            <Button
-              type="button"
-              disabled={cancelMutation.isPending}
-              onClick={() =>
-                cancelTarget &&
-                cancelMutation.mutate({
-                  id: cancelTarget.id,
-                  keterangan,
-                  refund: Number(refund) || 0,
-                })
-              }
-              className="flex-1 rounded-xl bg-orange-500 text-xs font-bold text-white hover:bg-orange-600"
-            >
-              Konfirmasi Pembatalan
-            </Button>
-          </div>
-        </div>
+          </form>
+        </FieldErrorsContext.Provider>
       </Dialog>
+
     </div>
   )
 }

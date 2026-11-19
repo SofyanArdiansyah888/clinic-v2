@@ -20,7 +20,7 @@ type NurseLaporan = {
 }
 
 const terapisColumns: ReportColumn<TerapisRow>[] = [
-  { key: 'nama', header: 'Terapis / Nurse', cell: (r) => <span className="font-semibold">{r.nama}</span>, csv: (r) => r.nama },
+  { key: 'nama', header: 'Terapis', cell: (r) => <span className="font-semibold">{r.nama}</span>, csv: (r) => r.nama },
   { key: 'jabatan', header: 'Jabatan', cell: (r) => r.jabatan || '-', csv: (r) => r.jabatan },
   { key: 'tindakan', header: 'Tindakan', cell: (r) => formatNumber(r.tindakan), csv: (r) => r.tindakan },
   { key: 'pasien', header: 'Pasien', cell: (r) => formatNumber(r.pasien), csv: (r) => r.pasien },
@@ -39,7 +39,7 @@ export function NursePage() {
   return (
     <ReportShell<NurseLaporan>
       title="Laporan Nurse"
-      description="Tindakan per terapis/nurse dan komisinya, dari perawatan yang sudah dibayar."
+      description="Tindakan dan komisi terapis"
       endpoint="/laporan/nurse"
     >
       {(d, periode) => (
@@ -54,11 +54,9 @@ export function NursePage() {
               valueClass={d.ringkasan.tanpa_terapis > 0 ? 'text-amber-600' : 'text-slate-900'}
             />
           </KpiGrid>
-          <p className="text-xs text-slate-500">
-            Komisi = komisi terapis di master Treatment × jumlah tindakan. Tindakan tanpa terapis tidak menghasilkan komisi.
-          </p>
+          <p className="text-xs text-slate-500">Komisi = komisi terapis × jumlah tindakan.</p>
           <ReportTable
-            title="Per Terapis / Nurse"
+            title="Per Terapis"
             columns={terapisColumns}
             rows={d.per_terapis}
             rowKey={(r) => r.staff_id}

@@ -9,6 +9,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/informedconsent"
 	"github.com/scaleup/clinic-v2/api/internal/modules/jadwaldokter"
+	"github.com/scaleup/clinic-v2/api/internal/modules/laporan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
@@ -58,6 +59,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&warehouse.KonversiStokDetail{},
 		&warehouse.ProduksiBarang{},
 		&warehouse.ProduksiBarangDetail{},
+		&laporan.Catatan{},
 		&warehouse.StokOpname{},
 		&warehouse.StokOpnameDetail{},
 		&membership.Membership{},

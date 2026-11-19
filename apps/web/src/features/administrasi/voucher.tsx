@@ -16,9 +16,9 @@ type Voucher = {
 }
 
 const columns: Column<Voucher>[] = [
-  { key: 'kode', header: 'Kode Voucher', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
   { key: 'nama', header: 'Nama Voucher', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
-  { key: 'tipe', header: 'Tipe Diskon', cell: (r) => (r.tipe_diskon === 'percent' ? 'Persentase (%)' : 'Nominal (Rp)') },
+  { key: 'tipe', header: 'Tipe', cell: (r) => (r.tipe_diskon === 'percent' ? 'Persentase (%)' : 'Nominal (Rp)') },
   {
     key: 'nilai',
     header: 'Nilai Diskon',
@@ -45,16 +45,16 @@ const formFields: FormField[] = [
     ],
   },
   { name: 'nilai_diskon', label: 'Nilai Diskon', type: 'number', required: true },
-  { name: 'min_pembelian', label: 'Min. Pembelian Transaksi (Rp)', type: 'number', placeholder: '0' },
-  { name: 'tanggal_mulai', label: 'Tanggal Berlaku Mulai', type: 'date' },
+  { name: 'min_pembelian', label: 'Min. Transaksi (Rp)', type: 'number', placeholder: '0' },
+  { name: 'tanggal_mulai', label: 'Berlaku Mulai', type: 'date' },
   { name: 'tanggal_selesai', label: 'Tanggal Kadaluarsa', type: 'date' },
 ]
 
 export function VoucherPage() {
   return (
     <ResourceListPage<Voucher>
-      title="Voucher Diskon Transaksi"
-      description="Pengaturan kupon voucher dan potongan harga pembayaran pasien"
+      title="Voucher"
+      description="Kupon potongan harga transaksi"
       endpoint="/voucher"
       queryKey="voucher"
       columns={columns}

@@ -26,7 +26,7 @@ export function PenjualanPage() {
   return (
     <ResourceListPage<Row>
       title="Data Penjualan"
-      description="Transaksi penjualan produk / perawatan"
+      description="Penjualan produk dan perawatan"
       endpoint="/penjualan"
       queryKey="penjualan"
       columns={columns}
@@ -44,7 +44,7 @@ export function PenjualanPage() {
           type: 'select',
           options: [
             { label: 'Draft', value: 'draft' },
-            { label: 'Confirmed (ke kasir)', value: 'confirmed' },
+            { label: 'Ke Kasir', value: 'confirmed' },
           ],
         },
         { name: 'keterangan', label: 'Keterangan' },

@@ -2,12 +2,10 @@ import { toast as pushToast } from '@/shared/components/Toaster'
 import { useConfirm } from '@/shared/components/ConfirmDialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   CreditCard,
   Edit3,
   FileText,
   Gift,
-  HandCoins,
   Plus,
   RotateCcw,
   Search,
@@ -17,7 +15,7 @@ import {
   Volume2,
   XCircle,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/shared/api/client'
 import { BeauticianSelect, type StaffLite } from '@/shared/components/BeauticianSelect'
@@ -27,9 +25,12 @@ import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { TreatmentSelect, type TreatmentLite } from '@/shared/components/TreatmentSelect'
 import { KpiCard } from '@/shared/components/KpiCard'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { Button } from '@/shared/ui/button'
+import { Tabs } from '@/shared/ui/tabs'
+import { Field, FormAlert } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
-import { cn } from '@/shared/lib/cn'
 
 type AntrianRow = {
   id: number
@@ -95,6 +96,8 @@ export function PerawatanListPage() {
     staff_id: '',
   })
   const [regulerDetails, setRegulerDetails] = useState<TreatmentRegulerRow[]>([])
+  const [regulerError, setRegulerError] = useState<string | null>(null)
+  const regulerValidation = useFormValidation()
 
   // State for Tab 3: Treatment Paket
   const [paketForm, setPaketForm] = useState({
@@ -103,6 +106,8 @@ export function PerawatanListPage() {
     staff_id: '',
   })
   const [paketDetails, setPaketDetails] = useState<TreatmentRegulerRow[]>([])
+  const [paketError, setPaketError] = useState<string | null>(null)
+  const paketValidation = useFormValidation()
 
   // State for Tab 4: Data Perawatan
   const [dataSearch, setDataSearch] = useState('')
@@ -155,9 +160,7 @@ export function PerawatanListPage() {
     const waitingCount = allAntrian.filter((a) => a.status.toLowerCase() === 'menunggu').length
     const activeCount = allAntrian.filter((a) => ['dipanggil', 'diproses'].includes(a.status.toLowerCase())).length
     const completedCount = allPerawatan.filter((p) => p.status.toLowerCase() === 'selesai' || p.biaya).length
-    const estimatedRevenue = allPerawatan.reduce((sum, p) => sum + (p.biaya || 0), 0)
-
-    return { waitingCount, activeCount, completedCount, estimatedRevenue }
+    return { waitingCount, activeCount, completedCount }
   }, [antrianData?.data, perawatanData?.data])
 
   // Filter Tab 3
@@ -249,15 +252,20 @@ export function PerawatanListPage() {
       showToast('Treatment berhasil diproses ke kasir pembayaran!', 'success')
       setRegulerForm({ tanggal: today, pasien_id: '', staff_id: '' })
       setRegulerDetails([])
+      setRegulerError(null)
+      regulerValidation.reset()
       setActiveTab('data')
     },
     onError: (err) => {
-      showToast(err instanceof Error ? err.message : 'Gagal memproses treatment reguler', 'error')
+      const message = err instanceof Error ? err.message : 'Gagal memproses treatment reguler'
+      setRegulerError(message)
+      showToast(message, 'error')
     },
   })
 
   // Handlers for Treatment Reguler rows
   function handleAddRegulerRow() {
+    setRegulerError(null)
     setRegulerDetails((prev) => [
       ...prev,
       {
@@ -368,14 +376,19 @@ export function PerawatanListPage() {
       showToast('Paket treatment berhasil diproses ke kasir pembayaran!', 'success')
       setPaketForm({ tanggal: today, pasien_id: '', staff_id: '' })
       setPaketDetails([])
+      setPaketError(null)
+      paketValidation.reset()
       setActiveTab('data')
     },
     onError: (err) => {
-      showToast(err instanceof Error ? err.message : 'Gagal memproses treatment paket', 'error')
+      const message = err instanceof Error ? err.message : 'Gagal memproses treatment paket'
+      setPaketError(message)
+      showToast(message, 'error')
     },
   })
 
   function handleAddPaketRow() {
+    setPaketError(null)
     setPaketDetails((prev) => [
       ...prev,
       {
@@ -442,140 +455,95 @@ export function PerawatanListPage() {
     return paketDetails.reduce((sum, item) => sum + calculateRegulerTotal(item), 0)
   }, [paketDetails])
 
+  // Fields are checked by the form's native constraints; only the row-count rule is left here.
+  function handleRegulerSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (e.target !== e.currentTarget) return
+    if (regulerDetails.length === 0) {
+      setRegulerError('Minimal satu treatment harus ditambahkan')
+      return
+    }
+    setRegulerError(null)
+    submitRegulerMutation.mutate()
+  }
+
+  function handlePaketSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (e.target !== e.currentTarget) return
+    if (paketDetails.length === 0) {
+      setPaketError('Minimal satu paket treatment harus ditambahkan')
+      return
+    }
+    setPaketError(null)
+    submitPaketMutation.mutate()
+  }
+
+  function handleTabChange(tab: typeof activeTab) {
+    regulerValidation.reset()
+    paketValidation.reset()
+    setRegulerError(null)
+    setPaketError(null)
+    setActiveTab(tab)
+  }
+
   return (
     <div className="space-y-6">
       {confirmDialog}
 
-      {/* Header Title Bar */}
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Perawatan (SOAP) & Treatment</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Daftar antrian perawatan baru, form treatment reguler kasir, dan rekam medis (EMR) pasien kecantikan.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            onClick={() => navigate({ to: '/perawatan/detail' })}
-            className="rounded-xl text-xs bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-bold shadow-md shadow-rose-600/20 active:scale-95 transition-all"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Perawatan Baru (SOAP)
+      <PageHeader
+        title="Perawatan"
+        description="Antrian, treatment, dan rekam medis"
+        actions={
+          <Button type="button" onClick={() => navigate({ to: '/perawatan/detail' })}>
+            <Plus />
+            Perawatan Baru
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI Metric Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <KpiCard
-          label="Menunggu Treatment"
-          value={`${stats.waitingCount} Pasien`}
+          label="Menunggu"
+          value={stats.waitingCount}
           valueClass="text-amber-600"
           icon={<Users className="h-5 w-5" />}
           iconClass="bg-amber-50 text-amber-600"
         />
         <KpiCard
-          label="Sedang Treatment"
-          value={`${stats.activeCount} Pasien`}
+          label="Dilayani"
+          value={stats.activeCount}
           valueClass="text-indigo-600"
           icon={<Stethoscope className="h-5 w-5" />}
           iconClass="bg-indigo-50 text-indigo-600"
         />
         <KpiCard
-          label="Selesai SOAP"
-          value={`${stats.completedCount} Pasien`}
+          label="Selesai"
+          value={stats.completedCount}
           valueClass="text-emerald-600"
           icon={<FileText className="h-5 w-5" />}
           iconClass="bg-emerald-50 text-emerald-600"
         />
-        <KpiCard
-          label="Estimasi Revenue"
-          value={formatCurrency(stats.estimatedRevenue)}
-          valueClass="text-slate-900"
-          icon={<HandCoins className="h-5 w-5" />}
-          iconClass="bg-indigo-50 text-indigo-600"
-        />
       </div>
 
-      {/* Sub-Tab Navigation Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setActiveTab('baru')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
-            activeTab === 'baru'
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          <span>Perawatan Baru (Antrian)</span>
-          <span
-            className={cn(
-              'ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold',
-              activeTab === 'baru' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700',
-            )}
-          >
-            {antrianList.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('reguler')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold transition-all',
-            activeTab === 'reguler'
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-          )}
-        >
-          <Stethoscope className="h-4 w-4" />
-          <span>Treatment Reguler</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('paket')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold transition-all',
-            activeTab === 'paket'
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-          )}
-        >
-          <Gift className="h-4 w-4" />
-          <span>Treatment Paket</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('data')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold transition-all',
-            activeTab === 'data'
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-          )}
-        >
-          <FileText className="h-4 w-4" />
-          <span>Data Perawatan & EMR History</span>
-        </button>
-      </div>
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        fullWidth
+        items={[
+          { value: 'baru', label: 'Antrian', icon: <Users />, count: antrianList.length },
+          { value: 'reguler', label: 'Reguler', icon: <Stethoscope /> },
+          { value: 'paket', label: 'Paket', icon: <Gift /> },
+          { value: 'data', label: 'Data EMR', icon: <FileText /> },
+        ]}
+      />
 
       {/* SUB-TAB 1: PERAWATAN BARU / ANTRIAN MENUNGGU PERAWATAN */}
       {activeTab === 'baru' ? (
-        <div className="space-y-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+        <div className="space-y-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           {/* Table Header Controls */}
           <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-extrabold text-slate-900">Antrian Menunggu Perawatan & Input SOAP</h3>
-              <span className="rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-800">
-                Beauty Lounge
-              </span>
-            </div>
+            <h3 className="text-sm font-bold text-slate-900">Antrian Perawatan</h3>
 
             <div className="flex items-center gap-3">
               {/* Date Filter Picker */}
@@ -595,7 +563,7 @@ export function PerawatanListPage() {
                   type="text"
                   value={baruSearch}
                   onChange={(e) => setBaruSearch(e.target.value)}
-                  placeholder="Cari pasien / no. antrian..."
+                  placeholder="Cari pasien / antrian..."
                   className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
                 />
               </div>
@@ -604,23 +572,21 @@ export function PerawatanListPage() {
 
           {/* Queue Table */}
           {loadingAntrian ? (
-            <div className="p-8 text-center text-xs text-slate-500">Memuat antrian perawatan baru...</div>
+            <div className="p-8 text-center text-xs text-slate-500">Memuat antrian...</div>
           ) : antrianList.length === 0 ? (
-            <div className="p-12 text-center text-xs text-slate-400">
-              Tidak ada pasien antrian untuk filter tanggal / pencarian ini.
-            </div>
+            <div className="p-12 text-center text-xs text-slate-400">Tidak ada antrian.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="table-sticky-actions w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="w-36 px-4 py-3.5 text-center">NO ANTRIAN</th>
-                    <th className="px-4 py-3.5">NO MEMBER / RM</th>
-                    <th className="px-4 py-3.5">NAMA PASIEN</th>
-                    <th className="px-4 py-3.5">DOKTER / BEAUTICIAN</th>
-                    <th className="px-4 py-3.5">JAM DATANG</th>
-                    <th className="px-4 py-3.5 text-center">STATUS</th>
-                    <th className="w-36 px-4 py-3.5 text-center">AKSI</th>
+                    <th className="w-36 px-4 py-3.5 text-center">No Antrian</th>
+                    <th className="px-4 py-3.5">No RM</th>
+                    <th className="px-4 py-3.5">Pasien</th>
+                    <th className="px-4 py-3.5">Dokter</th>
+                    <th className="px-4 py-3.5">Datang</th>
+                    <th className="px-4 py-3.5 text-center">Status</th>
+                    <th className="w-36 px-4 py-3.5 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -648,31 +614,33 @@ export function PerawatanListPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            title="Riwayat EMR Pasien"
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Riwayat EMR"
+                            aria-label="Riwayat EMR"
                             onClick={() =>
                               navigate({
                                 to: '/perawatan/riwayat',
                                 search: { pasien_id: String(row.pasien_id) },
                               })
                             }
-                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-200 bg-purple-50 text-purple-700 transition-all hover:bg-purple-100"
                           >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
+                            <RotateCcw />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             title="Panggil Pasien"
+                            aria-label="Panggil Pasien"
                             onClick={() =>
                               updateAntrianStatusMutation.mutate({ id: row.id, status: 'dipanggil' })
                             }
-                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 transition-all hover:bg-blue-100"
                           >
-                            <Volume2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
+                            <Volume2 />
+                          </Button>
+                          <Button
+                            size="sm"
                             title="Input SOAP & Treatment"
                             onClick={() =>
                               navigate({
@@ -680,27 +648,27 @@ export function PerawatanListPage() {
                                 search: { pasien_id: String(row.pasien_id), antrian_id: String(row.id) },
                               })
                             }
-                            className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:from-rose-700 hover:to-pink-700"
                           >
-                            <Stethoscope className="h-3.5 w-3.5" />
-                            <span>SOAP</span>
-                          </button>
-                          <button
-                            type="button"
-                            title="Batalkan Antrian (Cancel)"
+                            <Stethoscope />
+                            SOAP
+                          </Button>
+                          <Button
+                            variant="ghost-danger"
+                            size="icon-sm"
+                            title="Batalkan antrian"
+                            aria-label="Batalkan antrian"
                             onClick={async () => {
                               const ok = await confirm({
                                 title: `Batalkan antrian ${row.kode}?`,
-                                description: 'Pasien tidak akan dilayani dan keluar dari antrian perawatan.',
+                                description: 'Pasien akan keluar dari antrian.',
                                 confirmLabel: 'Ya, batalkan',
                                 destructive: true,
                               })
                               if (ok) updateAntrianStatusMutation.mutate({ id: row.id, status: 'batal' })
                             }}
-                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-400 transition-all hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                           >
-                            <XCircle className="h-3.5 w-3.5" />
-                          </button>
+                            <XCircle />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -715,400 +683,367 @@ export function PerawatanListPage() {
       {/* SUB-TAB 2: FORM TREATMENT REGULER (FAST-TRACK KASIR) */}
       {activeTab === 'reguler' ? (
         <div className="space-y-6">
-          <div className="space-y-6 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-            <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3">
-                <span className="rounded-xl bg-rose-50 p-2.5 text-rose-600 shadow-sm">
-                  <Stethoscope className="h-5 w-5" />
-                </span>
+          <FieldErrorsContext.Provider value={regulerValidation.errors}>
+            <form
+              {...regulerValidation.formProps}
+              onSubmit={handleRegulerSubmit}
+              className="space-y-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm"
+            >
+              <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Form Khusus Treatment Reguler</h3>
-                  <p className="text-xs text-slate-500">
-                    Input cepat treatment pasien tanpa SOAP untuk langsung diproses ke kasir pembayaran.
-                  </p>
+                  <h3 className="text-sm font-bold text-slate-900">Treatment Reguler</h3>
+                  <p className="text-xs text-slate-500">Tanpa SOAP, langsung ke kasir</p>
                 </div>
-              </div>
 
-              <Button
-                type="button"
-                disabled={submitRegulerMutation.isPending}
-                onClick={() => submitRegulerMutation.mutate()}
-                className="rounded-xl text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
-              >
-                <CreditCard className="h-4 w-4 mr-1.5" />
-                {submitRegulerMutation.isPending ? 'Memproses...' : 'Proses Ke Kasir Pembayaran'}
-              </Button>
-            </div>
-
-            {/* 3 Column Selectors */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div>
-                <label htmlFor="perawatanlistpage-f1" className="mb-1.5 block text-xs font-bold text-slate-700">Tanggal Treatment *</label>
-                <input id="perawatanlistpage-f1"
-                  type="date"
-                  value={regulerForm.tanggal}
-                  onChange={(e) => setRegulerForm((f) => ({ ...f, tanggal: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-800 focus:border-rose-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="perawatanlistpage-f2" className="mb-1.5 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab *</label>
-                <DokterSelect id="perawatanlistpage-f2"
-                  required
-                  value={regulerForm.staff_id}
-                  onChange={(staff_id) => setRegulerForm((f) => ({ ...f, staff_id }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="perawatanlistpage-f3" className="mb-1.5 block text-xs font-bold text-slate-700">Pasien / Member *</label>
-                <PasienSelect id="perawatanlistpage-f3"
-                  required
-                  value={regulerForm.pasien_id}
-                  onChange={(pasien_id) => setRegulerForm((f) => ({ ...f, pasien_id }))}
-                />
-              </div>
-            </div>
-
-            {/* Treatment Items Builder Area */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold tracking-wider text-slate-800 uppercase">
-                  Daftar Tindakan Treatment & Produk
-                </h4>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleAddRegulerRow}
-                  className="rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-all"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Tambah Treatment
+                <Button type="submit" disabled={submitRegulerMutation.isPending}>
+                  <CreditCard />
+                  {submitRegulerMutation.isPending ? 'Memproses...' : 'Kirim ke Kasir'}
                 </Button>
               </div>
 
-              {regulerDetails.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
-                  Belum ada treatment ditambahkan. Klik tombol <b>Tambah Treatment</b>.
+              <FormAlert>{regulerError}</FormAlert>
+
+              {/* 3 Column Selectors */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <Field label="Tanggal" htmlFor="perawatanlistpage-f1" required>
+                  <input id="perawatanlistpage-f1"
+                    type="date"
+                    required
+                    value={regulerForm.tanggal}
+                    onChange={(e) => setRegulerForm((f) => ({ ...f, tanggal: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-800 focus:border-rose-500 focus:outline-none"
+                  />
+                </Field>
+                <Field label="Dokter" htmlFor="perawatanlistpage-f2" required>
+                  <DokterSelect id="perawatanlistpage-f2"
+                    required
+                    value={regulerForm.staff_id}
+                    onChange={(staff_id) => setRegulerForm((f) => ({ ...f, staff_id }))}
+                  />
+                </Field>
+                <Field label="Pasien" htmlFor="perawatanlistpage-f3" required>
+                  <PasienSelect id="perawatanlistpage-f3"
+                    required
+                    value={regulerForm.pasien_id}
+                    onChange={(pasien_id) => setRegulerForm((f) => ({ ...f, pasien_id }))}
+                  />
+                </Field>
+              </div>
+
+              {/* Treatment Items Builder Area */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900">Daftar Treatment</h4>
+                  <Button type="button" size="sm" variant="outline" onClick={handleAddRegulerRow}>
+                    <Plus />
+                    Tambah Treatment
+                  </Button>
                 </div>
-              ) : (
-                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-slate-200 bg-slate-100 font-bold tracking-wider text-slate-600 uppercase">
-                      <tr>
-                        <th className="px-4 py-3 min-w-[200px]">Nama Treatment / Produk</th>
-                        <th className="w-20 px-4 py-3 text-center">Qty</th>
-                        <th className="px-4 py-3 min-w-[180px]">Beautician</th>
-                        <th className="w-32 px-4 py-3">Harga Satuan</th>
-                        <th className="w-24 px-4 py-3 text-center">Diskon (%)</th>
-                        <th className="w-24 px-4 py-3 text-center">RP (%)</th>
-                        <th className="w-36 px-4 py-3 text-right">Subtotal</th>
-                        <th className="w-12 px-4 py-3 text-center">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                      {regulerDetails.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="p-2">
-                            <TreatmentSelect
-                              value={row.treatment_id ? String(row.treatment_id) : ''}
-                              onChange={(val, selected) => handleRegulerTreatmentSelect(idx, val, selected)}
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={1}
-                              value={row.jumlah}
-                              onChange={(e) => handleRegulerRowChange(idx, 'jumlah', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-bold"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <BeauticianSelect
-                              value={row.beautician_id ? String(row.beautician_id) : ''}
-                              onChange={(val, selected) => handleRegulerBeauticianSelect(idx, val, selected)}
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={row.harga}
-                              onChange={(e) => handleRegulerRowChange(idx, 'harga', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={row.diskon}
-                              onChange={(e) => handleRegulerRowChange(idx, 'diskon', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center font-mono text-xs"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={row.rp_percent}
-                              onChange={(e) => handleRegulerRowChange(idx, 'rp_percent', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center font-mono text-xs"
-                            />
-                          </td>
-                          <td className="p-2 text-right font-mono font-extrabold text-slate-900">
-                            {formatCurrency(calculateRegulerTotal(row))}
-                          </td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRegulerRow(idx)}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 transition-all hover:bg-rose-100"
-                              title="Hapus tindakan"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
+
+                {regulerDetails.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                    Belum ada treatment.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-slate-200 bg-slate-100 font-bold tracking-wider text-slate-600 uppercase">
+                        <tr>
+                          <th className="px-4 py-3 min-w-[200px]">Treatment</th>
+                          <th className="w-20 px-4 py-3 text-center">Qty</th>
+                          <th className="px-4 py-3 min-w-[180px]">Beautician</th>
+                          <th className="w-32 px-4 py-3">Harga</th>
+                          <th className="w-24 px-4 py-3 text-center">Diskon %</th>
+                          <th className="w-24 px-4 py-3 text-center">RP %</th>
+                          <th className="w-36 px-4 py-3 text-right">Subtotal</th>
+                          <th className="w-12 px-4 py-3 text-center">Aksi</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 bg-white">
+                        {regulerDetails.map((row, idx) => (
+                          <tr key={idx}>
+                            <td className="p-2">
+                              <TreatmentSelect
+                                id={`reguler-treatment-${idx}`}
+                                required
+                                value={row.treatment_id ? String(row.treatment_id) : ''}
+                                onChange={(val, selected) => handleRegulerTreatmentSelect(idx, val, selected)}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`reguler-qty-${idx}`}
+                                aria-label="Qty"
+                                type="number"
+                                required
+                                min={1}
+                                value={row.jumlah}
+                                onChange={(e) => handleRegulerRowChange(idx, 'jumlah', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-bold"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <BeauticianSelect
+                                value={row.beautician_id ? String(row.beautician_id) : ''}
+                                onChange={(val, selected) => handleRegulerBeauticianSelect(idx, val, selected)}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`reguler-harga-${idx}`}
+                                type="number"
+                                min={0}
+                                value={row.harga}
+                                onChange={(e) => handleRegulerRowChange(idx, 'harga', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`reguler-diskon-${idx}`}
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={row.diskon}
+                                onChange={(e) => handleRegulerRowChange(idx, 'diskon', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center font-mono text-xs"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`reguler-rp-percent-${idx}`}
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={row.rp_percent}
+                                onChange={(e) => handleRegulerRowChange(idx, 'rp_percent', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center font-mono text-xs"
+                              />
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-slate-900">
+                              {formatCurrency(calculateRegulerTotal(row))}
+                            </td>
+                            <td className="p-2 text-center">
+                              <Button
+                                variant="ghost-danger"
+                                size="icon-sm"
+                                onClick={() => handleRemoveRegulerRow(idx)}
+                                title="Hapus tindakan"
+                                aria-label="Hapus tindakan"
+                              >
+                                <Trash2 />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-              {/* Calculation Summary */}
-              <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-rose-100 bg-rose-50/50 p-4 md:flex-row">
-                <div className="flex items-center gap-2 text-xs font-medium text-amber-800">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                  <span>
-                    <b>Catatan:</b> Pemberian diskon di sini berpengaruh dengan pembagian fee dokter, silakan lihat
-                    settingannya di menu Setting Klinik.
-                  </span>
-                </div>
+                {/* Calculation Summary */}
+                <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 md:flex-row">
+                  <p className="text-xs text-slate-500">Diskon memengaruhi fee dokter (lihat Setting Klinik).</p>
 
-                <div className="w-full text-right md:w-auto">
-                  <p className="text-xs font-medium text-slate-500">Total Estimasi Tagihan:</p>
-                  <p className="text-xl font-black text-rose-900">{formatCurrency(grandTotalReguler)}</p>
+                  <div className="w-full text-right md:w-auto">
+                    <p className="text-xs font-medium text-slate-500">Total</p>
+                    <p className="text-xl font-bold text-slate-900">{formatCurrency(grandTotalReguler)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </form>
+          </FieldErrorsContext.Provider>
         </div>
       ) : null}
 
       {/* SUB-TAB 3: FORM TREATMENT PAKET */}
       {activeTab === 'paket' ? (
         <div className="space-y-6">
-          <div className="flex items-start gap-3 rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
-            <Gift className="mt-0.5 h-5 w-5 shrink-0 text-violet-600" />
-            <div className="text-xs text-violet-900">
-              <p className="font-bold">Pembelian Paket Treatment</p>
-              <p className="mt-1 text-violet-800">
-                Pasien membeli paket multi-sesi (mis. Facial 5x). Setelah Proses Ke Kasir, bayar di menu Kasir → tab
-                Perawatan Paket. Sesi tercatat otomatis setelah pembayaran.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-6 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-            <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3">
-                <span className="rounded-xl bg-violet-50 p-2.5 text-violet-600 shadow-sm">
-                  <Gift className="h-5 w-5" />
-                </span>
+          <FieldErrorsContext.Provider value={paketValidation.errors}>
+            <form
+              {...paketValidation.formProps}
+              onSubmit={handlePaketSubmit}
+              className="space-y-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm"
+            >
+              <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Form Treatment Paket</h3>
-                  <p className="text-xs text-slate-500">
-                    Hanya treatment kategori paket. Setelah dibayar, sesi aktif bisa dibatalkan di Batal Paket.
-                  </p>
+                  <h3 className="text-sm font-bold text-slate-900">Treatment Paket</h3>
+                  <p className="text-xs text-slate-500">Paket multi-sesi, dibayar di kasir</p>
                 </div>
-              </div>
 
-              <Button
-                type="button"
-                disabled={submitPaketMutation.isPending}
-                onClick={() => submitPaketMutation.mutate()}
-                className="rounded-xl text-xs bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold shadow-md shadow-violet-600/20 active:scale-95 transition-all"
-              >
-                <CreditCard className="h-4 w-4 mr-1.5" />
-                {submitPaketMutation.isPending ? 'Memproses...' : 'Proses Ke Kasir Pembayaran'}
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div>
-                <label htmlFor="perawatanlistpage-f4" className="mb-1.5 block text-xs font-bold text-slate-700">Tanggal *</label>
-                <input id="perawatanlistpage-f4"
-                  type="date"
-                  value={paketForm.tanggal}
-                  onChange={(e) => setPaketForm((f) => ({ ...f, tanggal: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-800 focus:border-violet-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="perawatanlistpage-f5" className="mb-1.5 block text-xs font-bold text-slate-700">Dokter Penanggung Jawab *</label>
-                <DokterSelect id="perawatanlistpage-f5"
-                  required
-                  value={paketForm.staff_id}
-                  onChange={(staff_id) => setPaketForm((f) => ({ ...f, staff_id }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="perawatanlistpage-f6" className="mb-1.5 block text-xs font-bold text-slate-700">Pasien / Member *</label>
-                <PasienSelect id="perawatanlistpage-f6"
-                  required
-                  value={paketForm.pasien_id}
-                  onChange={(pasien_id) => setPaketForm((f) => ({ ...f, pasien_id }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold tracking-wider text-slate-800 uppercase">Daftar Paket Treatment</h4>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleAddPaketRow}
-                  className="rounded-xl border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 text-xs font-bold transition-all"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  Tambah Paket
+                <Button type="submit" disabled={submitPaketMutation.isPending}>
+                  <CreditCard />
+                  {submitPaketMutation.isPending ? 'Memproses...' : 'Kirim ke Kasir'}
                 </Button>
               </div>
 
-              {paketDetails.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
-                  Belum ada paket ditambahkan. Pastikan treatment di master data memiliki kategori &quot;paket&quot;.
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-slate-200 bg-slate-100 font-bold tracking-wider text-slate-600 uppercase">
-                      <tr>
-                        <th className="px-4 py-3 min-w-[200px]">Nama Paket</th>
-                        <th className="w-20 px-4 py-3 text-center">Qty</th>
-                        <th className="px-4 py-3 min-w-[180px]">Beautician</th>
-                        <th className="w-32 px-4 py-3">Harga</th>
-                        <th className="w-24 px-4 py-3 text-center">Diskon (%)</th>
-                        <th className="w-36 px-4 py-3 text-right">Subtotal</th>
-                        <th className="w-12 px-4 py-3 text-center">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                      {paketDetails.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="p-2">
-                            <TreatmentSelect
-                              kategoriFilter="paket"
-                              placeholder="Pilih paket treatment..."
-                              value={row.treatment_id ? String(row.treatment_id) : ''}
-                              onChange={(val, selected) => handlePaketTreatmentSelect(idx, val, selected)}
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={1}
-                              value={row.jumlah}
-                              onChange={(e) => handlePaketRowChange(idx, 'jumlah', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-bold"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <BeauticianSelect
-                              value={row.beautician_id ? String(row.beautician_id) : ''}
-                              onChange={(val, selected) => handlePaketBeauticianSelect(idx, val, selected)}
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={row.harga}
-                              onChange={(e) => handlePaketRowChange(idx, 'harga', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={row.diskon}
-                              onChange={(e) => handlePaketRowChange(idx, 'diskon', Number(e.target.value))}
-                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center font-mono text-xs"
-                            />
-                          </td>
-                          <td className="p-2 text-right font-mono font-extrabold text-slate-900">
-                            {formatCurrency(calculateRegulerTotal(row))}
-                          </td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePaketRow(idx)}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 transition-all hover:bg-rose-100"
-                              title="Hapus paket"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <FormAlert>{paketError}</FormAlert>
 
-              <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4 md:flex-row">
-                <p className="text-xs text-violet-800">
-                  Setelah bayar di kasir, paket aktif muncul di menu <strong>Batal Paket Perawatan</strong> jika perlu
-                  refund sisa sesi.
-                </p>
-                <div className="w-full text-right md:w-auto">
-                  <p className="text-xs font-medium text-slate-500">Total Tagihan Paket:</p>
-                  <p className="text-xl font-black text-violet-900">{formatCurrency(grandTotalPaket)}</p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <Field label="Tanggal" htmlFor="perawatanlistpage-f4" required>
+                  <input id="perawatanlistpage-f4"
+                    type="date"
+                    required
+                    value={paketForm.tanggal}
+                    onChange={(e) => setPaketForm((f) => ({ ...f, tanggal: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-800 focus:border-violet-500 focus:outline-none"
+                  />
+                </Field>
+                <Field label="Dokter" htmlFor="perawatanlistpage-f5" required>
+                  <DokterSelect id="perawatanlistpage-f5"
+                    required
+                    value={paketForm.staff_id}
+                    onChange={(staff_id) => setPaketForm((f) => ({ ...f, staff_id }))}
+                  />
+                </Field>
+                <Field label="Pasien" htmlFor="perawatanlistpage-f6" required>
+                  <PasienSelect id="perawatanlistpage-f6"
+                    required
+                    value={paketForm.pasien_id}
+                    onChange={(pasien_id) => setPaketForm((f) => ({ ...f, pasien_id }))}
+                  />
+                </Field>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900">Daftar Paket</h4>
+                  <Button type="button" size="sm" variant="outline" onClick={handleAddPaketRow}>
+                    <Plus />
+                    Tambah Paket
+                  </Button>
+                </div>
+
+                {paketDetails.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                    Belum ada paket. Hanya treatment kategori &quot;paket&quot;.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-slate-200 bg-slate-100 font-bold tracking-wider text-slate-600 uppercase">
+                        <tr>
+                          <th className="px-4 py-3 min-w-[200px]">Nama Paket</th>
+                          <th className="w-20 px-4 py-3 text-center">Qty</th>
+                          <th className="px-4 py-3 min-w-[180px]">Beautician</th>
+                          <th className="w-32 px-4 py-3">Harga</th>
+                          <th className="w-24 px-4 py-3 text-center">Diskon %</th>
+                          <th className="w-36 px-4 py-3 text-right">Subtotal</th>
+                          <th className="w-12 px-4 py-3 text-center">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 bg-white">
+                        {paketDetails.map((row, idx) => (
+                          <tr key={idx}>
+                            <td className="p-2">
+                              <TreatmentSelect
+                                id={`paket-treatment-${idx}`}
+                                required
+                                kategoriFilter="paket"
+                                placeholder="Pilih paket treatment..."
+                                value={row.treatment_id ? String(row.treatment_id) : ''}
+                                onChange={(val, selected) => handlePaketTreatmentSelect(idx, val, selected)}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`paket-qty-${idx}`}
+                                aria-label="Qty"
+                                type="number"
+                                required
+                                min={1}
+                                value={row.jumlah}
+                                onChange={(e) => handlePaketRowChange(idx, 'jumlah', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center text-xs font-bold"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <BeauticianSelect
+                                value={row.beautician_id ? String(row.beautician_id) : ''}
+                                onChange={(val, selected) => handlePaketBeauticianSelect(idx, val, selected)}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`paket-harga-${idx}`}
+                                type="number"
+                                min={0}
+                                value={row.harga}
+                                onChange={(e) => handlePaketRowChange(idx, 'harga', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                id={`paket-diskon-${idx}`}
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={row.diskon}
+                                onChange={(e) => handlePaketRowChange(idx, 'diskon', Number(e.target.value))}
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-center font-mono text-xs"
+                              />
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-slate-900">
+                              {formatCurrency(calculateRegulerTotal(row))}
+                            </td>
+                            <td className="p-2 text-center">
+                              <Button
+                                variant="ghost-danger"
+                                size="icon-sm"
+                                onClick={() => handleRemovePaketRow(idx)}
+                                title="Hapus paket"
+                                aria-label="Hapus paket"
+                              >
+                                <Trash2 />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="flex flex-col items-center justify-end gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 md:flex-row">
+                  <div className="w-full text-right md:w-auto">
+                    <p className="text-xs font-medium text-slate-500">Total</p>
+                    <p className="text-xl font-bold text-slate-900">{formatCurrency(grandTotalPaket)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </form>
+          </FieldErrorsContext.Provider>
         </div>
       ) : null}
 
       {/* SUB-TAB 4: DATA PERAWATAN & EMR HISTORY */}
       {activeTab === 'data' ? (
-        <div className="space-y-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+        <div className="space-y-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-extrabold text-slate-900">List Data Perawatan & Rekam Medis (EMR)</h3>
-                <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                  Archive Log
-                </span>
-              </div>
+              <h3 className="text-sm font-bold text-slate-900">Data Perawatan</h3>
 
               {(dataTanggal || dataStatus !== 'all' || dataDokterId || dataSearch) && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setDataTanggal('')
                     setDataStatus('all')
                     setDataDokterId('')
                     setDataSearch('')
                   }}
-                  className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:underline"
                 >
-                  <RotateCcw className="h-3 w-3" />
+                  <RotateCcw />
                   Reset Filter
-                </button>
+                </Button>
               )}
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label htmlFor="perawatanlistpage-f7" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Filter Tanggal</label>
+                <label htmlFor="perawatanlistpage-f7" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Tanggal</label>
                 <input id="perawatanlistpage-f7"
                   type="date"
                   value={dataTanggal}
@@ -1118,7 +1053,7 @@ export function PerawatanListPage() {
               </div>
 
               <div>
-                <label htmlFor="perawatanlistpage-f8" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Filter Status</label>
+                <label htmlFor="perawatanlistpage-f8" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Status</label>
                 <select id="perawatanlistpage-f8"
                   value={dataStatus}
                   onChange={(e) => setDataStatus(e.target.value)}
@@ -1132,7 +1067,7 @@ export function PerawatanListPage() {
               </div>
 
               <div>
-                <label htmlFor="perawatanlistpage-f9" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Filter Dokter</label>
+                <label htmlFor="perawatanlistpage-f9" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Dokter</label>
                 <DokterSelect id="perawatanlistpage-f9"
                   value={dataDokterId}
                   onChange={(val) => setDataDokterId(val)}
@@ -1141,7 +1076,7 @@ export function PerawatanListPage() {
               </div>
 
               <div>
-                <label htmlFor="perawatanlistpage-f10" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Pencarian</label>
+                <label htmlFor="perawatanlistpage-f10" className="mb-1 block text-[11px] font-bold text-slate-500 uppercase">Cari</label>
                 <div className="relative">
                   <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <input id="perawatanlistpage-f10"
@@ -1159,22 +1094,20 @@ export function PerawatanListPage() {
           {loadingPerawatan ? (
             <div className="p-8 text-center text-xs text-slate-500">Memuat data perawatan...</div>
           ) : filteredPerawatan.length === 0 ? (
-            <div className="p-12 text-center text-xs text-slate-400">
-              Tidak ada data perawatan yang ditemukan.
-            </div>
+            <div className="p-12 text-center text-xs text-slate-400">Tidak ada data perawatan.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="table-sticky-actions w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-4 py-3.5 text-center">KODE EMR</th>
-                    <th className="px-4 py-3.5">TANGGAL</th>
-                    <th className="px-4 py-3.5">PASIEN & RM</th>
-                    <th className="px-4 py-3.5">DOKTER SPESIALIS</th>
-                    <th className="px-4 py-3.5">DIAGNOSA KULIT (A)</th>
-                    <th className="px-4 py-3.5 text-right">BIAYA</th>
-                    <th className="px-4 py-3.5 text-center">STATUS</th>
-                    <th className="px-4 py-3.5 text-right">DETAIL</th>
+                    <th className="px-4 py-3.5 text-center">Kode</th>
+                    <th className="px-4 py-3.5">Tanggal</th>
+                    <th className="px-4 py-3.5">Pasien</th>
+                    <th className="px-4 py-3.5">Dokter</th>
+                    <th className="px-4 py-3.5">Diagnosa</th>
+                    <th className="px-4 py-3.5 text-right">Biaya</th>
+                    <th className="px-4 py-3.5 text-center">Status</th>
+                    <th className="px-4 py-3.5 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1188,7 +1121,7 @@ export function PerawatanListPage() {
                       </td>
                       <td className="px-4 py-3 text-xs font-semibold text-slate-700">{row.staff?.nama || '-'}</td>
                       <td className="max-w-xs truncate px-4 py-3 text-xs text-slate-500">{row.diagnosa || '—'}</td>
-                      <td className="px-4 py-3 text-right font-mono font-extrabold text-slate-900">
+                      <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
                         {formatCurrency(row.biaya ?? 0)}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -1196,26 +1129,26 @@ export function PerawatanListPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
+                          <Button
+                            size="sm"
+                            variant="outline"
                             title="Detail / Edit EMR"
                             onClick={() =>
                               navigate({ to: '/perawatan/detail', search: { id: String(row.id) } })
                             }
-                            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
                           >
-                            <Edit3 className="h-3.5 w-3.5" />
-                            <span>Detail EMR</span>
-                          </button>
-                          <button
-                            type="button"
+                            <Edit3 />
+                            Detail
+                          </Button>
+                          <Button
+                            variant="ghost-danger"
+                            size="icon-sm"
                             onClick={() => setDeleteTarget(row)}
-                            className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition-all hover:bg-rose-100"
-                            title="Hapus data perawatan"
+                            title="Hapus perawatan"
+                            aria-label="Hapus perawatan"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span>Hapus</span>
-                          </button>
+                            <Trash2 />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1233,7 +1166,7 @@ export function PerawatanListPage() {
           if (!deletePerawatanMutation.isPending) setDeleteTarget(null)
         }}
         title="Hapus Data Perawatan"
-        description="Data EMR yang dihapus tidak dapat dikembalikan."
+        description="Data yang dihapus tidak dapat dikembalikan."
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-600">
@@ -1251,7 +1184,6 @@ export function PerawatanListPage() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-xl text-xs"
               disabled={deletePerawatanMutation.isPending}
               onClick={() => setDeleteTarget(null)}
             >
@@ -1259,13 +1191,13 @@ export function PerawatanListPage() {
             </Button>
             <Button
               type="button"
-              className="rounded-xl bg-rose-600 text-xs text-white hover:bg-rose-700"
+              variant="destructive"
               disabled={deletePerawatanMutation.isPending || !deleteTarget}
               onClick={() => {
                 if (deleteTarget) deletePerawatanMutation.mutate(deleteTarget.id)
               }}
             >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              <Trash2 />
               {deletePerawatanMutation.isPending ? 'Menghapus...' : 'Ya, Hapus'}
             </Button>
           </div>

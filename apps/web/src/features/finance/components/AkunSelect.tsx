@@ -44,7 +44,7 @@ export function AkunSelect({ value, onChange, required, disabled, className, id,
       required={required}
       className={className}
       placeholder={placeholder ?? 'Pilih akun...'}
-      searchPlaceholder="Cari kode atau nama akun..."
+      searchPlaceholder="Cari akun..."
       emptyText="Akun tidak ditemukan"
     />
   )

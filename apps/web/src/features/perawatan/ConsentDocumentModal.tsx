@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { FileUp, Trash2, FileText } from 'lucide-react'
 import { Dialog } from '@/shared/components/Dialog'
 import { Button } from '@/shared/ui/button'
+import { Field } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { todayISO } from '@/shared/lib/formatters'
 
 type DocumentItem = {
@@ -20,8 +22,18 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
   const [docs, setDocs] = useState<DocumentItem[]>([])
   const [docName, setDocName] = useState('')
   const [docUrl, setDocUrl] = useState('')
+  const validation = useFormValidation()
 
-  function handleAdd() {
+  function handleClose() {
+    validation.reset()
+    onClose()
+  }
+
+  // "Nama Dokumen" is checked natively (required) before this runs.
+  function handleAdd(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    // Portalled inside the EMR form: keep this submit from reaching it.
+    e.stopPropagation()
     if (!docName.trim()) return
     const newDoc: DocumentItem = {
       name: docName.trim(),
@@ -31,6 +43,7 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
     setDocs((prev) => [...prev, newDoc])
     setDocName('')
     setDocUrl('')
+    validation.reset()
   }
 
   function handleRemove(idx: number) {
@@ -39,53 +52,58 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
 
   function handleSave() {
     onSave?.(docs)
-    onClose()
+    handleClose()
   }
 
   return (
     <Dialog
       open={isOpen}
-      onClose={onClose}
-      title="Upload / Lampirkan Dokumen Informed Consent"
-      description="Lampirkan dokumen persetujuan tindakan medis atau surat pernyataan pasien."
+      onClose={handleClose}
+      title="Informed Consent"
+      description="Lampirkan dokumen persetujuan pasien"
       className="max-w-xl"
     >
       <div className="space-y-4">
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-          <p className="text-xs font-bold text-slate-800">Tambah Dokumen Baru</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label htmlFor="consentdocumentmodal-f1" className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Dokumen *</label>
-              <input id="consentdocumentmodal-f1"
-                value={docName}
-                onChange={(e) => setDocName(e.target.value)}
-                placeholder="misal: Informed Consent Laser"
-                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-rose-500 focus:outline-none"
-              />
+        <FieldErrorsContext.Provider value={validation.errors}>
+          <form
+            {...validation.formProps}
+            onSubmit={handleAdd}
+            className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3"
+          >
+            <p className="text-sm font-bold text-slate-900">Tambah Dokumen</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Field label="Nama Dokumen" htmlFor="consentdocumentmodal-f1" required>
+                <input id="consentdocumentmodal-f1"
+                  required
+                  value={docName}
+                  onChange={(e) => setDocName(e.target.value)}
+                  placeholder="Contoh: Consent Laser"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-rose-500 focus:outline-none"
+                />
+              </Field>
+              <Field label="Link Dokumen" htmlFor="consentdocumentmodal-f2">
+                <input id="consentdocumentmodal-f2"
+                  value={docUrl}
+                  onChange={(e) => setDocUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-rose-500 focus:outline-none"
+                />
+              </Field>
             </div>
-            <div>
-              <label htmlFor="consentdocumentmodal-f2" className="block text-[11px] font-semibold text-slate-600 mb-1">URL / Link Dokumen</label>
-              <input id="consentdocumentmodal-f2"
-                value={docUrl}
-                onChange={(e) => setDocUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs focus:border-rose-500 focus:outline-none"
-              />
+            <div className="flex justify-end">
+              <Button type="submit" size="sm" variant="outline">
+                <FileUp />
+                Tambah
+              </Button>
             </div>
-          </div>
-          <div className="flex justify-end">
-            <Button type="button" size="sm" onClick={handleAdd} disabled={!docName.trim()} className="rounded-lg text-xs">
-              <FileUp className="h-3.5 w-3.5 mr-1" />
-              Tambahkan
-            </Button>
-          </div>
-        </div>
+          </form>
+        </FieldErrorsContext.Provider>
 
         <div>
-          <p className="text-xs font-bold text-slate-800 mb-2">Daftar Dokumen Lampiran</p>
+          <p className="mb-2 text-sm font-bold text-slate-900">Lampiran</p>
           {docs.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-400">
-              Belum ada dokumen disetujui / dilampirkan.
+              Belum ada dokumen.
             </div>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -98,13 +116,16 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
                       <p className="text-[11px] text-slate-400">{doc.date}</p>
                     </div>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost-danger"
+                    size="icon-sm"
                     onClick={() => handleRemove(idx)}
-                    className="rounded p-1 text-rose-500 hover:bg-rose-50"
+                    title="Hapus dokumen"
+                    aria-label="Hapus dokumen"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                    <Trash2 />
+                  </Button>
                 </div>
               ))}
             </div>
@@ -112,11 +133,11 @@ export function ConsentDocumentModal({ isOpen, onClose, onSave }: ConsentDocumen
         </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-          <Button type="button" variant="outline" onClick={onClose} className="rounded-xl text-xs">
+          <Button type="button" variant="outline" onClick={handleClose}>
             Tutup
           </Button>
-          <Button type="button" onClick={handleSave} className="rounded-xl text-xs">
-            Simpan Dokumen
+          <Button type="button" onClick={handleSave}>
+            Simpan
           </Button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { translateServerValidation } from '@/shared/lib/validation'
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiResponse } from '@/shared/types/api'
 
@@ -36,7 +37,12 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 })
 
 function friendlyMessage(error: AxiosError) {
-  const serverMessage = (error.response?.data as { message?: string } | undefined)?.message
+  const body = error.response?.data as { message?: string; errors?: unknown } | undefined
+  if (body?.message === 'validation failed') {
+    // Rewrite the body too: some screens read response.data.message directly.
+    body.message = translateServerValidation(body.errors) ?? 'Periksa kembali isian form.'
+  }
+  const serverMessage = body?.message
   if (serverMessage) return serverMessage
   const status = error.response?.status
   if (!error.response || status === 502 || status === 503 || status === 504) {

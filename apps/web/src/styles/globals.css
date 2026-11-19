@@ -194,3 +194,70 @@ table,
     background-color: rgb(248 250 252);
   }
 }
+
+/* ── Print / Save as PDF (reports) ──
+   .print-hide: app chrome, filters and buttons. .print-only: kop + footer shown on paper only.
+   .print-flow: containers that scroll on screen must flow across pages on paper. */
+.print-only {
+  display: none;
+}
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+}
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+  * {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-flow {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  .print-keep {
+    break-inside: avoid;
+  }
+}
+
+/* Inline form validation (see shared/lib/validation.ts): any control the form
+   marks invalid — input, select, textarea or a SearchableSelect trigger. */
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'],
+button[aria-invalid='true'] {
+  border-color: var(--color-red-500);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-red-500) 15%, transparent);
+}
+
+/* Magazine sheets: each .sheet is exactly one A4 landscape page (printed with 12mm margins). */
+@media print {
+  .sheet-stack {
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .sheet {
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    break-after: page;
+    break-inside: avoid;
+  }
+  .sheet:last-child {
+    break-after: auto;
+  }
+}

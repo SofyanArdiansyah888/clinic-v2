@@ -11,7 +11,7 @@ type EmptyStateProps = {
 
 export function EmptyState({
   title = 'Belum ada data',
-  description = 'Data akan muncul di sini setelah tersedia.',
+  description,
   action,
   className,
 }: EmptyStateProps) {
@@ -21,8 +21,8 @@ export function EmptyState({
         <Inbox className="h-5 w-5" />
       </div>
       <div>
-        <p className="font-semibold text-foreground">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <p className="text-sm font-semibold text-slate-900">{title}</p>
+        {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
       </div>
       {action}
     </div>

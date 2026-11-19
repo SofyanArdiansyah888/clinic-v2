@@ -3,7 +3,9 @@ import type { ButtonHTMLAttributes } from 'react'
 import { cn } from '@/shared/lib/cn'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-xs font-semibold transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
+  // Icons inside a button are sized by the button itself so every icon in a
+  // given button size matches, whatever className the icon carries.
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -14,12 +16,16 @@ const buttonVariants = cva(
         ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
         // Plain red, no brand gradient/glow, so it never reads as the primary CTA.
         destructive: 'bg-red-600 text-white shadow-sm ring-1 ring-red-700/20 hover:bg-red-700',
+        // Row-level delete/cancel icon action: quiet until hovered.
+        'ghost-danger': 'text-slate-500 hover:bg-red-50 hover:text-red-600',
       },
       size: {
         default: 'h-10 rounded-xl px-4 py-2',
-        sm: 'h-8 rounded-lg px-3 text-[11px]',
+        sm: 'h-8 gap-1.5 rounded-lg px-3 text-[11px] [&_svg]:size-3.5',
         lg: 'h-11 rounded-xl px-6',
         icon: 'h-10 w-10 rounded-xl',
+        // Table row icon actions (edit, delete, print...).
+        'icon-sm': 'h-8 w-8 rounded-lg [&_svg]:size-3.5',
       },
     },
     defaultVariants: {

@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useQuickCreate } from '@/shared/components/useQuickCreate'
+import { MASTERS } from '@/shared/lib/masters'
 import { formatCurrency } from '@/shared/lib/formatters'
 
 export type TreatmentLite = {
@@ -23,6 +25,13 @@ type TreatmentSelectProps = {
   id?: string
   placeholder?: string
   kategoriFilter?: string
+}
+
+// A paket-only picker should create a paket treatment, so it shows up in the list.
+function kategoriOption(filter: string) {
+  const kategori = MASTERS.treatment.fields.find((f) => f.name === 'kategori')
+  const match = kategori?.options?.find((o) => o.value.toLowerCase().includes(filter.toLowerCase()))
+  return match?.value ?? ''
 }
 
 export function TreatmentSelect({
@@ -71,19 +80,28 @@ export function TreatmentSelect({
     onChange(val, found)
   }
 
+  const quick = useQuickCreate<TreatmentLite>('treatment', {
+    defaults: kategoriFilter ? { kategori: kategoriOption(kategoriFilter) } : undefined,
+    onCreated: (row) => onChange(String(row.id), row),
+  })
+
   return (
-    <SearchableSelect
-      id={id}
-      value={value}
-      onChange={handleChange}
-      options={options}
-      loading={isLoading}
-      disabled={disabled}
-      required={required}
-      className={className}
-      placeholder={placeholder}
-      searchPlaceholder="Cari nama atau kode treatment..."
-      emptyText="Treatment tidak ditemukan"
-    />
+    <>
+      <SearchableSelect
+        {...quick.selectProps}
+        id={id}
+        value={value}
+        onChange={handleChange}
+        options={options}
+        loading={isLoading}
+        disabled={disabled}
+        required={required}
+        className={className}
+        placeholder={placeholder}
+        searchPlaceholder="Cari nama atau kode treatment..."
+        emptyText="Treatment tidak ditemukan"
+      />
+      {quick.dialog}
+    </>
   )
 }

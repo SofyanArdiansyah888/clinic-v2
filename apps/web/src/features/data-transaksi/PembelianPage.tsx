@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Wallet } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
 import { Dialog } from '@/shared/components/Dialog'
@@ -9,7 +9,9 @@ import { ResourceListPage } from '@/shared/components/ResourceListPage'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
 import { Button } from '@/shared/ui/button'
+import { Field, FormAlert } from '@/shared/ui/field'
 import { Input } from '@/shared/ui/input'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { cn } from '@/shared/lib/cn'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { useAuthStore } from '@/features/auth/store'
@@ -73,7 +75,7 @@ export function PembelianPage() {
     <>
       <ResourceListPage<Row>
         title="Data Pembelian"
-        description="Pembelian barang dari supplier. Stok bertambah saat disimpan dan utang supplier tercatat sampai dibayar."
+        description="Pembelian barang dari supplier"
         endpoint="/pembelian"
         queryKey="pembelian"
         columns={columns}
@@ -82,16 +84,16 @@ export function PembelianPage() {
         enableDelete={role === 'admin'}
         customRowActions={(r) =>
           r.status_bayar !== 'lunas' && sisa(r) > 0 ? (
-            <Button variant="outline" size="sm" className="gap-1" onClick={() => setBayarTarget(r)}>
-              <Wallet className="h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" onClick={() => setBayarTarget(r)}>
+              <Wallet />
               Bayar
             </Button>
           ) : null
         }
         extraActions={
           canCreate ? (
-            <Button type="button" onClick={() => setOpen(true)} className="gap-1.5">
-              <Plus className="h-4 w-4" />
+            <Button type="button" onClick={() => setOpen(true)}>
+              <Plus />
               Buat Pembelian
             </Button>
           ) : null
@@ -110,7 +112,6 @@ export function PembelianPage() {
   )
 }
 
-const fieldLabel = 'text-[11px] font-bold uppercase tracking-wider text-slate-500'
 
 function BayarSupplierDialog({ target, onClose }: { target: Row | null; onClose: () => void }) {
   const queryClient = useQueryClient()
@@ -120,6 +121,16 @@ function BayarSupplierDialog({ target, onClose }: { target: Row | null; onClose:
   const [bankId, setBankId] = useState('')
   const [keterangan, setKeterangan] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const validation = useFormValidation()
+
+  // Clear stale messages each time the dialog opens for a row.
+  useEffect(() => {
+    if (target) {
+      setError(null)
+      validation.reset()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target])
   const needsBank = metode === 'transfer' || metode === 'e_money' || metode === 'kartu_debit'
   const sisaUtang = target ? sisa(target) : 0
 
@@ -154,53 +165,51 @@ function BayarSupplierDialog({ target, onClose }: { target: Row | null; onClose:
       title="Bayar Supplier"
       description={target ? `${target.kode} · ${target.supplier?.nama ?? ''} · sisa ${formatCurrency(sisaUtang)}` : undefined}
     >
-      <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="bs-tgl">Tanggal</label>
-            <Input id="bs-tgl" type="date" required value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+      <FieldErrorsContext.Provider value={validation.errors}>
+        <form {...validation.formProps} onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tanggal" htmlFor="bs-tgl" required>
+              <Input id="bs-tgl" type="date" required value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+            </Field>
+            <Field label="Jumlah" htmlFor="bs-jumlah" required>
+              <div className="flex gap-1.5">
+                <Input
+                  id="bs-jumlah"
+                  type="number"
+                  min={1}
+                  max={sisaUtang}
+                  step="0.01"
+                  required
+                  value={jumlah}
+                  onChange={(e) => setJumlah(e.target.value)}
+                />
+                <Button variant="outline" onClick={() => setJumlah(String(sisaUtang))}>
+                  Lunasi
+                </Button>
+              </div>
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="bs-jumlah">Jumlah</label>
-            <div className="flex gap-1.5">
-              <Input
-                id="bs-jumlah"
-                type="number"
-                min={1}
-                max={sisaUtang}
-                step="0.01"
-                required
-                value={jumlah}
-                onChange={(e) => setJumlah(e.target.value)}
-              />
-              <Button variant="outline" size="sm" className="h-10" onClick={() => setJumlah(String(sisaUtang))}>
-                Lunasi
-              </Button>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Metode" htmlFor="bs-metode" required>
+              <JenisPembayaranSelect id="bs-metode" value={metode} onChange={setMetode} required />
+            </Field>
+            {needsBank ? (
+              <Field label="Rekening Asal" htmlFor="bs-bank">
+                <BankSelect id="bs-bank" value={bankId} onChange={setBankId} />
+              </Field>
+            ) : null}
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <span className={fieldLabel}>Metode</span>
-            <JenisPembayaranSelect value={metode} onChange={setMetode} required />
+          <Field label="Keterangan" htmlFor="bs-ket">
+            <Input id="bs-ket" value={keterangan} onChange={(e) => setKeterangan(e.target.value)} placeholder="No. bukti transfer" />
+          </Field>
+          <FormAlert>{error}</FormAlert>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>Batal</Button>
+            <Button type="submit" disabled={mutation.isPending}>Simpan</Button>
           </div>
-          {needsBank ? (
-            <div className="space-y-1.5">
-              <span className={fieldLabel}>Rekening Asal</span>
-              <BankSelect value={bankId} onChange={setBankId} />
-            </div>
-          ) : null}
-        </div>
-        <div className="space-y-1.5">
-          <label className={fieldLabel} htmlFor="bs-ket">Keterangan</label>
-          <Input id="bs-ket" value={keterangan} onChange={(e) => setKeterangan(e.target.value)} placeholder="No. bukti transfer, dll." />
-        </div>
-        {error ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>Batal</Button>
-          <Button type="submit" disabled={mutation.isPending || !Number(jumlah)}>Simpan Pembayaran</Button>
-        </div>
-      </form>
+        </form>
+      </FieldErrorsContext.Provider>
+
     </Dialog>
   )
 }

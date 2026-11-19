@@ -4,10 +4,10 @@ export function StokOpnamePage() {
   return (
     <StokDokumenPage
       title="Stok Opname"
-      description="Sesi hitung fisik gudang. Stok disesuaikan ke hasil hitung; selisih tercatat di kartu stok."
+      description="Hitung fisik dan penyesuaian stok"
       endpoint="/stok-opname"
       queryKey="stok-opname"
-      createLabel="Buat Stok Opname"
+      createLabel="Buat Opname"
       variant="opname"
     />
   )

@@ -6,7 +6,8 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { Field, FormAlert } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 
 type KlinikForm = {
   nama: string
@@ -31,6 +32,7 @@ export function PengaturanUmumPage() {
   const [klinikForm, setKlinikForm] = useState<KlinikForm>(emptyForm)
   const [savedSuccess, setSavedSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const validation = useFormValidation()
 
   const { data, isLoading } = useQuery({
     queryKey: ['pengaturan-klinik'],
@@ -72,106 +74,95 @@ export function PengaturanUmumPage() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Pengaturan Umum & Setup Klinik"
-        description="Kelola identitas, alamat, kontak, dan konfigurasi umum operasional klinik."
-      />
+    <div className="space-y-6">
+      <PageHeader title="Pengaturan Umum" description="Identitas dan kontak klinik" />
 
-      <div className="mt-6">
+      <div>
         <Card className="p-6">
           <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-            <span className="rounded-xl bg-rose-50 p-2.5 text-rose-600 shadow-sm">
-              <Building2 className="h-5 w-5" />
+            <span className="rounded-xl bg-rose-50 p-2 text-rose-600">
+              <Building2 className="h-4 w-4" />
             </span>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Identitas & Informasi Klinik</h3>
-              <p className="text-xs text-slate-500">
-                Pengaturan dasar yang akan ditampilkan pada cetakan invoice, header kwitansi, dan bukti transaksi.
-              </p>
+              <h3 className="text-sm font-bold text-slate-900">Identitas Klinik</h3>
+              <p className="text-xs text-slate-500">Tampil di invoice dan kwitansi</p>
             </div>
           </div>
 
-          <form onSubmit={handleSaveKlinik} className="mt-6 space-y-4 max-w-2xl">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="nama">Nama Klinik</Label>
+          <FieldErrorsContext.Provider value={validation.errors}>
+            <form {...validation.formProps} onSubmit={handleSaveKlinik} className="mt-6 space-y-4 max-w-2xl">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Nama Klinik" htmlFor="nama" required>
+                  <Input
+                    id="nama"
+                    value={klinikForm.nama}
+                    onChange={(e) => setKlinikForm({ ...klinikForm, nama: e.target.value })}
+                    required
+                  />
+                </Field>
+
+                <Field label="No. Telepon" htmlFor="telepon">
+                  <Input
+                    id="telepon"
+                    value={klinikForm.telepon}
+                    onChange={(e) => setKlinikForm({ ...klinikForm, telepon: e.target.value })}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Email Klinik" htmlFor="email">
                 <Input
-                  id="nama"
-                  value={klinikForm.nama}
-                  onChange={(e) => setKlinikForm({ ...klinikForm, nama: e.target.value })}
-                  required
+                  id="email"
+                  type="email"
+                  value={klinikForm.email}
+                  onChange={(e) => setKlinikForm({ ...klinikForm, email: e.target.value })}
                 />
-              </div>
+              </Field>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="telepon">No. Telepon</Label>
+              <Field label="Alamat Lengkap" htmlFor="alamat">
+                <textarea
+                  id="alamat"
+                  rows={2}
+                  className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
+                  value={klinikForm.alamat}
+                  onChange={(e) => setKlinikForm({ ...klinikForm, alamat: e.target.value })}
+                />
+              </Field>
+
+              <Field label="Catatan Garansi" htmlFor="garansi">
                 <Input
-                  id="telepon"
-                  value={klinikForm.telepon}
-                  onChange={(e) => setKlinikForm({ ...klinikForm, telepon: e.target.value })}
+                  id="garansi"
+                  value={klinikForm.garansi}
+                  onChange={(e) => setKlinikForm({ ...klinikForm, garansi: e.target.value })}
                 />
+              </Field>
+
+              <Field label="Catatan Invoice" htmlFor="catatanInvoice">
+                <textarea
+                  id="catatanInvoice"
+                  rows={2}
+                  className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
+                  value={klinikForm.catatan_invoice}
+                  onChange={(e) => setKlinikForm({ ...klinikForm, catatan_invoice: e.target.value })}
+                />
+              </Field>
+
+              <FormAlert>{saveError}</FormAlert>
+
+              {savedSuccess ? (
+                <div className="rounded-md bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
+                  Pengaturan klinik berhasil disimpan!
+                </div>
+              ) : null}
+
+              <div className="pt-2">
+                <Button type="submit" disabled={isLoading || saveMutation.isPending}>
+                  <Save />
+                  {saveMutation.isPending ? 'Menyimpan...' : 'Simpan'}
+                </Button>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email Klinik</Label>
-              <Input
-                id="email"
-                type="email"
-                value={klinikForm.email}
-                onChange={(e) => setKlinikForm({ ...klinikForm, email: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="alamat">Alamat Lengkap</Label>
-              <textarea
-                id="alamat"
-                rows={2}
-                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
-                value={klinikForm.alamat}
-                onChange={(e) => setKlinikForm({ ...klinikForm, alamat: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="garansi">Catatan Garansi</Label>
-              <Input
-                id="garansi"
-                value={klinikForm.garansi}
-                onChange={(e) => setKlinikForm({ ...klinikForm, garansi: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="catatanInvoice">Catatan Kwitansi / Invoice Footer</Label>
-              <textarea
-                id="catatanInvoice"
-                rows={2}
-                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs focus:ring-2 focus:ring-rose-500"
-                value={klinikForm.catatan_invoice}
-                onChange={(e) => setKlinikForm({ ...klinikForm, catatan_invoice: e.target.value })}
-              />
-            </div>
-
-            {saveError ? (
-              <div className="rounded-md bg-rose-50 p-3 text-xs font-semibold text-rose-700">{saveError}</div>
-            ) : null}
-
-            {savedSuccess ? (
-              <div className="rounded-md bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
-                Pengaturan klinik berhasil disimpan!
-              </div>
-            ) : null}
-
-            <div className="pt-2">
-              <Button type="submit" className="gap-2" disabled={isLoading || saveMutation.isPending}>
-                <Save className="h-4 w-4" />
-                {saveMutation.isPending ? 'Menyimpan...' : 'Simpan Pengaturan'}
-              </Button>
-            </div>
-          </form>
+            </form>
+          </FieldErrorsContext.Provider>
         </Card>
       </div>
     </div>

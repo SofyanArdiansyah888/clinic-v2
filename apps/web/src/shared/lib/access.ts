@@ -20,6 +20,8 @@ const PAGE_ACCESS: [prefix: string, roles: Role[]][] = [
   ['/administrasi/membership', FO],
   ['/administrasi/supplier', FARMASI],
   ['/finance', FINANCE],
+  // Every role opens the magazine and sees the chapters it may read.
+  ['/laporan/majalah', ['admin', 'staff', 'doctor', 'nurse', 'apoteker', 'finance']],
   ['/laporan/fo', ['admin', 'staff', 'finance']],
   ['/laporan/apotek', ['admin', 'apoteker', 'finance']],
   ['/laporan/nurse', ['admin', 'nurse']],

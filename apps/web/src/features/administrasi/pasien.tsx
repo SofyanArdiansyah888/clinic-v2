@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Upload } from 'lucide-react'
-import { ResourceListPage, type FormField } from '@/shared/components/ResourceListPage'
+import { ResourceListPage } from '@/shared/components/ResourceListPage'
+import { MASTERS } from '@/shared/lib/masters'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
 import { Dialog } from '@/shared/components/Dialog'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { Field } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 
 type Pasien = {
   id: number
@@ -29,27 +31,13 @@ const columns: Column<Pasien>[] = [
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
-const formFields: FormField[] = [
-  { name: 'nama', label: 'Nama Pasien', required: true },
-  { name: 'no_telp', label: 'No. Telepon', type: 'tel' },
-  { name: 'email', label: 'Email', type: 'email' },
-  { name: 'alamat', label: 'Alamat', type: 'textarea' },
-  {
-    name: 'jenis_kelamin',
-    label: 'Jenis Kelamin',
-    type: 'select',
-    options: [
-      { label: 'Laki-laki', value: 'L' },
-      { label: 'Perempuan', value: 'P' },
-    ],
-  },
-  { name: 'tanggal_lahir', label: 'Tanggal Lahir', type: 'date' },
-]
+const formFields = MASTERS.pasien.fields
 
 export function PasienPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [importSuccess, setImportSuccess] = useState(false)
+  const validation = useFormValidation()
 
   function handleImportSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -66,7 +54,6 @@ export function PasienPage() {
     <div>
       <ResourceListPage<Pasien>
         title="Pasien"
-        description="Master data pasien klinik"
         endpoint="/pasien"
         queryKey="pasien"
         columns={columns}
@@ -74,9 +61,12 @@ export function PasienPage() {
         createFields={formFields}
         editFields={formFields}
         extraActions={
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4" />
-            Import CSV/Excel
+          <Button variant="outline" onClick={() => {
+              validation.reset()
+              setImportOpen(true)
+            }}>
+            <Upload />
+            Import
           </Button>
         }
       />
@@ -85,33 +75,34 @@ export function PasienPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         title="Import Data Pasien"
-        description="Unggah berkas CSV/Excel daftar pasien untuk diimpor sekaligus."
+        description="Format CSV atau Excel"
       >
-        <form onSubmit={handleImportSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="import-file">Pilih Berkas (.csv / .xlsx)</Label>
-            <Input
-              id="import-file"
-              type="file"
-              accept=".csv, .xlsx, .xls"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-              required
-            />
-          </div>
-          {importSuccess ? (
-            <p className="text-xs font-semibold text-emerald-600">
-              Data pasien berhasil diimpor!
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>
-              Batal
-            </Button>
-            <Button type="submit" disabled={!selectedFile}>
-              Proses Import
-            </Button>
-          </div>
-        </form>
+        <FieldErrorsContext.Provider value={validation.errors}>
+          <form {...validation.formProps} onSubmit={handleImportSubmit} className="space-y-4">
+            <Field label="Berkas" htmlFor="import-file" required>
+              <Input
+                id="import-file"
+                type="file"
+                accept=".csv, .xlsx, .xls"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                required
+              />
+            </Field>
+            {importSuccess ? (
+              <p className="text-xs font-semibold text-emerald-600">
+                Data pasien berhasil diimpor!
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit">
+                Import
+              </Button>
+            </div>
+          </form>
+        </FieldErrorsContext.Provider>
       </Dialog>
     </div>
   )

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useQuickCreate } from '@/shared/components/useQuickCreate'
 
 export type StaffLite = {
   id: number
@@ -67,19 +68,28 @@ export function BeauticianSelect({
     onChange(val, found)
   }
 
+  const quick = useQuickCreate<StaffLite>('staff', {
+    defaults: { jabatan: 'Beautician' },
+    onCreated: (row) => onChange(String(row.id), row),
+  })
+
   return (
-    <SearchableSelect
-      id={id}
-      value={value}
-      onChange={handleChange}
-      options={options}
-      loading={isLoading}
-      disabled={disabled}
-      required={required}
-      className={className}
-      placeholder={placeholder}
-      searchPlaceholder="Cari nama atau kode beautician..."
-      emptyText="Beautician / Staff tidak ditemukan"
-    />
+    <>
+      <SearchableSelect
+        {...quick.selectProps}
+        id={id}
+        value={value}
+        onChange={handleChange}
+        options={options}
+        loading={isLoading}
+        disabled={disabled}
+        required={required}
+        className={className}
+        placeholder={placeholder}
+        searchPlaceholder="Cari nama atau kode beautician..."
+        emptyText="Beautician / Staff tidak ditemukan"
+      />
+      {quick.dialog}
+    </>
   )
 }

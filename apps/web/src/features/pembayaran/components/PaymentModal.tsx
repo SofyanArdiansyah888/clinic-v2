@@ -1,12 +1,14 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { CreditCard, Loader2, Tag } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
 import { Dialog } from '@/shared/components/Dialog'
 import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
 import { StaffSelect } from '@/shared/components/StaffSelect'
 import { Button } from '@/shared/ui/button'
+import { Field, FormAlert } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 
 export type PaymentLineItem = {
@@ -55,7 +57,6 @@ function errorMessage(err: unknown, fallback: string) {
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 focus:border-rose-500 focus:outline-none'
-const labelClass = 'text-[11px] font-bold uppercase tracking-wider text-slate-500'
 
 export function PaymentModal({
   open,
@@ -74,9 +75,11 @@ export function PaymentModal({
   const [kode, setKode] = useState({ promo: '', voucher: '' })
   const [poin, setPoin] = useState('')
   const [deposit, setDeposit] = useState('')
+  const validation = useFormValidation()
 
   useEffect(() => {
     if (target) {
+      validation.reset()
       setJenisPembayaran('')
       setBankId('')
       setPromoInput('')
@@ -85,6 +88,7 @@ export function PaymentModal({
       setPoin('')
       setDeposit('')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target])
 
   // The server prices the bill (items, promo, voucher, balances); poin and deposit are
@@ -120,8 +124,6 @@ export function PaymentModal({
   const payMutation = useMutation({
     mutationFn: async () => {
       if (!target) throw new Error('Data tagihan tidak valid')
-      if (!staffId) throw new Error('Staff kasir wajib dipilih')
-      if (sisaBayar > 0 && !jenisPembayaran) throw new Error('Jenis pembayaran wajib dipilih')
       const jumlah = Number(jumlahBayar) || 0
       if (sisaBayar > 0 && jumlah < sisaBayar) throw new Error('Jumlah bayar kurang dari sisa tagihan')
 
@@ -160,6 +162,22 @@ export function PaymentModal({
   const canPay =
     !!tagihan && !tagihanError && !melebihi && !poinKelebihan && !depositKelebihan && !payMutation.isPending
 
+  function applyKode() {
+    setKode({ promo: promoInput.trim(), voucher: voucherInput.trim() })
+  }
+
+  // Enter in a code box applies the code instead of submitting the payment.
+  function onKodeKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    applyKode()
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (canPay) payMutation.mutate()
+  }
+
   return (
     <Dialog
       open={open}
@@ -168,163 +186,157 @@ export function PaymentModal({
       description={target ? `${target.label} — ${target.pasienNama || 'Pasien'}` : undefined}
       className="max-w-md"
     >
-      <div className="max-h-[75vh] space-y-4 overflow-y-auto p-5">
-        {lineItems.length > 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Rincian Tagihan</p>
-            <ul className="space-y-1.5">
-              {lineItems.map((item, idx) => (
-                <li key={idx} className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-700">
-                    {item.nama} <span className="text-slate-400">×{item.qty}</span>
-                  </span>
-                  <span className="font-bold text-slate-900">{formatCurrency(item.subtotal)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            <label htmlFor="paymentmodal-f1" className={labelClass}>Kode Promo</label>
-            <input id="paymentmodal-f1"
-              value={promoInput}
-              onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-              placeholder="PRM-..."
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="paymentmodal-f2" className={labelClass}>Kode Voucher</label>
-            <input id="paymentmodal-f2"
-              value={voucherInput}
-              onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
-              placeholder="VCR-..."
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setKode({ promo: promoInput.trim(), voucher: voucherInput.trim() })}
-          className="w-full rounded-xl text-xs"
-        >
-          <Tag className="mr-1.5 h-3.5 w-3.5" />
-          Terapkan Promo / Voucher
-        </Button>
-
-        {tagihanError ? (
-          <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{tagihanError}</div>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            <label htmlFor="paymentmodal-f3" className={labelClass}>Pakai Poin</label>
-            <input id="paymentmodal-f3"
-              type="number"
-              min={0}
-              value={poin}
-              onChange={(e) => setPoin(e.target.value)}
-              placeholder="0"
-              className={inputClass}
-            />
-            <p className={poinKelebihan ? 'text-[11px] font-semibold text-rose-600' : 'text-[11px] text-slate-500'}>
-              Tersedia {(tagihan?.poin_tersedia ?? 0).toLocaleString('id-ID')} poin
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="paymentmodal-f4" className={labelClass}>Pakai Deposit (Rp)</label>
-            <input id="paymentmodal-f4"
-              type="number"
-              min={0}
-              value={deposit}
-              onChange={(e) => setDeposit(e.target.value)}
-              placeholder="0"
-              className={inputClass}
-            />
-            <p className={depositKelebihan ? 'text-[11px] font-semibold text-rose-600' : 'text-[11px] text-slate-500'}>
-              Saldo {formatCurrency(tagihan?.saldo_deposit ?? 0)}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-1 rounded-2xl border border-rose-100 bg-rose-50/60 p-4 text-xs">
-          <SummaryRow label="Subtotal" value={tagihan?.subtotal ?? target?.total ?? 0} />
-          {tagihan?.diskon_promo ? <SummaryRow label="Diskon promo" value={-tagihan.diskon_promo} /> : null}
-          {tagihan?.diskon_voucher ? <SummaryRow label="Diskon voucher" value={-tagihan.diskon_voucher} /> : null}
-          {potonganPoin > 0 ? <SummaryRow label="Potongan poin" value={-potonganPoin} /> : null}
-          {depositDipakai > 0 ? <SummaryRow label="Pakai deposit" value={-depositDipakai} /> : null}
-          <div className="flex items-center justify-between border-t border-rose-100 pt-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Sisa Bayar</span>
-            <span className="text-2xl font-extrabold text-slate-900">
-              {tagihanQuery.isFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(sisaBayar)}
-            </span>
-          </div>
-          {melebihi ? (
-            <p className="font-semibold text-rose-600">Poin dan deposit melebihi total tagihan.</p>
-          ) : null}
-        </div>
-
-        <div className="space-y-1.5">
-          <label htmlFor="paymentmodal-f5" className={labelClass}>Staff Kasir</label>
-          <StaffSelect id="paymentmodal-f5" value={staffId} onChange={onStaffIdChange} required />
-        </div>
-
-        {sisaBayar > 0 ? (
-          <>
-            <div className="space-y-1.5">
-              <label htmlFor="paymentmodal-f6" className={labelClass}>Jenis Pembayaran</label>
-              <JenisPembayaranSelect id="paymentmodal-f6" value={jenisPembayaran} onChange={setJenisPembayaran} required />
+      <FieldErrorsContext.Provider value={validation.errors}>
+        <form {...validation.formProps} onSubmit={onSubmit} className="max-h-[75vh] space-y-4 overflow-y-auto p-5">
+          {lineItems.length > 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Rincian Tagihan</p>
+              <ul className="space-y-1.5">
+                {lineItems.map((item, idx) => (
+                  <li key={idx} className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-slate-700">
+                      {item.nama} <span className="text-slate-400">×{item.qty}</span>
+                    </span>
+                    <span className="font-bold text-slate-900">{formatCurrency(item.subtotal)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
+          ) : null}
 
-            {needsBank ? (
-              <div className="space-y-1.5">
-                <label htmlFor="paymentmodal-f7" className={labelClass}>Rekening Tujuan</label>
-                <BankSelect id="paymentmodal-f7" value={bankId} onChange={setBankId} required />
-              </div>
-            ) : null}
-
-            <div className="space-y-1.5">
-              <label htmlFor="paymentmodal-f8" className={labelClass}>Jumlah Bayar (Rp)</label>
-              <input id="paymentmodal-f8"
-                type="number"
-                value={jumlahBayar}
-                onChange={(e) => setJumlahBayar(e.target.value)}
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Kode Promo" htmlFor="paymentmodal-f1">
+              <input id="paymentmodal-f1"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                onKeyDown={onKodeKeyDown}
+                placeholder="PRM-..."
                 className={inputClass}
               />
-              {kembalian > 0 ? (
-                <p className="text-[11px] font-semibold text-emerald-700">Kembalian {formatCurrency(kembalian)}</p>
-              ) : null}
-            </div>
-          </>
-        ) : (
-          <p className="rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
-            Tagihan lunas dengan poin/deposit — tidak ada pembayaran tambahan.
-          </p>
-        )}
-
-        <div className="flex gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1 rounded-xl text-xs">
-            Batal
-          </Button>
+            </Field>
+            <Field label="Kode Voucher" htmlFor="paymentmodal-f2">
+              <input id="paymentmodal-f2"
+                value={voucherInput}
+                onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
+                onKeyDown={onKodeKeyDown}
+                placeholder="VCR-..."
+                className={inputClass}
+              />
+            </Field>
+          </div>
           <Button
             type="button"
-            disabled={!canPay}
-            onClick={() => payMutation.mutate()}
-            className="flex-1 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 text-xs font-bold text-white hover:from-rose-700 hover:to-rose-600"
+            variant="outline"
+            onClick={applyKode}
+            className="w-full"
           >
-            {payMutation.isPending ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <CreditCard className="mr-1.5 h-4 w-4" />
-            )}
-            Bayar & Selesai
+            <Tag />
+            Terapkan Kode
           </Button>
-        </div>
-      </div>
+
+          {tagihanError ? (
+            <FormAlert>{tagihanError}</FormAlert>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <Field
+              label="Pakai Poin"
+              htmlFor="paymentmodal-f3"
+              error={poinKelebihan ? `Melebihi poin tersedia (${(tagihan?.poin_tersedia ?? 0).toLocaleString('id-ID')})` : undefined}
+              hint={`Tersedia ${(tagihan?.poin_tersedia ?? 0).toLocaleString('id-ID')} poin`}
+            >
+              <input id="paymentmodal-f3"
+                type="number"
+                min={0}
+                value={poin}
+                onChange={(e) => setPoin(e.target.value)}
+                placeholder="0"
+                className={inputClass}
+              />
+            </Field>
+            <Field
+              label="Pakai Deposit (Rp)"
+              htmlFor="paymentmodal-f4"
+              error={depositKelebihan ? `Melebihi saldo deposit (${formatCurrency(tagihan?.saldo_deposit ?? 0)})` : undefined}
+              hint={`Saldo ${formatCurrency(tagihan?.saldo_deposit ?? 0)}`}
+            >
+              <input id="paymentmodal-f4"
+                type="number"
+                min={0}
+                value={deposit}
+                onChange={(e) => setDeposit(e.target.value)}
+                placeholder="0"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          <div className="space-y-1 rounded-2xl border border-rose-100 bg-rose-50/60 p-4 text-xs">
+            <SummaryRow label="Subtotal" value={tagihan?.subtotal ?? target?.total ?? 0} />
+            {tagihan?.diskon_promo ? <SummaryRow label="Diskon promo" value={-tagihan.diskon_promo} /> : null}
+            {tagihan?.diskon_voucher ? <SummaryRow label="Diskon voucher" value={-tagihan.diskon_voucher} /> : null}
+            {potonganPoin > 0 ? <SummaryRow label="Potongan poin" value={-potonganPoin} /> : null}
+            {depositDipakai > 0 ? <SummaryRow label="Pakai deposit" value={-depositDipakai} /> : null}
+            <div className="flex items-center justify-between border-t border-rose-100 pt-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Sisa Bayar</span>
+              <span className="text-2xl font-bold text-slate-900">
+                {tagihanQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : formatCurrency(sisaBayar)}
+              </span>
+            </div>
+            {melebihi ? (
+              <p className="font-semibold text-rose-600">Poin dan deposit melebihi total tagihan.</p>
+            ) : null}
+          </div>
+
+          <Field label="Staff Kasir" htmlFor="paymentmodal-f5" required>
+            <StaffSelect id="paymentmodal-f5" value={staffId} onChange={onStaffIdChange} required />
+          </Field>
+
+          {sisaBayar > 0 ? (
+            <>
+              <Field label="Jenis Pembayaran" htmlFor="paymentmodal-f6" required>
+                <JenisPembayaranSelect id="paymentmodal-f6" value={jenisPembayaran} onChange={setJenisPembayaran} required />
+              </Field>
+
+              {needsBank ? (
+                <Field label="Rekening Tujuan" htmlFor="paymentmodal-f7" required>
+                  <BankSelect id="paymentmodal-f7" value={bankId} onChange={setBankId} required />
+                </Field>
+              ) : null}
+
+              <Field label="Jumlah Bayar (Rp)" htmlFor="paymentmodal-f8" required>
+                <input id="paymentmodal-f8"
+                  type="number"
+                  required
+                  min={0}
+                  value={jumlahBayar}
+                  onChange={(e) => setJumlahBayar(e.target.value)}
+                  className={inputClass}
+                />
+                {kembalian > 0 ? (
+                  <p className="text-[11px] font-semibold text-emerald-700">Kembalian {formatCurrency(kembalian)}</p>
+                ) : null}
+              </Field>
+            </>
+          ) : (
+            <p className="rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
+              Lunas dengan poin/deposit.
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Batal
+            </Button>
+            <Button type="submit" disabled={!canPay} className="flex-1">
+              {payMutation.isPending ? <Loader2 className="animate-spin" /> : <CreditCard />}
+              Bayar & Selesai
+            </Button>
+          </div>
+        </form>
+      </FieldErrorsContext.Provider>
     </Dialog>
+
   )
 }
 

@@ -9,7 +9,7 @@ import { itemsColumn, type StokDokumenRow } from '@/features/warehouse/component
 
 type StokDokumenPageProps = {
   title: string
-  description: string
+  description?: string
   endpoint: string
   queryKey: string
   createLabel: string
@@ -50,8 +50,8 @@ export function StokDokumenPage({
         enableCreate={false}
         enableEdit={false}
         extraActions={
-          <Button type="button" onClick={() => setOpen(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
+          <Button type="button" onClick={() => setOpen(true)}>
+            <Plus />
             {createLabel}
           </Button>
         }

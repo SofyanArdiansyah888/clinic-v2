@@ -1,12 +1,15 @@
 import { toast as pushToast } from '@/shared/components/Toaster'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CreditCard, HandCoins, Laptop, Package, Printer, Search, Send, ShoppingCart } from 'lucide-react'
+import { HandCoins, Laptop, Package, Search, ShoppingCart } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { apiGet } from '@/shared/api/client'
+import { EmptyState } from '@/shared/components/EmptyState'
+import { KpiCard } from '@/shared/components/KpiCard'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
+import { Tabs } from '@/shared/ui/tabs'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
-import { cn } from '@/shared/lib/cn'
 import { PaymentModal, type PaymentTarget } from '@/features/pembayaran/components/PaymentModal'
 
 type PenjualanRow = {
@@ -57,87 +60,43 @@ export function PembayaranProdukPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader title="Pembayaran Produk" description="Tagihan obat & produk dari depo" />
 
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kasir — Pembayaran Produk</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Tagihan penjualan obat/produk dari depo langsung dan pemesanan online. Staff kasir dipilih saat bayar.
-          </p>
-        </div>
+      <div className="grid grid-cols-2 gap-4">
+        <KpiCard
+          label="Invoice Pending"
+          value={stats.count}
+          icon={<Package className="h-5 w-5" />}
+          iconClass="bg-rose-50 text-rose-600"
+        />
+        <KpiCard
+          label="Total Tagihan"
+          value={formatCurrency(stats.total)}
+          icon={<HandCoins className="h-5 w-5" />}
+          iconClass="bg-indigo-50 text-indigo-600"
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Invoice Pending</p>
-            <h3 className="mt-1 text-xl font-extrabold text-rose-600">{stats.count}</h3>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-            <Package className="h-6 w-6" />
-          </div>
-        </div>
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Total Tagihan</p>
-            <h3 className="mt-1 text-xl font-extrabold text-slate-900">{formatCurrency(stats.total)}</h3>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-            <HandCoins className="h-6 w-6" />
-          </div>
-        </div>
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Metode</p>
-            <h3 className="mt-1 text-xl font-extrabold text-rose-600">
-              {activeTab === 'langsung' ? 'Langsung' : 'Online'}
-            </h3>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-            <CreditCard className="h-6 w-6" />
-          </div>
-        </div>
-      </div>
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        fullWidth
+        items={[
+          { value: 'langsung', label: 'Langsung', icon: <ShoppingCart /> },
+          { value: 'online', label: 'Online', icon: <Laptop /> },
+        ]}
+      />
 
-      <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setActiveTab('langsung')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
-            activeTab === 'langsung'
-              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100',
-          )}
-        >
-          <ShoppingCart className="h-4 w-4" />
-          Penjualan Langsung
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('online')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
-            activeTab === 'online'
-              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100',
-          )}
-        >
-          <Laptop className="h-4 w-4" />
-          Pemesanan Online
-        </button>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-sm font-extrabold text-slate-900">Daftar Invoice Produk</h3>
+          <h3 className="text-sm font-bold text-slate-900">Daftar Invoice</h3>
           <div className="relative w-full sm:w-72">
             <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari invoice / pasien..."
+              placeholder="Cari invoice / pasien"
               className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
@@ -146,7 +105,7 @@ export function PembayaranProdukPage() {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Memuat invoice produk...</div>
         ) : rows.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400">Tidak ada penjualan produk menunggu bayar.</div>
+          <EmptyState title="Belum ada tagihan" />
         ) : (
           <div className="overflow-x-auto">
             <table className="table-sticky-actions w-full text-left text-sm">
@@ -174,19 +133,8 @@ export function PembayaranProdukPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => openPay(row)}
-                          className="h-8 rounded-lg bg-rose-600 text-[11px] font-bold text-white hover:bg-rose-700"
-                        >
+                        <Button type="button" size="sm" onClick={() => openPay(row)}>
                           Bayar
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg px-2">
-                          <Printer className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg px-2">
-                          <Send className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </td>

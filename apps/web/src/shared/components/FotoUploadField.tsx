@@ -55,7 +55,7 @@ export function FotoUploadField({
         }
       }, 50)
     } catch {
-      setError('Kamera tidak tersedia. Gunakan pilih dari galeri.')
+      setError('Kamera tidak tersedia. Gunakan galeri.')
       setCameraOn(false)
     }
   }
@@ -107,25 +107,23 @@ export function FotoUploadField({
         <Button
           type="button"
           variant="outline"
-          className="rounded-xl text-xs"
           disabled={uploading}
           onClick={() => void startCamera()}
         >
-          <Camera className="h-3.5 w-3.5" />
+          <Camera />
           Kamera
         </Button>
         <Button
           type="button"
           variant="outline"
-          className="rounded-xl text-xs"
           disabled={uploading}
           onClick={() => fileRef.current?.click()}
         >
-          <ImagePlus className="h-3.5 w-3.5" />
+          <ImagePlus />
           Galeri
         </Button>
         {cameraOn ? (
-          <Button type="button" variant="ghost" className="rounded-xl text-xs" onClick={stopCamera} disabled={uploading}>
+          <Button type="button" variant="ghost" onClick={stopCamera} disabled={uploading}>
             Tutup Kamera
           </Button>
         ) : null}
@@ -149,11 +147,10 @@ export function FotoUploadField({
           <div className="flex justify-center bg-slate-900 p-3">
             <Button
               type="button"
-              className="rounded-xl text-xs"
-              disabled={uploading}
+                  disabled={uploading}
               onClick={() => void captureFrame()}
             >
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+              {uploading ? <Loader2 className="animate-spin" /> : <Camera />}
               Ambil Foto
             </Button>
           </div>
@@ -170,7 +167,7 @@ export function FotoUploadField({
             <Upload className="mb-2 h-5 w-5 text-slate-400" />
           )}
           <p className="text-[11px] font-semibold text-slate-500">
-            {uploading ? 'Mengunggah...' : 'Belum ada foto — ambil dari kamera atau galeri'}
+            {uploading ? 'Mengunggah...' : 'Belum ada foto'}
           </p>
         </div>
       ) : (
@@ -181,6 +178,7 @@ export function FotoUploadField({
               <button
                 type="button"
                 title="Hapus foto"
+                aria-label="Hapus foto"
                 disabled={uploading}
                 onClick={() => removeAt(index)}
                 className="absolute top-2 right-2 rounded-lg bg-slate-950/70 p-1.5 text-white"

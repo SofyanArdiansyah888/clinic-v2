@@ -1,12 +1,6 @@
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { JENIS_PEMBAYARAN as OPTIONS } from '@/shared/lib/pembayaran'
 
-const OPTIONS = [
-  { value: 'e_money', label: 'E-Money' },
-  { value: 'kartu_debit', label: 'Kartu Debit' },
-  { value: 'kartu_kredit', label: 'Kartu Kredit' },
-  { value: 'transfer', label: 'Transfer Bank' },
-  { value: 'tunai', label: 'Tunai' },
-]
 
 type JenisPembayaranSelectProps = {
   value: string

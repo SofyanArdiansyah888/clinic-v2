@@ -7,6 +7,8 @@ import { Dialog } from '@/shared/components/Dialog'
 import { StaffSelect } from '@/shared/components/StaffSelect'
 import { SupplierSelect } from '@/shared/components/SupplierSelect'
 import { Button } from '@/shared/ui/button'
+import { Field, FormAlert } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 
 // mutasi: konversi & produksi (barang keluar/masuk), opname: physical count, pembelian: stock in from a supplier.
@@ -64,9 +66,11 @@ export function StokDokumenDialog({
   const [noInvoice, setNoInvoice] = useState('')
   const [lines, setLines] = useState<Line[]>(() => initialLines(variant))
   const [error, setError] = useState<string | null>(null)
+  const validation = useFormValidation()
 
   useEffect(() => {
     if (!open) return
+    validation.reset()
     setTanggal(todayISO())
     setKeterangan('')
     setSupplierId('')
@@ -74,6 +78,7 @@ export function StokDokumenDialog({
     setNoInvoice('')
     setLines(initialLines(variant))
     setError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, variant])
 
   function updateLine(key: number, patch: Partial<Line>) {
@@ -110,8 +115,6 @@ export function StokDokumenDialog({
     }
 
     if (variant === 'pembelian') {
-      if (!supplierId) throw new Error('Supplier wajib dipilih')
-      if (!staffId) throw new Error('Staff penerima wajib dipilih')
       return {
         supplier_id: Number(supplierId),
         staff_id: Number(staffId),
@@ -170,7 +173,13 @@ export function StokDokumenDialog({
           return (
             <div key={l.key} className="grid grid-cols-12 items-start gap-2 rounded-xl border border-slate-100 bg-slate-50/60 p-2">
               <div className="col-span-12 md:col-span-6">
-                <BarangSelect value={l.barangId} onChange={(v, b) => selectBarang(l.key, v, b)} />
+                {/* Empty rows are skipped on save, so a row's fields are required once either is filled. */}
+                <BarangSelect
+                  id={`stok-barang-${l.key}`}
+                  value={l.barangId}
+                  onChange={(v, b) => selectBarang(l.key, v, b)}
+                  required={l.qty !== ''}
+                />
                 {stok !== undefined ? (
                   <p className="mt-1 text-[11px] text-slate-500">
                     Stok sistem: <span className="font-semibold">{stok}</span> {l.barang?.satuan ?? ''}
@@ -179,8 +188,10 @@ export function StokDokumenDialog({
               </div>
               <div className={variant === 'pembelian' ? 'col-span-4 md:col-span-2' : 'col-span-6 md:col-span-3'}>
                 <input
+                  id={`stok-qty-${l.key}`}
                   type="number"
-                  min={0}
+                  min={variant === 'opname' ? 0 : 1}
+                  required={!!l.barangId}
                   value={l.qty}
                   onChange={(e) => updateLine(l.key, { qty: e.target.value })}
                   placeholder={variant === 'opname' ? 'Stok fisik' : 'Qty'}
@@ -200,6 +211,7 @@ export function StokDokumenDialog({
               {variant === 'pembelian' ? (
                 <div className="col-span-6 md:col-span-3">
                   <input
+                    id={`stok-harga-${l.key}`}
                     type="number"
                     min={0}
                     value={l.harga}
@@ -216,13 +228,14 @@ export function StokDokumenDialog({
               <div className={variant === 'pembelian' ? 'col-span-2 md:col-span-1' : 'col-span-6 md:col-span-3'}>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost-danger"
                   size="icon"
+                  title="Hapus baris"
                   aria-label="Hapus baris"
                   onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
                   disabled={rows.length <= 1}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 />
                 </Button>
               </div>
             </div>
@@ -232,11 +245,10 @@ export function StokDokumenDialog({
           type="button"
           variant="outline"
           size="sm"
-          className="gap-1.5"
           onClick={() => setLines((prev) => [...prev, newLine(tipe ?? 'keluar')])}
         >
-          <Plus className="h-3.5 w-3.5" />
-          Tambah barang
+          <Plus />
+          Tambah Baris
         </Button>
       </div>
     )
@@ -244,99 +256,91 @@ export function StokDokumenDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title={title} className="max-w-3xl">
-      <form onSubmit={onSubmit} className="max-h-[75vh] space-y-4 overflow-y-auto p-5">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="stok-tanggal">
-              Tanggal
-            </label>
-            <input
-              id="stok-tanggal"
-              type="date"
-              value={tanggal}
-              onChange={(e) => setTanggal(e.target.value)}
-              required
-              className={inputClass}
-            />
-          </div>
-          {variant === 'pembelian' ? (
-            <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="stok-invoice">
-                No. Invoice Supplier
-              </label>
+      <FieldErrorsContext.Provider value={validation.errors}>
+        <form {...validation.formProps} onSubmit={onSubmit} className="max-h-[75vh] space-y-4 overflow-y-auto p-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Tanggal" htmlFor="stok-tanggal" required>
               <input
-                id="stok-invoice"
-                value={noInvoice}
-                onChange={(e) => setNoInvoice(e.target.value)}
-                placeholder="Opsional"
+                id="stok-tanggal"
+                type="date"
+                value={tanggal}
+                onChange={(e) => setTanggal(e.target.value)}
+                required
                 className={inputClass}
               />
-            </div>
-          ) : null}
-          {variant === 'pembelian' ? (
+            </Field>
+            {variant === 'pembelian' ? (
+              <Field label="No. Invoice" htmlFor="stok-invoice">
+                <input
+                  id="stok-invoice"
+                  value={noInvoice}
+                  onChange={(e) => setNoInvoice(e.target.value)}
+                  placeholder="Opsional"
+                  className={inputClass}
+                />
+              </Field>
+            ) : null}
+            {variant === 'pembelian' ? (
+              <>
+                <Field label="Supplier" htmlFor="stokdokumendialog-f1" required>
+                  <SupplierSelect id="stokdokumendialog-f1" value={supplierId} onChange={setSupplierId} required />
+                </Field>
+                <Field label="Staff Penerima" htmlFor="stokdokumendialog-f2" required>
+                  <StaffSelect id="stokdokumendialog-f2" value={staffId} onChange={setStaffId} placeholder="Pilih staff..." required />
+                </Field>
+              </>
+            ) : null}
+          </div>
+
+          {variant === 'mutasi' ? (
             <>
-              <div className="space-y-1.5">
-                <label htmlFor="stokdokumendialog-f1" className={labelClass}>Supplier</label>
-                <SupplierSelect id="stokdokumendialog-f1" value={supplierId} onChange={setSupplierId} required />
+              <div className="space-y-2">
+                <p className={labelClass}>{keluarLabel} (−)</p>
+                {renderLines('keluar')}
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="stokdokumendialog-f2" className={labelClass}>Staff Penerima</label>
-                <StaffSelect id="stokdokumendialog-f2" value={staffId} onChange={setStaffId} placeholder="Pilih staff penerima..." required />
+              <div className="space-y-2">
+                <p className={labelClass}>{masukLabel} (+)</p>
+                {renderLines('masuk')}
               </div>
             </>
+          ) : (
+            <div className="space-y-2">
+              <p className={labelClass}>{variant === 'opname' ? 'Hasil hitung fisik' : 'Barang diterima'}</p>
+              {renderLines()}
+            </div>
+          )}
+
+          {variant === 'pembelian' ? (
+            <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Total Pembelian</span>
+              <span className="text-lg font-extrabold text-slate-900">{formatCurrency(total)}</span>
+            </div>
           ) : null}
-        </div>
 
-        {variant === 'mutasi' ? (
-          <>
-            <div className="space-y-2">
-              <p className={labelClass}>{keluarLabel} (stok berkurang)</p>
-              {renderLines('keluar')}
-            </div>
-            <div className="space-y-2">
-              <p className={labelClass}>{masukLabel} (stok bertambah)</p>
-              {renderLines('masuk')}
-            </div>
-          </>
-        ) : (
-          <div className="space-y-2">
-            <p className={labelClass}>{variant === 'opname' ? 'Hasil hitung fisik' : 'Barang diterima'}</p>
-            {renderLines()}
+          <Field label="Keterangan" htmlFor="stok-keterangan">
+            <textarea
+              id="stok-keterangan"
+              rows={2}
+              value={keterangan}
+              onChange={(e) => setKeterangan(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+
+          <FormAlert>{error}</FormAlert>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+              Simpan
+            </Button>
           </div>
-        )}
-
-        {variant === 'pembelian' ? (
-          <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Total Pembelian</span>
-            <span className="text-lg font-extrabold text-slate-900">{formatCurrency(total)}</span>
-          </div>
-        ) : null}
-
-        <div className="space-y-1.5">
-          <label className={labelClass} htmlFor="stok-keterangan">
-            Keterangan
-          </label>
-          <textarea
-            id="stok-keterangan"
-            rows={2}
-            value={keterangan}
-            onChange={(e) => setKeterangan(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-
-        {error ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Batal
-          </Button>
-          <Button type="submit" disabled={saveMutation.isPending} className="gap-1.5">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Simpan
-          </Button>
-        </div>
-      </form>
+        </form>
+      </FieldErrorsContext.Provider>
     </Dialog>
+
   )
 }

@@ -11,7 +11,7 @@ type TemplateInformedConsent = {
 }
 
 const columns: Column<TemplateInformedConsent>[] = [
-  { key: 'judul', header: 'Judul Template', cell: (r) => <span className="font-bold text-slate-900">{r.judul}</span> },
+  { key: 'judul', header: 'Judul', cell: (r) => <span className="font-bold text-slate-900">{r.judul}</span> },
   {
     key: 'kategori',
     header: 'Kategori',
@@ -23,23 +23,23 @@ const columns: Column<TemplateInformedConsent>[] = [
   },
   {
     key: 'isi',
-    header: 'Pratinjau Isi',
+    header: 'Isi',
     cell: (r) => <span className="truncate max-w-xs block text-slate-600">{r.isi || '-'}</span>,
   },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
 const formFields: FormField[] = [
-  { name: 'judul', label: 'Judul Template Informed Consent', required: true },
-  { name: 'kategori', label: 'Kategori Tindakan', placeholder: 'Contoh: Estetika, Dental, General' },
-  { name: 'isi', label: 'Isi / Teks Persetujuan Medis', type: 'textarea', required: true },
+  { name: 'judul', label: 'Judul', required: true },
+  { name: 'kategori', label: 'Kategori', placeholder: 'Estetika, Dental, ...' },
+  { name: 'isi', label: 'Isi Persetujuan', type: 'textarea', required: true },
 ]
 
 export function TemplateInformedConsentPage() {
   return (
     <ResourceListPage<TemplateInformedConsent>
-      title="Template Informed Consent"
-      description="Kelola master template surat persetujuan tindakan medis dan perawatan pasien"
+      title="Template Consent"
+      description="Surat persetujuan tindakan medis"
       endpoint="/template-informed-consent"
       queryKey="template-informed-consent"
       columns={columns}

@@ -5,7 +5,6 @@ import { useNavigate } from '@tanstack/react-router'
 import {
   CheckCircle2,
   Clock3,
-  DoorOpen,
   Grip,
   ListChecks,
   Plus,
@@ -21,6 +20,8 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { apiGet, apiPost, apiPut } from '@/shared/api/client'
 import { uploadImage } from '@/shared/api/upload'
 import { Dialog } from '@/shared/components/Dialog'
+import { EmptyState } from '@/shared/components/EmptyState'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { DokterSelect } from '@/shared/components/DokterSelect'
 import { FotoSebelumDialog, type PendingPhoto } from '@/shared/components/FotoSebelumDialog'
 import { PasienSelect } from '@/shared/components/PasienSelect'
@@ -28,6 +29,9 @@ import { StatusBadge } from '@/shared/components/StatusBadge'
 import { KpiCard } from '@/shared/components/KpiCard'
 import { cn } from '@/shared/lib/cn'
 import { Button } from '@/shared/ui/button'
+import { Field } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
+import { Tabs } from '@/shared/ui/tabs'
 import { todayISO } from '@/shared/lib/formatters'
 
 type PasienLite = { id: number; kode?: string; nama?: string; no_telp?: string }
@@ -220,6 +224,7 @@ export function KunjunganPage() {
     jam: nowTime(),
     keterangan: '',
   })
+  const validation = useFormValidation()
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['antrian', 'kunjungan', today],
@@ -337,7 +342,7 @@ export function KunjunganPage() {
       nextStatus === 'batal' &&
       !(await confirm({
         title: `Batalkan antrian ${row.kode}?`,
-        description: `${row.pasien?.nama ?? 'Pasien'} akan dikeluarkan dari antrian hari ini dan tidak akan dilayani.`,
+        description: `${row.pasien?.nama ?? 'Pasien'} akan dikeluarkan dari antrian hari ini.`,
         confirmLabel: 'Ya, batalkan',
         destructive: true,
       }))
@@ -390,6 +395,12 @@ export function KunjunganPage() {
     }
   }
 
+  function openRegistrasi() {
+    setForm((f) => ({ ...f, jam: nowTime() }))
+    validation.reset()
+    setModalOpen(true)
+  }
+
   function resetFilters() {
     setSearch('')
     setStatusFilter('all')
@@ -406,101 +417,61 @@ export function KunjunganPage() {
     <div className="space-y-6">
       {confirmDialog}
 
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kunjungan & Antrian Pasien</h2>
-            <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-600" />
-              Front Desk Active
-            </span>
-          </div>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Kelola kedatangan pasien, panggilan antrian, cetak tiket, dan status layanan hari ini.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1 rounded-xl bg-slate-200/80 p-1">
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={cn(
-                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all',
-                viewMode === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-900',
-              )}
-            >
-              <ListChecks className="h-3.5 w-3.5" />
-              Daftar Tabel
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('board')}
-              className={cn(
-                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all',
-                viewMode === 'board' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-900',
-              )}
-            >
-              <Grip className="h-3.5 w-3.5" />
-              Board Status
-            </button>
-          </div>
-          <Button
-            onClick={() => {
-              setForm((f) => ({ ...f, jam: nowTime() }))
-              setModalOpen(true)
-            }}
-            className="rounded-xl text-xs"
-          >
-            <Plus className="h-3.5 w-3.5" />
+      <PageHeader
+        title="Kunjungan & Antrian"
+        description="Antrian pasien hari ini"
+        actions={
+          <Button onClick={openRegistrasi}>
+            <Plus />
             Registrasi Kunjungan
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Total Kunjungan"
-          value={`${stats.total} Pasien`}
+          value={stats.total}
           icon={<Users className="h-5 w-5" />}
           iconClass="bg-rose-50 text-rose-600"
         />
         <KpiCard
           label="Menunggu"
-          value={`${stats.menunggu} Pasien`}
+          value={stats.menunggu}
           valueClass="text-amber-600"
           icon={<Clock3 className="h-5 w-5" />}
           iconClass="bg-amber-50 text-amber-600"
         />
         <KpiCard
-          label="Sedang Dilayani"
-          value={`${stats.aktif} Pasien`}
+          label="Dilayani"
+          value={stats.aktif}
           valueClass="text-indigo-600"
           icon={<Stethoscope className="h-5 w-5" />}
           iconClass="bg-indigo-50 text-indigo-600"
         />
         <KpiCard
           label="Selesai"
-          value={`${stats.selesai} Pasien`}
+          value={stats.selesai}
           valueClass="text-emerald-700"
           icon={<CheckCircle2 className="h-5 w-5" />}
           iconClass="bg-emerald-50 text-emerald-600"
         />
       </div>
 
-      <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+      <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-col items-stretch justify-between gap-3 border-b border-slate-100 bg-slate-50/50 p-4 md:flex-row md:items-center">
           <div className="relative flex-1">
             <Search className="absolute top-1/2 left-3.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama pasien, kode RM, no. antrian, atau dokter..."
+              placeholder="Cari pasien, no. antrian, dokter..."
               className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-10 pl-10 text-xs font-medium placeholder:text-slate-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
             />
             {search ? (
               <button
                 type="button"
+                aria-label="Hapus pencarian"
                 className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 onClick={() => setSearch('')}
               >
@@ -508,50 +479,43 @@ export function KunjunganPage() {
               </button>
             ) : null}
           </div>
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="appearance-none rounded-xl border border-slate-200 bg-white px-3.5 py-2 pr-8 text-xs font-bold text-slate-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <Tabs
+            value={viewMode}
+            onChange={setViewMode}
+            items={[
+              { value: 'table', label: 'Tabel', icon: <ListChecks /> },
+              { value: 'board', label: 'Board', icon: <Grip /> },
+            ]}
+          />
         </div>
 
         {isError ? <div className="p-8 text-center text-sm text-rose-600">Gagal memuat data antrian.</div> : null}
         {isLoading ? <div className="p-10 text-center text-xs text-slate-500">Memuat antrian...</div> : null}
 
         {empty ? (
-          <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-3xl border border-rose-100 bg-rose-50 text-rose-600 shadow-sm">
-              <DoorOpen className="h-8 w-8" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900">Tidak Ada Antrian</h3>
-            <p className="mt-1 mb-6 max-w-md text-xs text-slate-500">
-              Belum ada kunjungan pasien untuk filter yang dipilih. Daftarkan kunjungan baru atau reset filter.
-            </p>
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={() => {
-                  setForm((f) => ({ ...f, jam: nowTime() }))
-                  setModalOpen(true)
-                }}
-                className="rounded-xl text-xs"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Registrasi Kunjungan
-              </Button>
-              <Button variant="outline" onClick={resetFilters} className="rounded-xl text-xs">
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset Filter
-              </Button>
-            </div>
-          </div>
+          <EmptyState
+            title="Tidak ada antrian"
+            description="Belum ada kunjungan untuk filter ini."
+            action={
+              search || statusFilter !== 'all' ? (
+                <Button variant="outline" onClick={resetFilters}>
+                  <RotateCcw />
+                  Reset Filter
+                </Button>
+              ) : null
+            }
+          />
         ) : null}
 
         {!isLoading && !empty && viewMode === 'table' ? (
@@ -560,7 +524,7 @@ export function KunjunganPage() {
               <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <tr>
                   <th className="w-28 px-3 py-3 text-center">No.</th>
-                  <th className="px-3 py-3">Pasien & RM</th>
+                  <th className="px-3 py-3">Pasien</th>
                   <th className="px-3 py-3">Dokter</th>
                   <th className="w-16 px-3 py-3">Jam</th>
                   <th className="px-3 py-3">Keterangan</th>
@@ -615,10 +579,10 @@ export function KunjunganPage() {
               return (
                 <div
                   key={col.key}
-                  className="flex h-full flex-col rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm"
+                  className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"
                 >
                   <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2.5">
-                    <h4 className="text-xs font-extrabold tracking-wider text-slate-900 uppercase">{col.title}</h4>
+                    <h4 className="text-sm font-bold text-slate-900">{col.title}</h4>
                     <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700">
                       {items.length}
                     </span>
@@ -646,7 +610,7 @@ export function KunjunganPage() {
                             <span className="text-[11px] font-bold text-slate-500">{formatJam(item.jam)}</span>
                           </div>
                           <div>
-                            <h5 className="text-xs font-extrabold text-slate-900">{item.pasien?.nama || '-'}</h5>
+                            <h5 className="text-xs font-bold text-slate-900">{item.pasien?.nama || '-'}</h5>
                             <p className="text-[11px] text-slate-400">
                               {item.pasien?.kode || `ID-${item.pasien_id}`} ·{' '}
                               <span className="font-semibold text-rose-600">{item.staff?.nama || 'Staff'}</span>
@@ -670,133 +634,124 @@ export function KunjunganPage() {
           </div>
         ) : null}
 
-        {!empty ? (
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 p-4 text-xs text-slate-500 sm:flex-row">
-            <div>
-              Menampilkan{' '}
-              <span className="font-bold text-slate-800">
-                {filtered.length === 0 ? '0' : `1-${filtered.length}`}
-              </span>{' '}
-              dari <span className="font-bold text-slate-800">{filtered.length}</span> antrian
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <Dialog
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Registrasi Kunjungan Pasien"
-        description="Daftarkan pasien ke antrian front desk hari ini."
+        title="Registrasi Kunjungan"
         className="max-w-2xl"
       >
-        <form onSubmit={onSubmitModal} className="space-y-4">
-          <div className="flex gap-2 rounded-xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, mode: 'existing' }))}
-              className={cn(
-                'flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all',
-                form.mode === 'existing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600',
-              )}
-            >
-              Pasien Terdaftar
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, mode: 'new' }))}
-              className={cn(
-                'flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all',
-                form.mode === 'new' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600',
-              )}
-            >
-              Pasien Baru
-            </button>
-          </div>
-
-          {form.mode === 'existing' ? (
-            <div>
-              <label htmlFor="kunjunganpage-f1" className="mb-1 block text-xs font-bold text-slate-700">Pasien *</label>
-              <PasienSelect id="kunjunganpage-f1"
-                required
-                value={form.pasien_id}
-                onChange={(pasien_id) => setForm((f) => ({ ...f, pasien_id }))}
-              />
+        <FieldErrorsContext.Provider value={validation.errors}>
+          <form {...validation.formProps} onSubmit={onSubmitModal} className="space-y-4">
+            {/* Same look as <Tabs fullWidth>, kept as plain buttons: QA specs select "Pasien Baru" by role=button. */}
+            <div className="flex w-full gap-1 rounded-xl bg-slate-100 p-1">
+              {(
+                [
+                  { value: 'existing', label: 'Pasien Terdaftar' },
+                  { value: 'new', label: 'Pasien Baru' },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={form.mode === opt.value}
+                  onClick={() => setForm((f) => ({ ...f, mode: opt.value }))}
+                  className={cn(
+                    'flex h-8 flex-1 items-center justify-center rounded-lg px-3 text-xs font-semibold whitespace-nowrap transition-colors',
+                    form.mode === opt.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
-          ) : (
+
+            {form.mode === 'existing' ? (
+              <Field label="Pasien" htmlFor="kunjunganpage-f1" required>
+                <PasienSelect
+                  id="kunjunganpage-f1"
+                  required
+                  value={form.pasien_id}
+                  onChange={(pasien_id) => setForm((f) => ({ ...f, pasien_id }))}
+                />
+              </Field>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Nama Pasien" htmlFor="kunjunganpage-f2" required>
+                  <input
+                    id="kunjunganpage-f2"
+                    required
+                    value={form.nama}
+                    onChange={(e) => setForm((f) => ({ ...f, nama: e.target.value }))}
+                    placeholder="Contoh: Siti Aminah"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
+                  />
+                </Field>
+                <Field label="No. Telepon" htmlFor="kunjunganpage-f3" required>
+                  <input
+                    id="kunjunganpage-f3"
+                    required
+                    value={form.no_telp}
+                    onChange={(e) => setForm((f) => ({ ...f, no_telp: e.target.value }))}
+                    placeholder="08xxxxxxxxxx"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
+                  />
+                </Field>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="kunjunganpage-f2" className="mb-1 block text-xs font-bold text-slate-700">Nama Pasien *</label>
-                <input id="kunjunganpage-f2"
+              <Field label="Dokter" htmlFor="kunjunganpage-f4" required>
+                <DokterSelect
+                  id="kunjunganpage-f4"
                   required
-                  value={form.nama}
-                  onChange={(e) => setForm((f) => ({ ...f, nama: e.target.value }))}
-                  placeholder="Contoh: Siti Aminah"
+                  value={form.staff_id}
+                  onChange={(staff_id) => setForm((f) => ({ ...f, staff_id }))}
+                />
+              </Field>
+              <Field label="Jam Datang" htmlFor="kunjunganpage-f5">
+                <input
+                  id="kunjunganpage-f5"
+                  type="time"
+                  value={form.jam}
+                  onChange={(e) => setForm((f) => ({ ...f, jam: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
                 />
-              </div>
-              <div>
-                <label htmlFor="kunjunganpage-f3" className="mb-1 block text-xs font-bold text-slate-700">No. Telepon *</label>
-                <input id="kunjunganpage-f3"
-                  required
-                  value={form.no_telp}
-                  onChange={(e) => setForm((f) => ({ ...f, no_telp: e.target.value }))}
-                  placeholder="08xxxxxxxxxx"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
-                />
-              </div>
+              </Field>
             </div>
-          )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="kunjunganpage-f4" className="mb-1 block text-xs font-bold text-slate-700">Dokter *</label>
-              <DokterSelect id="kunjunganpage-f4"
-                required
-                value={form.staff_id}
-                onChange={(staff_id) => setForm((f) => ({ ...f, staff_id }))}
+            <Field label="Keluhan" htmlFor="kunjunganpage-f6">
+              <input
+                id="kunjunganpage-f6"
+                value={form.keterangan}
+                onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value }))}
+                placeholder="Cth: Kontrol rutin"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
               />
-            </div>
-            <div>
-              <label htmlFor="kunjunganpage-f5" className="mb-1 block text-xs font-bold text-slate-700">Jam Kedatangan</label>
-              <input id="kunjunganpage-f5"
-                type="time"
-                value={form.jam}
-                onChange={(e) => setForm((f) => ({ ...f, jam: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
+            </Field>
+
+            <label htmlFor="kunjunganpage-f7" className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <input
+                id="kunjunganpage-f7"
+                type="checkbox"
+                checked={printAfterCreate}
+                onChange={(e) => setPrintAfterCreate(e.target.checked)}
+                className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
               />
+              Cetak tiket setelah simpan
+            </label>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? 'Menyimpan...' : 'Masukkan Antrian'}
+              </Button>
             </div>
-          </div>
-
-          <div>
-            <label htmlFor="kunjunganpage-f6" className="mb-1 block text-xs font-bold text-slate-700">Keluhan / Keterangan</label>
-            <input id="kunjunganpage-f6"
-              value={form.keterangan}
-              onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value }))}
-              placeholder="Cth: Kontrol rutin, konsultasi kulit..."
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none"
-            />
-          </div>
-
-          <label htmlFor="kunjunganpage-f7" className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input id="kunjunganpage-f7"
-              type="checkbox"
-              checked={printAfterCreate}
-              onChange={(e) => setPrintAfterCreate(e.target.checked)}
-              className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-            />
-            Cetak tiket antrian setelah simpan
-          </label>
-
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
-            <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => setModalOpen(false)}>
-              Batal
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending} className="rounded-xl text-xs">
-              {createMutation.isPending ? 'Menyimpan...' : 'Masukkan Antrian'}
-            </Button>
-          </div>
-        </form>
+          </form>
+        </FieldErrorsContext.Provider>
       </Dialog>
 
       <FotoSebelumDialog
@@ -830,32 +785,41 @@ function QueueActions({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1', dense ? 'justify-end' : 'justify-start')}>
-      {actions.map((action) => (
-        <button
-          key={action.next + action.label}
-          type="button"
-          disabled={disabled}
-          onClick={() => onStatus(row, action.next)}
-          className={cn(
-            'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition-colors disabled:opacity-50',
-            action.tone === 'primary' && 'bg-rose-600 text-white hover:bg-rose-700',
-            action.tone === 'soft' && 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-            action.tone === 'danger' && 'border border-slate-200 bg-white text-slate-500 hover:border-rose-200 hover:text-rose-700',
-          )}
-        >
-          {action.next === 'dipanggil' ? <Volume2 className="h-3 w-3" /> : null}
-          {action.label}
-        </button>
-      ))}
-      <button
-        type="button"
-        title="Cetak tiket antrian"
+      {actions.map((action) =>
+        action.tone === 'danger' ? (
+          <Button
+            key={action.next + action.label}
+            variant="ghost-danger"
+            size="icon-sm"
+            title={`${action.label} antrian`}
+            aria-label={action.label}
+            disabled={disabled}
+            onClick={() => onStatus(row, action.next)}
+          >
+            <X />
+          </Button>
+        ) : (
+          <Button
+            key={action.next + action.label}
+            size="sm"
+            variant={action.tone === 'primary' ? 'default' : 'outline'}
+            disabled={disabled}
+            onClick={() => onStatus(row, action.next)}
+          >
+            {action.next === 'dipanggil' ? <Volume2 /> : null}
+            {action.label}
+          </Button>
+        ),
+      )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="Cetak tiket"
+        aria-label="Cetak tiket"
         onClick={() => onPrint(row)}
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
       >
-        <Printer className="h-3 w-3" />
-        Cetak
-      </button>
+        <Printer />
+      </Button>
     </div>
   )
 }

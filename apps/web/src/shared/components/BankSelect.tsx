@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { SearchableSelect } from '@/shared/components/SearchableSelect'
+import { useQuickCreate } from '@/shared/components/useQuickCreate'
 
 type BankLite = {
   id: number
@@ -36,19 +37,27 @@ export function BankSelect({ value, onChange, required, disabled, className, id 
     [data?.data],
   )
 
+  const quick = useQuickCreate<BankLite>('bank', {
+    onCreated: (row) => onChange(String(row.id)),
+  })
+
   return (
-    <SearchableSelect
-      id={id}
-      value={value}
-      onChange={onChange}
-      options={options}
-      loading={isLoading}
-      disabled={disabled}
-      required={required}
-      className={className}
-      placeholder="Pilih rekening tujuan..."
-      searchPlaceholder="Cari bank..."
-      emptyText="Bank tidak ditemukan"
-    />
+    <>
+      <SearchableSelect
+        {...quick.selectProps}
+        id={id}
+        value={value}
+        onChange={onChange}
+        options={options}
+        loading={isLoading}
+        disabled={disabled}
+        required={required}
+        className={className}
+        placeholder="Pilih rekening tujuan..."
+        searchPlaceholder="Cari bank..."
+        emptyText="Bank tidak ditemukan"
+      />
+      {quick.dialog}
+    </>
   )
 }

@@ -42,16 +42,16 @@ export function ApotekPage() {
   return (
     <ReportShell<ApotekLaporan>
       title="Laporan Apotek"
-      description="Penjualan obat/produk yang sudah lunas, status resep, dan stok yang perlu dipesan ulang."
+      description="Penjualan, resep, dan stok menipis"
       endpoint="/laporan/apotek"
     >
       {(d, periode) => (
         <>
           <KpiGrid>
             <KpiCard label="Item Terjual" value={formatNumber(d.ringkasan.item_terjual)} />
-            <KpiCard label="Nilai Penjualan Barang" value={formatCurrency(d.ringkasan.nilai_penjualan)} valueClass="text-emerald-700" />
+            <KpiCard label="Nilai Penjualan" value={formatCurrency(d.ringkasan.nilai_penjualan)} valueClass="text-emerald-700" />
             <KpiCard
-              label="Resep Siap / Diserahkan"
+              label="Resep Siap / Serah"
               value={`${formatNumber(d.ringkasan.resep_dibayar)} / ${formatNumber(d.ringkasan.resep_diserahkan)}`}
             />
             <KpiCard
@@ -62,12 +62,12 @@ export function ApotekPage() {
           </KpiGrid>
           {d.ringkasan.resep_belum_dibayar > 0 ? (
             <p className="text-xs text-slate-500">
-              {formatNumber(d.ringkasan.resep_belum_dibayar)} resep pada periode ini belum dibayar di kasir.
+              {formatNumber(d.ringkasan.resep_belum_dibayar)} resep belum dibayar di kasir.
             </p>
           ) : null}
           <ReportTable
             title="Barang Terlaris"
-            description="Nilai sebelum diskon transaksi (promo/voucher dihitung per transaksi, bukan per barang)."
+            description="Nilai sebelum diskon transaksi"
             columns={barangColumns}
             rows={d.barang_terjual}
             rowKey={(r) => r.barang_id}
@@ -76,7 +76,7 @@ export function ApotekPage() {
           />
           <ReportTable
             title="Stok Menipis"
-            description="Barang aktif dengan stok di bawah atau sama dengan stok minimal (kondisi saat ini)."
+            description="Stok ≤ minimal saat ini"
             columns={menipisColumns}
             rows={d.stok_menipis}
             rowKey={(r) => r.barang_id}

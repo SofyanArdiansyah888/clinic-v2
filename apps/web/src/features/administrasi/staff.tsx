@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CalendarDays, UsersRound } from 'lucide-react'
 import { ResourceListPage, type FormField } from '@/shared/components/ResourceListPage'
+import { MASTERS } from '@/shared/lib/masters'
+import { Tabs } from '@/shared/ui/tabs'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
 
@@ -25,37 +27,19 @@ type JadwalDokter = {
 
 const staffColumns: Column<Staff>[] = [
   { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
-  { key: 'nama', header: 'Nama Staff / Dokter', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
-  { key: 'jabatan', header: 'Jabatan / Peran', cell: (r) => r.jabatan || '-' },
+  { key: 'nama', header: 'Nama', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
+  { key: 'jabatan', header: 'Jabatan', cell: (r) => r.jabatan || '-' },
   { key: 'no_telp', header: 'No. Telp', cell: (r) => <span className="font-mono">{r.no_telp || '-'}</span> },
   { key: 'email', header: 'Email', cell: (r) => r.email || '-' },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
-const staffFields: FormField[] = [
-  { name: 'nama', label: 'Nama Staff / Dokter', required: true },
-  {
-    name: 'jabatan',
-    label: 'Jabatan / Peran',
-    type: 'select',
-    options: [
-      { label: 'Dokter Umum', value: 'Dokter Umum' },
-      { label: 'Dokter Spesialis / Aesthetic', value: 'Dokter Spesialis' },
-      { label: 'Beautician / Terapis', value: 'Beautician' },
-      { label: 'Perawat', value: 'Perawat' },
-      { label: 'Apoteker', value: 'Apoteker' },
-      { label: 'Front Office / Kasir', value: 'Front Office' },
-      { label: 'Admin Operasional', value: 'Admin' },
-    ],
-  },
-  { name: 'no_telp', label: 'No. Telepon', type: 'tel' },
-  { name: 'email', label: 'Email', type: 'email' },
-]
+const staffFields = MASTERS.staff.fields
 
 const jadwalColumns: Column<JadwalDokter>[] = [
   { key: 'dokter_nama', header: 'Nama Dokter', cell: (r) => <span className="font-bold text-slate-900">{r.dokter_nama}</span> },
-  { key: 'hari', header: 'Hari Praktek', cell: (r) => <span className="font-semibold text-rose-800">{r.hari}</span> },
-  { key: 'jam', header: 'Jam Operasional', cell: (r) => <span className="font-mono">{r.jam_mulai} - {r.jam_selesai}</span> },
+  { key: 'hari', header: 'Hari', cell: (r) => <span className="font-semibold text-rose-800">{r.hari}</span> },
+  { key: 'jam', header: 'Jam', cell: (r) => <span className="font-mono">{r.jam_mulai} - {r.jam_selesai}</span> },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
@@ -75,51 +59,33 @@ const jadwalFields: FormField[] = [
       { label: 'Minggu', value: 'Minggu' },
     ],
   },
-  { name: 'jam_mulai', label: 'Jam Mulai (HH:MM)', placeholder: '09:00', required: true },
-  { name: 'jam_selesai', label: 'Jam Selesai (HH:MM)', placeholder: '17:00', required: true },
+  { name: 'jam_mulai', label: 'Jam Mulai', placeholder: '09:00', required: true },
+  { name: 'jam_selesai', label: 'Jam Selesai', placeholder: '17:00', required: true },
 ]
 
 export function StaffPage() {
   const [activeTab, setActiveTab] = useState<'staff' | 'jadwal'>('staff')
 
   return (
-    <div>
-      <div className="flex border-b border-slate-200 bg-white px-4 pt-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab('staff')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold transition-colors ${
-            activeTab === 'staff'
-              ? 'border-rose-600 text-rose-700'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <UsersRound className="h-4 w-4" />
-          Data Staff & Dokter
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('jadwal')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold transition-colors ${
-            activeTab === 'jadwal'
-              ? 'border-rose-600 text-rose-700'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <CalendarDays className="h-4 w-4" />
-          Jadwal Dokter Praktek
-        </button>
-      </div>
+    <div className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: 'staff', label: 'Staff', icon: <UsersRound /> },
+          { value: 'jadwal', label: 'Jadwal Dokter', icon: <CalendarDays /> },
+        ]}
+      />
 
-      <div className="mt-4">
+      <div>
         {activeTab === 'staff' && (
           <ResourceListPage<Staff>
             title="Staff & Dokter"
-            description="Master data tenaga medis, perawat, beautician, dan staf klinik"
+            description="Tenaga medis dan staf klinik"
             endpoint="/staff"
             queryKey="staff"
             columns={staffColumns}
-            createLabel="Tambah Staff / Dokter"
+            createLabel="Tambah Staff"
             createFields={staffFields}
             editFields={staffFields}
           />
@@ -127,8 +93,8 @@ export function StaffPage() {
 
         {activeTab === 'jadwal' && (
           <ResourceListPage<JadwalDokter>
-            title="Jadwal Dokter Praktek"
-            description="Pengaturan jadwal jam kerja dan hari praktek dokter"
+            title="Jadwal Dokter"
+            description="Hari dan jam praktek dokter"
             endpoint="/jadwal-dokter"
             queryKey="jadwal-dokter"
             columns={jadwalColumns}

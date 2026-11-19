@@ -46,6 +46,8 @@ var policy = []rule{
 
 	{write, "/auth", allRoles},
 	{write, "/uploads", allRoles},
+	// Division notes for the report magazine; the handler checks which division a role may write.
+	{write, "/laporan/catatan", allRoles},
 
 	// Finance
 	{write, "/finance", []string{RoleAdmin, RoleFinance}},

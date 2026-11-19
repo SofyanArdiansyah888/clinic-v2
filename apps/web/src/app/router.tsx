@@ -52,6 +52,8 @@ import { JurnalPage } from '@/features/finance/JurnalPage'
 import { BukuBesarPage } from '@/features/finance/BukuBesarPage'
 import { NeracaSaldoPage } from '@/features/finance/NeracaSaldoPage'
 import { LabaRugiPage } from '@/features/finance/LabaRugiPage'
+import { HighlightsPage } from '@/features/finance/HighlightsPage'
+import { MajalahPage } from '@/features/majalah/MajalahPage'
 import { NeracaPage } from '@/features/finance/NeracaPage'
 
 
@@ -362,6 +364,18 @@ const financeNeracaRoute = createRoute({
   component: NeracaPage,
 })
 
+const financeHighlightsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/finance/highlights',
+  component: HighlightsPage,
+})
+
+const majalahRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/laporan/majalah',
+  component: MajalahPage,
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -409,6 +423,8 @@ const routeTree = rootRoute.addChildren([
     financeNeracaSaldoRoute,
     financeLabaRugiRoute,
     financeNeracaRoute,
+    financeHighlightsRoute,
+    majalahRoute,
   ]),
 ])
 

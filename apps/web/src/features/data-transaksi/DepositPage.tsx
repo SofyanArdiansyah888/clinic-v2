@@ -1,9 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { History, Search, Wallet } from 'lucide-react'
+import { Plus, Receipt, Search, Users, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { apiGet } from '@/shared/api/client'
+import { EmptyState } from '@/shared/components/EmptyState'
+import { KpiCard } from '@/shared/components/KpiCard'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge } from '@/shared/components/StatusBadge'
+import { buttonVariants } from '@/shared/ui/button'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 
 type DepositRow = {
@@ -65,46 +69,41 @@ export function DepositPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Riwayat Deposit & Member</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Semua transaksi deposit, deposit treatment, dan pendaftaran/perpanjangan membership tercatat di sini.
-          </p>
-        </div>
-        <Link
-          to="/pembayaran/deposit"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100"
-        >
-          <Wallet className="h-3.5 w-3.5" />
-          Input Transaksi Baru
-        </Link>
-      </div>
+      <PageHeader
+        title="Riwayat Deposit"
+        description="Deposit dan transaksi member"
+        actions={
+          <Link to="/pembayaran/deposit" className={buttonVariants()}>
+            <Plus />
+            Transaksi Baru
+          </Link>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Total Transaksi</p>
-          <h3 className="mt-1 text-xl font-extrabold text-rose-600">{stats.count}</h3>
-        </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Total Nilai</p>
-          <h3 className="mt-1 text-xl font-extrabold text-slate-900">{formatCurrency(stats.total)}</h3>
-        </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Transaksi Member</p>
-          <h3 className="mt-1 text-xl font-extrabold text-indigo-600">{stats.memberCount}</h3>
-          <Link to="/administrasi/membership" className="mt-1 text-[11px] font-bold text-indigo-600 hover:underline">
-            Lihat data membership →
-          </Link>
-        </div>
+        <KpiCard
+          label="Transaksi"
+          value={stats.count}
+          icon={<Receipt className="h-5 w-5" />}
+          iconClass="bg-rose-50 text-rose-600"
+        />
+        <KpiCard
+          label="Total Nilai"
+          value={formatCurrency(stats.total)}
+          icon={<Wallet className="h-5 w-5" />}
+          iconClass="bg-emerald-50 text-emerald-600"
+        />
+        <KpiCard
+          label="Transaksi Member"
+          value={stats.memberCount}
+          icon={<Users className="h-5 w-5" />}
+          iconClass="bg-indigo-50 text-indigo-600"
+        />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-rose-600" />
-            <h3 className="text-sm font-extrabold text-slate-900">Log Transaksi Deposit</h3>
-          </div>
+          <h3 className="text-sm font-bold text-slate-900">Log Transaksi</h3>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="date"
@@ -129,7 +128,7 @@ export function DepositPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari pasien / kode..."
+                placeholder="Cari pasien / kode"
                 className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
               />
             </div>
@@ -141,12 +140,7 @@ export function DepositPage() {
         ) : isError ? (
           <div className="p-12 text-center text-xs text-rose-600">Gagal memuat data deposit.</div>
         ) : rows.length === 0 ? (
-          <div className="space-y-2 p-12 text-center">
-            <p className="text-sm font-bold text-slate-700">Belum ada transaksi deposit</p>
-            <p className="text-xs text-slate-500">
-              Input transaksi baru di menu Kasir → Deposit & Member. Data akan muncul di halaman ini.
-            </p>
-          </div>
+          <EmptyState title="Belum ada transaksi" description="Input transaksi di Kasir → Deposit & Member." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -158,7 +152,7 @@ export function DepositPage() {
                   <th className="px-4 py-3">Jenis</th>
                   <th className="px-4 py-3">Treatment</th>
                   <th className="px-4 py-3">Staff</th>
-                  <th className="px-4 py-3">Bayar</th>
+                  <th className="px-4 py-3">Metode</th>
                   <th className="px-4 py-3 text-right">Jumlah</th>
                 </tr>
               </thead>

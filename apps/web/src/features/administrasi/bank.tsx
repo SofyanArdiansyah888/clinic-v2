@@ -1,4 +1,5 @@
-import { ResourceListPage, type FormField } from '@/shared/components/ResourceListPage'
+import { ResourceListPage } from '@/shared/components/ResourceListPage'
+import { MASTERS } from '@/shared/lib/masters'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
 
@@ -19,17 +20,13 @@ const columns: Column<Bank>[] = [
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
-const formFields: FormField[] = [
-  { name: 'nama', label: 'Nama Bank', required: true },
-  { name: 'no_rekening', label: 'No. Rekening', required: true },
-  { name: 'atas_nama', label: 'Atas Nama Pemilik Rekening' },
-]
+const formFields = MASTERS.bank.fields
 
 export function BankPage() {
   return (
     <ResourceListPage<Bank>
-      title="Rekening Bank Klinik"
-      description="Kelola akun bank untuk metode pembayaran transfer pasien"
+      title="Rekening Bank"
+      description="Rekening untuk pembayaran transfer"
       endpoint="/bank"
       queryKey="bank"
       columns={columns}

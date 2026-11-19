@@ -8,7 +8,9 @@ import { toast } from '@/shared/components/Toaster'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Field, FormAlert } from '@/shared/ui/field'
 import { Input } from '@/shared/ui/input'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/lib/cn'
 import { apiErrorMessage, TIPE_LABEL, type Akun, type TipeAkun } from '@/features/finance/types'
@@ -37,7 +39,7 @@ const emptyForm: FormState = {
   keterangan: '',
 }
 
-const fieldLabel = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500'
+
 const selectClass =
   'h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-rose-600 focus:outline-none'
 
@@ -67,6 +69,7 @@ export function AkunPage() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
   const [confirm, confirmDialog] = useConfirm()
+  const validation = useFormValidation()
 
   const { data, isLoading } = useQuery({
     queryKey: ['finance', 'akun', 'all'],
@@ -119,6 +122,7 @@ export function AkunPage() {
     setEditing(null)
     setForm(emptyForm)
     setError(null)
+    validation.reset()
     setOpen(true)
   }
 
@@ -135,6 +139,7 @@ export function AkunPage() {
       keterangan: a.keterangan ?? '',
     })
     setError(null)
+    validation.reset()
     setOpen(true)
   }
 
@@ -145,14 +150,14 @@ export function AkunPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {confirmDialog}
       <PageHeader
-        title="Daftar Akun (COA)"
-        description="Bagan akun untuk pencatatan jurnal. Akun header hanya mengelompokkan dan tidak bisa diposting."
+        title="Daftar Akun"
+        description="Bagan akun (COA) untuk jurnal"
         actions={
-          <Button onClick={openCreate} className="gap-1.5">
-            <Plus className="h-4 w-4" />
+          <Button onClick={openCreate}>
+            <Plus />
             Tambah Akun
           </Button>
         }
@@ -181,7 +186,7 @@ export function AkunPage() {
         {groups.map(({ tipe, rows }) => (
           <Card key={tipe} className="overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2.5">
-              <h3 className="text-xs font-extrabold tracking-wider text-slate-700 uppercase">{TIPE_LABEL[tipe]}</h3>
+              <h3 className="text-sm font-bold text-slate-900">{TIPE_LABEL[tipe]}</h3>
               <span className="text-[11px] text-slate-500">{rows.length} akun</span>
             </div>
             {rows.length === 0 ? (
@@ -203,36 +208,36 @@ export function AkunPage() {
                     </div>
                     {akun.is_system ? (
                       <span title="Akun bawaan sistem">
-                        <Lock className="h-3 w-3 text-slate-300" />
+                        <Lock className="h-3.5 w-3.5 text-slate-300" />
                       </span>
                     ) : null}
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => openEdit(akun)}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-700"
                       title="Edit"
                       aria-label={`Edit akun ${akun.kode} ${akun.nama}`}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                      <Pencil />
+                    </Button>
                     {!akun.is_system ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost-danger"
+                        size="icon-sm"
                         title="Hapus"
                         aria-label={`Hapus akun ${akun.kode} ${akun.nama}`}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                         onClick={async () => {
                           const ok = await confirm({
                             title: `Hapus akun ${akun.kode}?`,
-                            description: `${akun.nama} akan dihapus dari bagan akun. Akun yang sudah dipakai di jurnal tidak bisa dihapus; nonaktifkan saja.`,
+                            description: `Akun yang sudah dipakai di jurnal tidak bisa dihapus.`,
                             confirmLabel: 'Ya, hapus',
                             destructive: true,
                           })
                           if (ok) deleteMutation.mutate(akun.id)
                         }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                        <Trash2 />
+                      </Button>
                     ) : null}
                   </li>
                 ))}
@@ -243,91 +248,87 @@ export function AkunPage() {
       </div>
 
       <Dialog open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Akun' : 'Tambah Akun'}>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <label className={fieldLabel} htmlFor="akun-kode">Kode</label>
-              <Input id="akun-kode" required value={form.kode} onChange={(e) => setForm((f) => ({ ...f, kode: e.target.value }))} placeholder="1-1202" />
+        <FieldErrorsContext.Provider value={validation.errors}>
+          <form {...validation.formProps} onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Kode" htmlFor="akun-kode" required>
+                <Input id="akun-kode" required value={form.kode} onChange={(e) => setForm((f) => ({ ...f, kode: e.target.value }))} placeholder="1-1202" />
+              </Field>
+              <Field label="Nama" htmlFor="akun-nama" required className="col-span-2">
+                <Input id="akun-nama" required value={form.nama} onChange={(e) => setForm((f) => ({ ...f, nama: e.target.value }))} />
+              </Field>
             </div>
-            <div className="col-span-2 space-y-1.5">
-              <label className={fieldLabel} htmlFor="akun-nama">Nama</label>
-              <Input id="akun-nama" required value={form.nama} onChange={(e) => setForm((f) => ({ ...f, nama: e.target.value }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tipe" htmlFor="akun-tipe" required>
+                <select
+                  id="akun-tipe"
+                  required
+                  className={selectClass}
+                  value={form.tipe}
+                  onChange={(e) => setForm((f) => ({ ...f, tipe: e.target.value as TipeAkun, parent_id: '', saldo_normal: '' }))}
+                >
+                  {TIPE_ORDER.map((t) => (
+                    <option key={t} value={t}>{TIPE_LABEL[t]}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Saldo Normal" htmlFor="akun-saldo">
+                <select
+                  id="akun-saldo"
+                  className={selectClass}
+                  value={form.saldo_normal}
+                  onChange={(e) => setForm((f) => ({ ...f, saldo_normal: e.target.value as FormState['saldo_normal'] }))}
+                >
+                  <option value="">Ikuti tipe akun</option>
+                  <option value="debit">Debit</option>
+                  <option value="kredit">Kredit (atau kontra)</option>
+                </select>
+              </Field>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={fieldLabel} htmlFor="akun-tipe">Tipe</label>
+            <Field label="Akun Induk" htmlFor="akun-parent">
               <select
-                id="akun-tipe"
+                id="akun-parent"
                 className={selectClass}
-                value={form.tipe}
-                onChange={(e) => setForm((f) => ({ ...f, tipe: e.target.value as TipeAkun, parent_id: '', saldo_normal: '' }))}
+                value={form.parent_id}
+                onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))}
               >
-                {TIPE_ORDER.map((t) => (
-                  <option key={t} value={t}>{TIPE_LABEL[t]}</option>
+                <option value="">Tanpa induk</option>
+                {headerOptions.map((a) => (
+                  <option key={a.id} value={a.id}>{`${a.kode} · ${a.nama}`}</option>
                 ))}
               </select>
+            </Field>
+            <Field label="Keterangan" htmlFor="akun-ket">
+              <textarea
+                id="akun-ket"
+                rows={2}
+                value={form.keterangan}
+                onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-xs focus:border-rose-600 focus:outline-none"
+              />
+            </Field>
+            <div className="flex flex-wrap gap-5 text-xs text-slate-700">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
+                Akun header (pengelompok)
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
+                Aktif
+              </label>
             </div>
-            <div className="space-y-1.5">
-              <label className={fieldLabel} htmlFor="akun-saldo">Saldo Normal</label>
-              <select
-                id="akun-saldo"
-                className={selectClass}
-                value={form.saldo_normal}
-                onChange={(e) => setForm((f) => ({ ...f, saldo_normal: e.target.value as FormState['saldo_normal'] }))}
-              >
-                <option value="">Ikuti tipe akun</option>
-                <option value="debit">Debit</option>
-                <option value="kredit">Kredit (atau kontra)</option>
-              </select>
+            {editing?.is_system ? (
+              <p className="text-xs text-slate-500">Akun sistem tidak bisa dihapus.</p>
+            ) : null}
+            <FormAlert>{error}</FormAlert>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
+              <Button type="submit" disabled={saveMutation.isPending}>Simpan</Button>
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="akun-parent">Akun Induk</label>
-            <select
-              id="akun-parent"
-              className={selectClass}
-              value={form.parent_id}
-              onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))}
-            >
-              <option value="">Tanpa induk</option>
-              {headerOptions.map((a) => (
-                <option key={a.id} value={a.id}>{`${a.kode} · ${a.nama}`}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="akun-ket">Keterangan</label>
-            <textarea
-              id="akun-ket"
-              rows={2}
-              value={form.keterangan}
-              onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value }))}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-xs focus:border-rose-600 focus:outline-none"
-            />
-          </div>
-          <div className="flex flex-wrap gap-5 text-xs text-slate-700">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
-              Akun header (pengelompok)
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
-              Aktif
-            </label>
-          </div>
-          {editing?.is_system ? (
-            <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
-              Akun bawaan sistem: tidak bisa dihapus. Akun yang dipakai di Pengaturan Akun tidak bisa dinonaktifkan sebelum diganti di sana.
-            </p>
-          ) : null}
-          {error ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button type="submit" disabled={saveMutation.isPending}>Simpan</Button>
-          </div>
-        </form>
+          </form>
+        </FieldErrorsContext.Provider>
       </Dialog>
+
     </div>
   )
 }

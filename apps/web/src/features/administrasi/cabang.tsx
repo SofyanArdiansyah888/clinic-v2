@@ -20,16 +20,15 @@ const columns: Column<Cabang>[] = [
 ]
 
 const formFields: FormField[] = [
-  { name: 'nama', label: 'Nama Unit Cabang', required: true },
+  { name: 'nama', label: 'Nama Cabang', required: true },
   { name: 'no_telp', label: 'No. Telepon', type: 'tel' },
-  { name: 'alamat', label: 'Alamat Cabang', type: 'textarea' },
+  { name: 'alamat', label: 'Alamat', type: 'textarea' },
 ]
 
 export function CabangPage() {
   return (
     <ResourceListPage<Cabang>
-      title="Unit Cabang Klinik"
-      description="Daftar unit cabang dan outlet operasional klinik"
+      title="Cabang"
       endpoint="/cabang"
       queryKey="cabang"
       columns={columns}

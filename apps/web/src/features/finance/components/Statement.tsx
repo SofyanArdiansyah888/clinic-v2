@@ -72,9 +72,9 @@ export function StatementCard({ title, description, children, csv }: StatementCa
           {description ? <p className="text-xs text-slate-500">{description}</p> : null}
         </div>
         {csv ? (
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => downloadCsv(csv.filename, csv.headers, csv.rows)}>
-            <Download className="h-3.5 w-3.5" />
-            Ekspor CSV
+          <Button variant="outline" size="sm" className="print-hide" onClick={() => downloadCsv(csv.filename, csv.headers, csv.rows)}>
+            <Download />
+            Export CSV
           </Button>
         ) : null}
       </div>

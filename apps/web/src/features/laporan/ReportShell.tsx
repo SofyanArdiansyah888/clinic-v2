@@ -1,15 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { addDays, format, startOfMonth } from 'date-fns'
-import { Download } from 'lucide-react'
+import { Download, FileDown } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { DataTable, type Column } from '@/shared/components/DataTable'
 import { EmptyState } from '@/shared/components/EmptyState'
 import { PageHeader } from '@/shared/components/PageHeader'
+import { PrintFooter, PrintHeader } from '@/shared/components/print/PrintDocument'
+import { printReport } from '@/shared/lib/print'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { downloadCsv, type CsvValue } from '@/shared/lib/csv'
-import { todayISO } from '@/shared/lib/formatters'
+import { formatDate, todayISO } from '@/shared/lib/formatters'
 
 export type Periode = { dari: string; sampai: string }
 
@@ -21,7 +23,7 @@ const PRESETS: { label: string; range: () => Periode }[] = [
 
 type ReportShellProps<T> = {
   title: string
-  description: string
+  description?: string
   endpoint: string
   children: (data: T, periode: Periode) => ReactNode
   // 'per' shows a single "per tanggal" date for point-in-time reports such as a balance sheet.
@@ -33,6 +35,8 @@ type ReportShellProps<T> = {
   // Shown instead of the report while `enabled` is false (e.g. "pick an account first").
   idleMessage?: string
   actions?: ReactNode
+  // "PDF" prints the page on A4 with the clinic letterhead; false hides the button.
+  pdf?: false | { orientation?: 'portrait' | 'landscape' }
 }
 
 const inputClass =
@@ -51,6 +55,7 @@ export function ReportShell<T>({
   enabled = true,
   idleMessage,
   actions,
+  pdf = {},
 }: ReportShellProps<T>) {
   const [periode, setPeriode] = useState<Periode>(() => PRESETS[2].range())
 
@@ -64,11 +69,39 @@ export function ReportShell<T>({
   const errorMessage =
     (error as { response?: { data?: { message?: string } } } | null)?.response?.data?.message ?? 'Gagal memuat laporan'
 
-  return (
-    <div className="space-y-5">
-      <PageHeader title={title} description={description} actions={actions} />
+  const periodeLabel =
+    mode === 'per' ? `Per ${formatDate(periode.sampai)}` : `${formatDate(periode.dari)} – ${formatDate(periode.sampai)}`
+  const fileName = `${title} ${mode === 'per' ? periode.sampai : `${periode.dari} sd ${periode.sampai}`}`
 
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={title}
+        description={description}
+        className="print-hide"
+        actions={
+          actions || pdf ? (
+            <>
+              {actions}
+              {pdf ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!data?.data}
+                  onClick={() => printReport(fileName, pdf.orientation)}
+                >
+                  <FileDown />
+                  PDF
+                </Button>
+              ) : null}
+            </>
+          ) : undefined
+        }
+      />
+      <PrintHeader title={title} periode={periodeLabel} />
+
+      <div className="print-hide flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
         {filters}
         <div className={mode === 'per' ? 'hidden' : 'space-y-1.5'}>
           <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-dari">
@@ -111,6 +144,7 @@ export function ReportShell<T>({
       {isLoading ? <p className="text-sm text-slate-500">Memuat laporan...</p> : null}
       {isError ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{errorMessage}</div> : null}
       {data?.data ? children(data.data, periode) : null}
+      {data?.data && pdf ? <PrintFooter /> : null}
     </div>
   )
 }
@@ -140,7 +174,7 @@ export function ReportTable<T>({ title, description, columns, rows, rowKey, file
           type="button"
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          className="print-hide"
           disabled={data.length === 0}
           onClick={() =>
             downloadCsv(
@@ -150,11 +184,11 @@ export function ReportTable<T>({ title, description, columns, rows, rowKey, file
             )
           }
         >
-          <Download className="h-3.5 w-3.5" />
-          Ekspor CSV
+          <Download />
+          Export CSV
         </Button>
       </div>
-      <DataTable columns={columns} data={data} rowKey={rowKey} emptyTitle="Tidak ada data" emptyDescription="Belum ada data pada periode ini." />
+      <DataTable columns={columns} data={data} rowKey={rowKey} emptyTitle="Tidak ada data" emptyDescription="Belum ada data di periode ini." />
     </Card>
   )
 }

@@ -1,4 +1,5 @@
 import { ResourceListPage } from '@/shared/components/ResourceListPage'
+import { MASTERS } from '@/shared/lib/masters'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
 import { formatCurrency } from '@/shared/lib/formatters'
@@ -27,32 +28,13 @@ const columns: Column<Row>[] = [
 export function BarangPage() {
   return (
     <ResourceListPage<Row>
-      title="Gudang / Barang"
+      title="Barang"
       description="Master barang dan stok"
       endpoint="/barang"
       queryKey="barang"
       columns={columns}
       createLabel="Tambah Barang"
-      createFields={[
-        { name: 'nama', label: 'Nama', required: true },
-        { name: 'kategori', label: 'Kategori' },
-        { name: 'satuan', label: 'Satuan' },
-        { name: 'harga_beli', label: 'Harga Beli', type: 'number' },
-        { name: 'harga_jual', label: 'Harga Jual', type: 'number', required: true },
-        { name: 'stok_minimal', label: 'Stok Minimal', type: 'number' },
-        { name: 'stok_aktual', label: 'Stok Awal', type: 'number' },
-        { name: 'lokasi_barang', label: 'Lokasi' },
-      ]}
-      transformCreateBody={(v) => ({
-        nama: v.nama,
-        kategori: v.kategori,
-        satuan: v.satuan,
-        harga_beli: Number(v.harga_beli || 0),
-        harga_jual: Number(v.harga_jual || 0),
-        stok_minimal: Number(v.stok_minimal || 0),
-        stok_aktual: Number(v.stok_aktual || 0),
-        lokasi_barang: v.lokasi_barang,
-      })}
+      createFields={MASTERS.barang.fields}
     />
   )
 }

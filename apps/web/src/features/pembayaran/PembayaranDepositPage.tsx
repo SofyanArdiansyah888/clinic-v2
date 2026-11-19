@@ -1,46 +1,26 @@
 import { toast as pushToast } from '@/shared/components/Toaster'
 import { useMutation } from '@tanstack/react-query'
-import { ArrowRight, BadgeDollarSign, CreditCard, History, Info, Loader2, Users } from 'lucide-react'
+import { CreditCard, History, Loader2, Users } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
 import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { PasienSelect } from '@/shared/components/PasienSelect'
 import { StaffSelect } from '@/shared/components/StaffSelect'
 import { TreatmentSelect } from '@/shared/components/TreatmentSelect'
-import { Button } from '@/shared/ui/button'
+import { Button, buttonVariants } from '@/shared/ui/button'
+import { Field } from '@/shared/ui/field'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 
 const JENIS_OPTIONS = [
   { value: 'pembayaran_deposit', label: 'Pembayaran Deposit' },
-  { value: 'pembayaran_deposit_treatment', label: 'Pembayaran Deposit Treatment' },
+  { value: 'pembayaran_deposit_treatment', label: 'Deposit Treatment' },
   { value: 'pendaftaran_member', label: 'Pendaftaran Member' },
   { value: 'perpanjangan_member', label: 'Perpanjangan Member' },
 ]
-
-const JENIS_INFO: Record<string, { title: string; desc: string; output: string }> = {
-  pembayaran_deposit: {
-    title: 'Pembayaran Deposit',
-    desc: 'Pasien setor uang muka (saldo kredit) untuk digunakan di kunjungan berikutnya.',
-    output: 'Tercatat di Riwayat Deposit',
-  },
-  pembayaran_deposit_treatment: {
-    title: 'Deposit Treatment',
-    desc: 'Bayar di muka untuk treatment tertentu yang akan digunakan nanti.',
-    output: 'Tercatat di Riwayat Deposit + link treatment',
-  },
-  pendaftaran_member: {
-    title: 'Pendaftaran Member',
-    desc: 'Daftar membership baru untuk pasien — membuat record di data membership.',
-    output: 'Riwayat Deposit + Administrasi Membership',
-  },
-  perpanjangan_member: {
-    title: 'Perpanjangan Member',
-    desc: 'Perpanjang membership aktif pasien yang sudah terdaftar.',
-    output: 'Riwayat Deposit + update Membership',
-  },
-}
 
 const today = todayISO()
 
@@ -57,6 +37,7 @@ export function PembayaranDepositPage() {
     jumlah: '',
     staff_id: '',
   })
+  const validation = useFormValidation()
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
     pushToast(message, tone)
@@ -64,14 +45,9 @@ export function PembayaranDepositPage() {
 
   const needsTreatment = form.jenis === 'pembayaran_deposit_treatment'
   const needsBank = form.jenis_pembayaran === 'transfer' || form.jenis_pembayaran === 'e_money'
-  const isMemberJenis = form.jenis === 'pendaftaran_member' || form.jenis === 'perpanjangan_member'
-  const jenisInfo = JENIS_INFO[form.jenis]
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      if (!form.pasien_id) throw new Error('Pasien wajib dipilih')
-      if (!form.staff_id) throw new Error('Staff kasir wajib dipilih')
-      if (!form.jenis_pembayaran) throw new Error('Jenis pembayaran wajib dipilih')
       const jumlah = Number(form.jumlah)
       if (!jumlah || jumlah <= 0) throw new Error('Jumlah wajib diisi')
 
@@ -92,6 +68,7 @@ export function PembayaranDepositPage() {
     onSuccess: () => {
       setLastSuccessJenis(form.jenis)
       showToast('Pembayaran deposit berhasil dicatat!', 'success')
+      validation.reset()
       setForm((f) => ({
         ...f,
         kwitansi: '',
@@ -105,182 +82,137 @@ export function PembayaranDepositPage() {
     onError: (err) => showToast(err instanceof Error ? err.message : 'Gagal memproses deposit', 'error'),
   })
 
+  function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    submitMutation.mutate()
+  }
+
   return (
     <div className="space-y-6">
-
-      <div>
-        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kasir — Deposit & Member</h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Pembayaran deposit pasien, deposit treatment, pendaftaran dan perpanjangan membership.
-        </p>
-      </div>
-
-      <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
-        <div className="text-xs text-rose-900">
-          <p className="font-bold">Input → Proses → Output</p>
-          <p className="mt-1 text-rose-800">
-            Semua transaksi disimpan ke tabel deposit. Transaksi member juga membuat/memperbarui data di menu
-            Administrasi → Membership. Lihat riwayat lengkap di Data Transaksi → Deposit.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Deposit & Member" description="Deposit pasien dan membership" />
 
       {lastSuccessJenis ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs font-semibold text-emerald-900">Transaksi berhasil! Data tersimpan.</p>
+          <p className="text-xs font-semibold text-emerald-900">Transaksi berhasil disimpan.</p>
           <div className="flex flex-wrap gap-2">
-            <Link
-              to="/data-transaksi/deposit"
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700"
-            >
-              <History className="h-3 w-3" />
-              Lihat riwayat deposit
+            <Link to="/data-transaksi/deposit" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <History />
+              Riwayat
             </Link>
             {lastSuccessJenis === 'pendaftaran_member' || lastSuccessJenis === 'perpanjangan_member' ? (
-              <Link
-                to="/administrasi/membership"
-                className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50"
-              >
-                <Users className="h-3 w-3" />
-                Lihat membership
+              <Link to="/administrasi/membership" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                <Users />
+                Membership
               </Link>
             ) : null}
           </div>
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-rose-50 to-white px-5 py-4">
-          <div className="flex items-center gap-2">
-            <BadgeDollarSign className="h-5 w-5 text-rose-600" />
-            <h3 className="text-sm font-extrabold text-slate-900">Pembayaran Deposit / Pendaftaran Member</h3>
-          </div>
-          <Button
-            type="button"
-            disabled={submitMutation.isPending}
-            onClick={() => submitMutation.mutate()}
-            className="rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 text-xs font-bold text-white"
-          >
-            {submitMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1 h-4 w-4" />}
-            Bayar
-          </Button>
-        </div>
-
-        <div className="space-y-4 p-5">
-          {jenisInfo ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs">
-              <p className="font-bold text-slate-800">{jenisInfo.title}</p>
-              <p className="mt-1 text-slate-600">{jenisInfo.desc}</p>
-              <p className="mt-2 flex items-center gap-1 font-semibold text-rose-700">
-                <ArrowRight className="h-3 w-3" />
-                Output: {jenisInfo.output}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="pembayarandepositpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tanggal</label>
-              <input id="pembayarandepositpage-f1"
-                type="date"
-                value={form.tanggal}
-                onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="pembayarandepositpage-f2" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Kwitansi</label>
-              <input id="pembayarandepositpage-f2"
-                type="text"
-                value={form.kwitansi}
-                onChange={(e) => setForm((f) => ({ ...f, kwitansi: e.target.value }))}
-                placeholder="Auto-generate jika kosong"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
-              />
-            </div>
+      <FieldErrorsContext.Provider value={validation.errors}>
+        <form
+          {...validation.formProps}
+          onSubmit={onSubmit}
+          className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm"
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <h3 className="text-sm font-bold text-slate-900">Form Transaksi</h3>
+            <Button type="submit" disabled={submitMutation.isPending}>
+              {submitMutation.isPending ? <Loader2 className="animate-spin" /> : <CreditCard />}
+              Bayar
+            </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="pembayarandepositpage-f3" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pasien</label>
-              <PasienSelect id="pembayarandepositpage-f3" value={form.pasien_id} onChange={(v) => setForm((f) => ({ ...f, pasien_id: v }))} required />
+          <div className="space-y-4 p-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Tanggal" htmlFor="pembayarandepositpage-f1" required>
+                <input id="pembayarandepositpage-f1"
+                  type="date"
+                  required
+                  value={form.tanggal}
+                  onChange={(e) => setForm((f) => ({ ...f, tanggal: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
+                />
+              </Field>
+              <Field label="Kwitansi" htmlFor="pembayarandepositpage-f2">
+                <input id="pembayarandepositpage-f2"
+                  type="text"
+                  value={form.kwitansi}
+                  onChange={(e) => setForm((f) => ({ ...f, kwitansi: e.target.value }))}
+                  placeholder="Otomatis jika kosong"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
+                />
+              </Field>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="pembayarandepositpage-f4" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jenis Transaksi</label>
-              <select id="pembayarandepositpage-f4"
-                value={form.jenis}
-                onChange={(e) => setForm((f) => ({ ...f, jenis: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
-              >
-                {JENIS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Pasien" htmlFor="pembayarandepositpage-f3" required>
+                <PasienSelect id="pembayarandepositpage-f3" value={form.pasien_id} onChange={(v) => setForm((f) => ({ ...f, pasien_id: v }))} required />
+              </Field>
+              <Field label="Jenis Transaksi" htmlFor="pembayarandepositpage-f4">
+                <select id="pembayarandepositpage-f4"
+                  value={form.jenis}
+                  onChange={(e) => setForm((f) => ({ ...f, jenis: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
+                >
+                  {JENIS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
-          </div>
 
-          {needsTreatment ? (
-            <div className="space-y-1.5">
-              <label htmlFor="pembayarandepositpage-f5" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Untuk Treatment</label>
-              <TreatmentSelect id="pembayarandepositpage-f5"
-                value={form.treatment_id}
-                onChange={(v) => setForm((f) => ({ ...f, treatment_id: v }))}
-              />
+            {needsTreatment ? (
+              <Field label="Treatment" htmlFor="pembayarandepositpage-f5">
+                <TreatmentSelect id="pembayarandepositpage-f5"
+                  value={form.treatment_id}
+                  onChange={(v) => setForm((f) => ({ ...f, treatment_id: v }))}
+                />
+              </Field>
+            ) : null}
+
+            <Field label="Staff Kasir" htmlFor="pembayarandepositpage-f6" required>
+              <StaffSelect id="pembayarandepositpage-f6" value={form.staff_id} onChange={(v) => setForm((f) => ({ ...f, staff_id: v }))} required />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Jenis Pembayaran" htmlFor="pembayarandepositpage-f7" required>
+                <JenisPembayaranSelect id="pembayarandepositpage-f7"
+                  value={form.jenis_pembayaran}
+                  onChange={(v) => setForm((f) => ({ ...f, jenis_pembayaran: v }))}
+                  required
+                />
+              </Field>
+              {needsBank ? (
+                <Field label="Bank" htmlFor="pembayarandepositpage-f8">
+                  <BankSelect id="pembayarandepositpage-f8" value={form.bank_id} onChange={(v) => setForm((f) => ({ ...f, bank_id: v }))} />
+                </Field>
+              ) : null}
             </div>
-          ) : null}
 
-          <div className="space-y-1.5">
-            <label htmlFor="pembayarandepositpage-f6" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Staff Kasir</label>
-            <StaffSelect id="pembayarandepositpage-f6" value={form.staff_id} onChange={(v) => setForm((f) => ({ ...f, staff_id: v }))} required />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="pembayarandepositpage-f7" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Jenis Pembayaran</label>
-              <JenisPembayaranSelect id="pembayarandepositpage-f7"
-                value={form.jenis_pembayaran}
-                onChange={(v) => setForm((f) => ({ ...f, jenis_pembayaran: v }))}
+            <Field label="Total (Rp)" htmlFor="pembayarandepositpage-f9" required>
+              <input id="pembayarandepositpage-f9"
+                type="number"
                 required
+                min={1}
+                value={form.jumlah}
+                onChange={(e) => setForm((f) => ({ ...f, jumlah: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-900 focus:border-rose-500 focus:outline-none"
               />
-            </div>
-            {needsBank ? (
-              <div className="space-y-1.5">
-                <label htmlFor="pembayarandepositpage-f8" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bank</label>
-                <BankSelect id="pembayarandepositpage-f8" value={form.bank_id} onChange={(v) => setForm((f) => ({ ...f, bank_id: v }))} />
+            </Field>
+
+            {form.jumlah ? (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4 text-center">
+                <p className="text-[11px] font-bold uppercase text-rose-700">Total Pembayaran</p>
+                <p className="mt-1 text-2xl font-bold text-slate-900">{formatCurrency(Number(form.jumlah))}</p>
               </div>
             ) : null}
           </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="pembayarandepositpage-f9" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total (Rp)</label>
-            <input id="pembayarandepositpage-f9"
-              type="number"
-              value={form.jumlah}
-              onChange={(e) => setForm((f) => ({ ...f, jumlah: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-extrabold text-slate-900 focus:border-rose-500 focus:outline-none"
-            />
-          </div>
-
-          {form.jumlah ? (
-            <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4 text-center">
-              <p className="text-[11px] font-bold uppercase text-rose-700">Total Pembayaran</p>
-              <p className="mt-1 text-2xl font-extrabold text-slate-900">{formatCurrency(Number(form.jumlah))}</p>
-            </div>
-          ) : null}
-
-          {isMemberJenis ? (
-            <p className="text-center text-[11px] text-slate-500">
-              Setelah bayar, cek data pasien di{' '}
-              <Link to="/administrasi/membership" className="font-bold text-rose-600 hover:underline">
-                Administrasi → Membership
-              </Link>
-            </p>
-          ) : null}
-        </div>
-      </div>
+        </form>
+      </FieldErrorsContext.Provider>
     </div>
+
   )
 }

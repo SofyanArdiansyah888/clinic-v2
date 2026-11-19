@@ -30,3 +30,8 @@ export function formatDateTime(value?: string | Date | null) {
 export function todayISO() {
   return format(new Date(), 'yyyy-MM-dd')
 }
+
+/** Compact axis label: 1.200.000 → "1,2 jt", 15.000 → "15 rb". */
+export function formatCompact(value: number) {
+  return new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+}

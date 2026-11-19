@@ -6,6 +6,7 @@ import { ResourceListPage } from '@/shared/components/ResourceListPage'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import type { Column } from '@/shared/components/DataTable'
 import { Button } from '@/shared/ui/button'
+import { Tabs } from '@/shared/ui/tabs'
 import { formatDate } from '@/shared/lib/formatters'
 
 type ResepBarang = {
@@ -25,13 +26,19 @@ type Row = {
   barangs?: ResepBarang[]
 }
 
-const TABS = [
-  { key: 'dibayar', label: 'Siap Diserahkan' },
-  { key: 'draft', label: 'Belum Dibayar' },
-  { key: 'diserahkan', label: 'Sudah Diserahkan' },
-] as const
+type TabKey = 'dibayar' | 'draft' | 'diserahkan'
 
-type TabKey = (typeof TABS)[number]['key']
+const TABS: { value: TabKey; label: string }[] = [
+  { value: 'dibayar', label: 'Siap Diserahkan' },
+  { value: 'draft', label: 'Belum Dibayar' },
+  { value: 'diserahkan', label: 'Sudah Diserahkan' },
+]
+
+const TAB_DESCRIPTION: Record<TabKey, string> = {
+  dibayar: 'Sudah dibayar, siap diserahkan ke pasien',
+  draft: 'Stok berkurang setelah dibayar di kasir',
+  diserahkan: 'Resep yang sudah diserahkan',
+}
 
 const columns: Column<Row>[] = [
   { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
@@ -40,7 +47,7 @@ const columns: Column<Row>[] = [
   { key: 'dokter', header: 'Dokter', cell: (r) => r.staff?.nama || '-' },
   {
     key: 'obat',
-    header: 'Obat / Produk',
+    header: 'Obat',
     cell: (r) =>
       (r.barangs ?? []).length === 0 ? (
         '-'
@@ -79,35 +86,16 @@ export function ResepPage() {
   })
 
   return (
-    <div>
-      <div className="flex border-b border-slate-200 bg-white px-4 pt-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`border-b-2 px-4 py-3 text-xs font-bold transition-colors ${
-              tab === t.key ? 'border-rose-600 text-rose-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-4">
+      <Tabs value={tab} onChange={setTab} items={TABS} />
 
-      {error ? <div className="mt-4 rounded-md bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
 
-      <div className="mt-4">
+      <div>
         <ResourceListPage<Row>
           key={tab}
           title="Resep"
-          description={
-            tab === 'dibayar'
-              ? 'Resep yang sudah dibayar di kasir. Stok sudah dikurangi; serahkan obat ke pasien.'
-              : tab === 'draft'
-                ? 'Resep yang belum dibayar. Stok berkurang saat pasien membayar di kasir.'
-                : 'Riwayat resep yang sudah diserahkan ke pasien.'
-          }
+          description={TAB_DESCRIPTION[tab]}
           endpoint="/resep"
           queryKey="depo-resep"
           columns={columns}
@@ -123,9 +111,8 @@ export function ResepPage() {
                     size="sm"
                     disabled={serahkanMutation.isPending}
                     onClick={() => serahkanMutation.mutate(row.id)}
-                    className="gap-1.5 text-xs"
                   >
-                    <PackageCheck className="h-3.5 w-3.5" />
+                    <PackageCheck />
                     Serahkan
                   </Button>
                 )

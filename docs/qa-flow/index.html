@@ -1,0 +1,537 @@
+<title>Peta Uji Clinic OS</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; diagrams scroll sideways inside their own frames; checklist cards stack per step. */
+:root {
+  --bg: #fbf8f9;
+  --surface: #ffffff;
+  --ink: #1d1a22;
+  --muted: #6b6573;
+  --line: #e8e1e6;
+  --accent: #e11d48;
+  --accent-soft: #fde7ec;
+  --ok: #15803d;
+  --ok-soft: #e3f4e8;
+  --warn: #b45309;
+  --warn-soft: #fdf0dc;
+  --lane-a: #fff5f7;
+  --lane-b: #faf7fb;
+  --node: #ffffff;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141217; --surface: #1c1a20; --ink: #f1edf3; --muted: #a39cab; --line: #2e2a33;
+    --accent: #fb7190; --accent-soft: #3a1922; --ok: #4ade80; --ok-soft: #14301f;
+    --warn: #fbbf24; --warn-soft: #36290f; --lane-a: #1f1a1e; --lane-b: #19171c; --node: #24212a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141217; --surface: #1c1a20; --ink: #f1edf3; --muted: #a39cab; --line: #2e2a33;
+  --accent: #fb7190; --accent-soft: #3a1922; --ok: #4ade80; --ok-soft: #14301f;
+  --warn: #fbbf24; --warn-soft: #36290f; --lane-a: #1f1a1e; --lane-b: #19171c; --node: #24212a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: clamp(28px, 4vw, 38px); }
+h2 { font-size: 22px; }
+h3 { font-size: 17px; }
+p { margin: 0; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.lead { color: var(--muted); max-width: 68ch; }
+header { display: flex; flex-direction: column; gap: 12px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+.chip.fix { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.chip.neg { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+section { display: flex; flex-direction: column; gap: 16px; }
+.frame { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+.frame svg { display: block; min-width: 980px; width: 100%; height: auto; }
+.frame.state svg { min-width: 760px; }
+svg text { font-family: var(--font-body); fill: var(--ink); }
+svg .lane-a { fill: var(--lane-a); }
+svg .lane-b { fill: var(--lane-b); }
+svg .lane-sep { stroke: var(--line); }
+svg .lane-label { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+svg .lane-sub { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted); }
+svg .node rect { fill: var(--node); stroke: var(--line); stroke-width: 1.2; }
+svg .node.sys rect { fill: var(--bg); stroke-dasharray: 4 3; }
+svg .node { cursor: pointer; }
+svg .node:hover rect, svg .node:focus rect { stroke: var(--accent); stroke-width: 2; }
+svg .node:focus { outline: none; }
+svg .num { font-family: var(--font-display); font-weight: 700; font-size: 12px; fill: var(--accent); }
+svg .ttl { font-weight: 600; font-size: 13px; }
+svg .rt { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+svg .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+svg .edge.alt { stroke-dasharray: 5 4; }
+svg .arrowhead { fill: var(--muted); }
+svg .elabel { font-size: 11px; fill: var(--muted); }
+svg .st rect { fill: var(--node); stroke: var(--line); stroke-width: 1.2; }
+svg .st.end rect { fill: var(--ok-soft); stroke: transparent; }
+svg .st.end text { fill: var(--ok); }
+svg .st.bad rect { fill: var(--warn-soft); stroke: transparent; }
+svg .st.bad text { fill: var(--warn); }
+svg .st text { font-weight: 600; font-size: 13px; }
+svg .st .code { font-family: var(--font-mono); font-weight: 400; font-size: 10.5px; fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 22px; height: 12px; border-radius: 3px; border: 1.2px solid var(--line); background: var(--node); display: inline-block; }
+.sw.sys { border-style: dashed; background: var(--bg); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button, .btn {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filters button:focus-visible, .btn:focus-visible, input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.danger { color: var(--accent); }
+.progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { width: 160px; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); width: 0; transition: width .25s; }
+.confirm { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.steps { display: flex; flex-direction: column; gap: 14px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 14px; scroll-margin-top: 24px; transition: box-shadow .3s, border-color .3s; }
+.step.flash { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.step-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
+.step-num { font-family: var(--font-display); font-weight: 700; color: var(--accent); font-size: 15px; min-width: 2ch; }
+.step-head h3 { flex: 1 1 260px; min-width: 0; }
+.step-meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.step-meta .mono { color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.cols > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+ol.do { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+ul.check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+ul.check label { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; font-size: 14px; cursor: pointer; }
+ul.check input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--ok); }
+ul.check input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-right: 4px; vertical-align: 1px; }
+.tag.fix { background: var(--ok-soft); color: var(--ok); }
+.tag.neg { background: var(--warn-soft); color: var(--warn); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 720px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+td.y { color: var(--ok); font-weight: 700; text-align: center; }
+td.n { color: var(--line); text-align: center; }
+th.c { text-align: center; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+@media (prefers-reduced-motion: reduce) { .bar i, .step { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Clinic OS · panduan uji manual</span>
+    <h1>Peta Uji Clinic OS</h1>
+    <p class="lead">Alur satu kunjungan pasien dari meja depan sampai obat diserahkan, dipecah per role. Klik kotak di diagram untuk melompat ke checklist langkah itu. Jalankan di <strong>staging</strong>, karena setiap langkah membuat data (pasien, stok, jurnal).</p>
+    <div class="meta">
+      <span class="chip">Akun uji: <span class="mono">e2e_staff · e2e_doctor · e2e_apoteker · admin</span></span>
+      <span class="chip fix">Regresi = bug yang sudah diperbaiki</span>
+      <span class="chip neg">Negatif = input salah harus ditolak</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-flow">
+    <h2 id="h-flow">Alur utama: kunjungan pasien</h2>
+    <div class="frame" role="region" aria-label="Diagram alur kunjungan, geser ke samping di layar kecil" tabindex="0">
+      <svg viewBox="0 0 1180 600" role="img" aria-labelledby="flow-desc">
+        <desc id="flow-desc">Swimlane lima jalur: Front Office, Dokter, Kasir, Apoteker, dan Sistem. Front Office registrasi, panggil, lalu layani dengan foto. Dokter mengisi SOAP dan resep, lalu tindakan dan kirim ke kasir. Kasir membayar tagihan. Apoteker menyerahkan obat. Sistem membuat perawatan, mengurangi stok, mencatat jurnal, dan menutup antrian.</desc>
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+          </marker>
+        </defs>
+        <rect class="lane-a" x="0" y="0" width="1180" height="120"></rect>
+        <rect class="lane-b" x="0" y="120" width="1180" height="120"></rect>
+        <rect class="lane-a" x="0" y="240" width="1180" height="120"></rect>
+        <rect class="lane-b" x="0" y="360" width="1180" height="120"></rect>
+        <rect class="lane-a" x="0" y="480" width="1180" height="120"></rect>
+        <line class="lane-sep" x1="0" y1="120" x2="1180" y2="120"></line>
+        <line class="lane-sep" x1="0" y1="240" x2="1180" y2="240"></line>
+        <line class="lane-sep" x1="0" y1="360" x2="1180" y2="360"></line>
+        <line class="lane-sep" x1="0" y1="480" x2="1180" y2="480"></line>
+        <line class="lane-sep" x1="124" y1="0" x2="124" y2="600"></line>
+
+        <text class="lane-label" x="16" y="56">Front Office</text><text class="lane-sub" x="16" y="74">e2e_staff</text>
+        <text class="lane-label" x="16" y="176">Dokter</text><text class="lane-sub" x="16" y="194">e2e_doctor</text>
+        <text class="lane-label" x="16" y="296">Kasir</text><text class="lane-sub" x="16" y="314">e2e_staff</text>
+        <text class="lane-label" x="16" y="416">Apoteker</text><text class="lane-sub" x="16" y="434">e2e_apoteker</text>
+        <text class="lane-label" x="16" y="536">Sistem</text><text class="lane-sub" x="16" y="554">otomatis</text>
+
+        <!-- edges -->
+        <path class="edge" d="M290,60 H308" marker-end="url(#ah)"></path>
+        <path class="edge" d="M460,60 H478" marker-end="url(#ah)"></path>
+        <path class="edge" d="M630,60 H725 V146" marker-end="url(#ah)"></path>
+        <text class="elabel" x="640" y="50">ke /perawatan</text>
+        <path class="edge" d="M800,180 H818" marker-end="url(#ah)"></path>
+        <path class="edge" d="M970,180 H1065 V266" marker-end="url(#ah)"></path>
+        <text class="elabel" x="980" y="170">status: Ke Kasir</text>
+        <path class="edge" d="M1065,332 V386" marker-end="url(#ah)"></path>
+        <text class="elabel" x="1072" y="364">resep dibayar</text>
+        <path class="edge alt" d="M555,92 V506" marker-end="url(#ah)"></path>
+        <path class="edge alt" d="M990,300 H895 V506" marker-end="url(#ah)"></path>
+
+        <!-- FO -->
+        <g class="node" data-step="s1" tabindex="0" role="link" aria-label="Langkah 1 Registrasi kunjungan">
+          <rect x="140" y="28" width="150" height="64" rx="10"></rect>
+          <text class="num" x="152" y="48">1</text><text class="ttl" x="166" y="48">Registrasi</text>
+          <text class="ttl" x="152" y="66">kunjungan</text>
+          <text class="rt" x="152" y="83">/resepsionis/kunjungan</text>
+        </g>
+        <g class="node" data-step="s2" tabindex="0" role="link" aria-label="Langkah 2 Panggil pasien">
+          <rect x="310" y="28" width="150" height="64" rx="10"></rect>
+          <text class="num" x="322" y="48">2</text><text class="ttl" x="336" y="48">Panggil pasien</text>
+          <text class="rt" x="322" y="66">Menunggu → Dipanggil</text>
+          <text class="rt" x="322" y="83">atau Batal</text>
+        </g>
+        <g class="node" data-step="s3" tabindex="0" role="link" aria-label="Langkah 3 Layani dengan foto">
+          <rect x="480" y="28" width="150" height="64" rx="10"></rect>
+          <text class="num" x="492" y="48">3</text><text class="ttl" x="506" y="48">Layani + foto</text>
+          <text class="rt" x="492" y="66">Foto Sebelum</text>
+          <text class="rt" x="492" y="83">Perawatan (wajib)</text>
+        </g>
+        <!-- Dokter -->
+        <g class="node" data-step="s4" tabindex="0" role="link" aria-label="Langkah 4 SOAP dan resep">
+          <rect x="650" y="148" width="150" height="64" rx="10"></rect>
+          <text class="num" x="662" y="168">4</text><text class="ttl" x="676" y="168">SOAP & resep</text>
+          <text class="rt" x="662" y="186">/perawatan/detail</text>
+          <text class="rt" x="662" y="203">Input Resep Dokter</text>
+        </g>
+        <g class="node" data-step="s5" tabindex="0" role="link" aria-label="Langkah 5 Tindakan dan kirim ke kasir">
+          <rect x="820" y="148" width="150" height="64" rx="10"></rect>
+          <text class="num" x="832" y="168">5</text><text class="ttl" x="846" y="168">Tindakan &</text>
+          <text class="ttl" x="832" y="186">kirim ke kasir</text>
+          <text class="rt" x="832" y="203">Simpan EMR</text>
+        </g>
+        <!-- Kasir -->
+        <g class="node" data-step="s6" tabindex="0" role="link" aria-label="Langkah 6 Bayar tagihan">
+          <rect x="990" y="268" width="150" height="64" rx="10"></rect>
+          <text class="num" x="1002" y="288">6</text><text class="ttl" x="1016" y="288">Bayar tagihan</text>
+          <text class="rt" x="1002" y="306">/pembayaran/</text>
+          <text class="rt" x="1002" y="323">perawatan</text>
+        </g>
+        <!-- Apoteker -->
+        <g class="node" data-step="s7" tabindex="0" role="link" aria-label="Langkah 7 Serahkan obat">
+          <rect x="990" y="388" width="150" height="64" rx="10"></rect>
+          <text class="num" x="1002" y="408">7</text><text class="ttl" x="1016" y="408">Serahkan obat</text>
+          <text class="rt" x="1002" y="426">/depo/resep</text>
+          <text class="rt" x="1002" y="443">Siap Diserahkan</text>
+        </g>
+        <!-- Sistem -->
+        <g class="node sys" data-step="s3" tabindex="0" role="link" aria-label="Efek langkah 3: perawatan dibuat">
+          <rect x="480" y="508" width="150" height="64" rx="10"></rect>
+          <text class="ttl" x="492" y="530">Perawatan dibuat</text>
+          <text class="rt" x="492" y="548">status: proses</text>
+          <text class="rt" x="492" y="564">antrian: Diproses</text>
+        </g>
+        <g class="node sys" data-step="s8" tabindex="0" role="link" aria-label="Langkah 8 cek back office">
+          <rect x="820" y="508" width="190" height="64" rx="10"></rect>
+          <text class="num" x="832" y="530">8</text><text class="ttl" x="846" y="530">Stok −, jurnal, Selesai</text>
+          <text class="rt" x="832" y="548">Finance › Jurnal</text>
+          <text class="rt" x="832" y="564">Laporan FO</text>
+        </g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="sw"></i>Langkah yang dikerjakan user</span>
+      <span><i class="sw sys"></i>Efek otomatis yang perlu dicek</span>
+      <span>Garis putus-putus = perubahan data di latar belakang</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-state">
+    <h2 id="h-state">Status antrian</h2>
+    <p class="lead">Tombol yang muncul di baris antrian bergantung pada statusnya. Kalau tombol yang muncul tidak sesuai diagram ini, catat sebagai bug.</p>
+    <div class="frame state" role="region" aria-label="Diagram status antrian" tabindex="0">
+      <svg viewBox="0 0 900 210" role="img" aria-labelledby="state-desc">
+        <desc id="state-desc">Menunggu ke Dipanggil lewat tombol Panggil. Dipanggil ke Sedang Dilayani lewat Layani. Sedang Dilayani ke Ke Kasir saat dokter mengirim EMR, atau langsung Selesai. Ke Kasir ke Selesai setelah dibayar. Menunggu dan Dipanggil bisa ke Batal.</desc>
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+          </marker>
+        </defs>
+        <g class="st"><rect x="20" y="40" width="130" height="56" rx="28"></rect><text x="85" y="64" text-anchor="middle">Menunggu</text><text class="code" x="85" y="82" text-anchor="middle">menunggu</text></g>
+        <g class="st"><rect x="200" y="40" width="130" height="56" rx="28"></rect><text x="265" y="64" text-anchor="middle">Dipanggil</text><text class="code" x="265" y="82" text-anchor="middle">dipanggil</text></g>
+        <g class="st"><rect x="380" y="40" width="150" height="56" rx="28"></rect><text x="455" y="64" text-anchor="middle">Sedang Dilayani</text><text class="code" x="455" y="82" text-anchor="middle">diproses</text></g>
+        <g class="st"><rect x="580" y="40" width="130" height="56" rx="28"></rect><text x="645" y="64" text-anchor="middle">Ke Kasir</text><text class="code" x="645" y="82" text-anchor="middle">bayar</text></g>
+        <g class="st end"><rect x="760" y="40" width="120" height="56" rx="28"></rect><text x="820" y="64" text-anchor="middle">Selesai</text><text class="code" x="820" y="82" text-anchor="middle">selesai</text></g>
+        <g class="st bad"><rect x="110" y="150" width="130" height="50" rx="25"></rect><text x="175" y="172" text-anchor="middle">Batal</text><text class="code" x="175" y="189" text-anchor="middle">batal</text></g>
+
+        <path class="edge" d="M150,68 H198" marker-end="url(#ah2)"></path>
+        <text class="elabel" x="174" y="32" text-anchor="middle">Panggil</text>
+        <path class="edge" d="M330,68 H378" marker-end="url(#ah2)"></path>
+        <text class="elabel" x="354" y="32" text-anchor="middle">Layani</text>
+        <path class="edge" d="M530,68 H578" marker-end="url(#ah2)"></path>
+        <text class="elabel" x="554" y="32" text-anchor="middle">Kirim EMR</text>
+        <path class="edge" d="M710,68 H758" marker-end="url(#ah2)"></path>
+        <text class="elabel" x="734" y="32" text-anchor="middle">Dibayar</text>
+        <path class="edge alt" d="M455,96 V124 H820 V98" marker-end="url(#ah2)"></path>
+        <text class="elabel" x="640" y="140" text-anchor="middle">Selesai tanpa tagihan</text>
+        <path class="edge" d="M85,96 V175 H108" marker-end="url(#ah2)"></path>
+        <path class="edge" d="M265,96 V175 H242" marker-end="url(#ah2)"></path>
+        <text class="elabel" x="175" y="140" text-anchor="middle">Batal + konfirmasi</text>
+      </svg>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-check">
+    <div class="toolbar">
+      <h2 id="h-check">Checklist per langkah</h2>
+      <div class="progress" aria-live="polite"><span class="bar"><i id="bar"></i></span><span id="count">0 / 0 dicek</span></div>
+    </div>
+    <div class="toolbar">
+      <div class="filters" role="group" aria-label="Saring menurut role" id="filters"></div>
+      <div id="reset-zone"><button class="btn danger" id="reset" type="button">Kosongkan centang</button></div>
+    </div>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <section aria-labelledby="h-roles">
+    <h2 id="h-roles">Akses menu per role</h2>
+    <p class="lead">Login sebagai tiap role. Menu yang tidak dicentang harus tidak terlihat, dan membuka URL-nya langsung harus mengarahkan kembali ke dashboard.</p>
+    <div class="frame">
+      <table>
+        <thead><tr><th>Menu</th><th class="c">admin</th><th class="c">staff</th><th class="c">doctor</th><th class="c">nurse</th><th class="c">apoteker</th><th class="c">finance</th></tr></thead>
+        <tbody id="roles"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-notes">
+    <h2 id="h-notes">Catatan</h2>
+    <div class="notes">
+      <div class="note">
+        <h3>Sebelum mulai</h3>
+        <ul>
+          <li>Pakai staging, jangan prod.</li>
+          <li>Siapkan satu dokter (jabatan berisi "Dokter"), satu beautician, satu treatment, dan satu obat dengan stok minimal 5.</li>
+          <li>Catat stok awal obat itu, untuk dicek di langkah 6 dan 7.</li>
+          <li>Beri nama pasien uji yang mudah dicari, misalnya <span class="mono">Pasien QA 19Nov</span>.</li>
+        </ul>
+      </div>
+      <div class="note">
+        <h3>Belum dipetakan</h3>
+        <ul>
+          <li>Appointment (<span class="mono">/resepsionis/appointment</span>)</li>
+          <li>Pembatalan paket (<span class="mono">/pembayaran/pembatalan</span>)</li>
+          <li>Warehouse: produksi, konversi, kartu stok</li>
+          <li>Laporan finance: buku besar, neraca, laba rugi</li>
+        </ul>
+        <p class="lead">Halaman-halaman ini sudah dicek bisa dibuka tanpa error, tapi alur kerjanya belum dibuatkan checklist.</p>
+      </div>
+      <div class="note">
+        <h3>Kalau menemukan bug</h3>
+        <ul>
+          <li>Catat langkah, akun, dan nama pasien uji.</li>
+          <li>Ambil screenshot termasuk pesan toast.</li>
+          <li>Tulis apa yang diharapkan dan apa yang terjadi.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const STEPS = [
+  { id: 's0', num: 'L', role: 'Semua', akun: 'semua akun', route: '/login', title: 'Login & sesi',
+    do: ['Buka /login.', 'Login dengan akun tiap role.', 'Klik Keluar di sidebar.'],
+    check: [
+      ['fix', 'Username dan password kosong saat halaman dibuka (tidak terisi admin / admin123).'],
+      ['', 'Login berhasil masuk ke dashboard sesuai role.'],
+      ['neg', 'Password salah: tetap di /login dan muncul pesan error merah.'],
+      ['neg', 'Form kosong lalu klik Masuk: tidak ada proses login.'],
+      ['', 'Setelah logout, membuka /pembayaran/perawatan diarahkan ke /login.'],
+    ] },
+  { id: 's1', num: '1', role: 'Front Office', akun: 'e2e_staff', route: '/resepsionis/kunjungan', title: 'Registrasi kunjungan',
+    do: ['Klik Registrasi Kunjungan.', 'Pilih Pasien Baru, isi Nama dan No. Telepon (atau Pasien Terdaftar lalu cari pasien).', 'Pilih Dokter, isi Keluhan.', 'Hapus centang Cetak tiket bila tidak perlu, lalu klik Masukkan Antrian.'],
+    check: [
+      ['', 'Toast "Kunjungan berhasil didaftarkan ke antrian".'],
+      ['', 'Baris baru muncul dengan nomor ANT-… dan status Menunggu.'],
+      ['', 'Pasien baru ikut muncul di Administrasi › Pasien.'],
+      ['neg', 'Tanpa memilih dokter: tidak tersimpan, dialog tetap terbuka.'],
+      ['neg', 'Pasien Baru tanpa nama: tidak tersimpan.'],
+    ] },
+  { id: 's2', num: '2', role: 'Front Office', akun: 'e2e_staff', route: '/resepsionis/kunjungan', title: 'Panggil pasien',
+    do: ['Pada baris pasien, klik Panggil.'],
+    check: [
+      ['', 'Status berubah menjadi Dipanggil; tombol berganti menjadi Layani dan Batal.'],
+      ['neg', 'Klik Batal lalu tolak konfirmasi: status tetap.'],
+      ['neg', 'Klik Batal lalu "Ya, batalkan" (pakai pasien uji lain): status Batal dan tombol Panggil hilang.'],
+    ] },
+  { id: 's3', num: '3', role: 'Front Office', akun: 'e2e_staff', route: '/resepsionis/kunjungan', title: 'Layani dengan foto sebelum perawatan',
+    do: ['Klik Layani.', 'Di dialog Foto Sebelum Perawatan, pilih foto dari galeri atau ambil dengan kamera.', 'Klik Lanjut ke Perawatan.'],
+    check: [
+      ['', 'Tombol Lanjut ke Perawatan nonaktif sebelum ada foto.'],
+      ['fix', 'Foto berhasil terunggah dan halaman pindah ke /perawatan.'],
+      ['', 'Di Kunjungan, status pasien menjadi Sedang Dilayani.'],
+    ] },
+  { id: 's4', num: '4', role: 'Dokter', akun: 'e2e_doctor', route: '/perawatan → /perawatan/detail', title: 'Isi SOAP dan resep',
+    do: ['Di /perawatan, klik ikon Input SOAP & Treatment pada baris pasien.', 'Isi keluhan (anamnesis), diagnosa, dan rencana.', 'Klik Input Resep Dokter › Tambah Barang, pilih obat, atur qty, lalu Masukkan ke Resep.'],
+    check: [
+      ['', 'Form EMR terbuka untuk pasien yang benar.'],
+      ['', 'Obat masuk ke tabel resep dengan harga dan total = harga × qty.'],
+      ['', 'Tombol Masukkan ke Resep nonaktif sebelum ada obat dipilih.'],
+    ] },
+  { id: 's5', num: '5', role: 'Dokter', akun: 'e2e_doctor', route: '/perawatan/detail', title: 'Tindakan lalu kirim ke kasir',
+    do: ['Buka tab Tindakan Medis, klik Tambah Tindakan.', 'Pilih treatment dan beautician, atur qty dan diskon.', 'Buka tab Data Pasien, Foto & Consent.', 'Klik Simpan EMR & Kirim ke Kasir.'],
+    check: [
+      ['', 'Harga treatment terisi otomatis; total ikut berubah saat qty atau diskon diubah.'],
+      ['fix', 'Dokter pemeriksa sudah terisi otomatis dari antrian.'],
+      ['', 'Toast "EMR disimpan & antrian dikirim ke kasir!" lalu kembali ke /perawatan.'],
+      ['', 'Di Kunjungan, status pasien menjadi Ke Kasir.'],
+    ] },
+  { id: 's6', num: '6', role: 'Kasir', akun: 'e2e_staff', route: '/pembayaran/perawatan', title: 'Bayar tagihan',
+    do: ['Cari baris pasien, klik Bayar.', 'Pilih staff kasir dan jenis pembayaran Tunai.', 'Isi jumlah bayar lebih besar dari tagihan.', 'Klik Bayar & Selesai.'],
+    check: [
+      ['', 'Pasien muncul satu kali saja di daftar kasir.'],
+      ['', 'Total = tindakan + resep; Sisa Bayar sama dengan total.'],
+      ['', 'Jumlah bayar terisi otomatis sama dengan sisa tagihan.'],
+      ['', 'Kembalian = jumlah bayar − sisa tagihan.'],
+      ['', 'Transfer atau E-money mewajibkan pilih bank.'],
+      ['', 'Setelah bayar, baris pasien hilang dari daftar.'],
+      ['neg', 'Bayar kurang dari tagihan: toast "Jumlah bayar kurang dari sisa tagihan", tagihan tetap ada.'],
+      ['neg', 'Kode promo yang tidak ada: ditolak dan tombol Bayar & Selesai nonaktif.'],
+    ] },
+  { id: 's7', num: '7', role: 'Apoteker', akun: 'e2e_apoteker', route: '/depo/resep', title: 'Serahkan obat',
+    do: ['Buka tab Siap Diserahkan.', 'Klik Serahkan pada resep pasien.', 'Buka tab Sudah Diserahkan.'],
+    check: [
+      ['fix', 'Baris resep menampilkan nama pasien dan dokter (bukan "-").'],
+      ['', 'Stok obat sudah berkurang sesuai qty resep (Warehouse › Barang).'],
+      ['', 'Setelah Serahkan, resep pindah ke tab Sudah Diserahkan.'],
+    ] },
+  { id: 's8', num: '8', role: 'Back office', akun: 'admin / e2e_finance', route: '/finance/jurnal · /laporan/fo', title: 'Cek efek di back office',
+    do: ['Buka Finance › Jurnal.', 'Buka Laporan › FO untuk hari ini.', 'Kembali ke Kunjungan sebagai e2e_staff.'],
+    check: [
+      ['', 'Ada jurnal baru "Penjualan PJL-…" dengan debit = kredit = total tagihan.'],
+      ['', 'Laporan FO hari ini bertambah satu transaksi.'],
+      ['', 'Status antrian pasien menjadi Selesai.'],
+    ] },
+  { id: 'd1', num: 'A', role: 'Apoteker', akun: 'e2e_apoteker → e2e_staff', route: '/depo/penjualan-langsung → /pembayaran/produk', title: 'Alur samping: penjualan obat langsung',
+    do: ['Sebagai apoteker: pilih pasien, staff depo, dan obat, lalu isi qty.', 'Klik tombol kirim ke kasir.', 'Sebagai kasir: buka Pembayaran Produk, klik Bayar, pilih staff dan Tunai, lalu Bayar & Selesai.'],
+    check: [
+      ['', 'Harga terisi otomatis dari master barang.'],
+      ['', 'Toast "Penjualan berhasil diproses ke kasir pembayaran!".'],
+      ['', 'Di kasir, total = harga × qty dan jumlah bayar default sama dengan total.'],
+      ['', 'Toast "Pembayaran produk berhasil!" dan stok berkurang sesuai qty.'],
+    ] },
+]
+
+const ROLES = ['admin', 'staff', 'doctor', 'nurse', 'apoteker', 'finance']
+// Mirrors apps/web/src/shared/lib/access.ts (page access per role).
+const MENU = [
+  ['Resepsionis: kunjungan, appointment', 'admin staff'],
+  ['Perawatan', 'admin staff doctor nurse'],
+  ['Pembayaran / kasir', 'admin staff'],
+  ['Depo', 'admin apoteker'],
+  ['Warehouse', 'admin apoteker'],
+  ['Data transaksi: penjualan', 'admin staff apoteker'],
+  ['Data transaksi: pembelian', 'admin apoteker finance'],
+  ['Data transaksi: deposit', 'admin staff'],
+  ['Administrasi: pasien, membership', 'admin staff'],
+  ['Administrasi: supplier', 'admin apoteker'],
+  ['Administrasi lainnya (staff, user, treatment, …)', 'admin'],
+  ['Finance', 'admin finance'],
+  ['Laporan FO', 'admin staff finance'],
+  ['Laporan Apotek', 'admin apoteker finance'],
+  ['Laporan Nurse', 'admin nurse'],
+  ['Laporan DM', 'admin doctor'],
+]
+
+const KEY = 'clinic-qa-checks-v1'
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} } }
+const save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)) } catch {} }
+let state = load()
+let roleFilter = 'Semua'
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const TAG = { fix: '<span class="tag fix">Regresi</span>', neg: '<span class="tag neg">Negatif</span>' }
+
+function render() {
+  const el = document.getElementById('steps')
+  el.innerHTML = STEPS.filter((s) => roleFilter === 'Semua' || s.role === roleFilter || s.role === 'Semua').map((s) => `
+    <article class="step" id="${s.id}">
+      <div class="step-head">
+        <span class="step-num">${esc(s.num)}</span>
+        <h3>${esc(s.title)}</h3>
+        <div class="step-meta"><span>${esc(s.role)}</span><span class="mono">${esc(s.akun)}</span><span class="mono">${esc(s.route)}</span></div>
+      </div>
+      <div class="cols">
+        <div><span class="label">Langkah</span><ol class="do">${s.do.map((d) => `<li>${esc(d)}</li>`).join('')}</ol></div>
+        <div><span class="label">Yang dicek</span><ul class="check">${s.check.map(([t, c], i) => {
+          const k = `${s.id}-${i}`
+          return `<li><label for="c-${k}"><input type="checkbox" id="c-${k}" data-k="${k}" ${state[k] ? 'checked' : ''}><span>${t ? TAG[t] : ''}${esc(c)}</span></label></li>`
+        }).join('')}</ul></div>
+      </div>
+    </article>`).join('')
+  updateProgress()
+}
+
+function updateProgress() {
+  const total = STEPS.reduce((n, s) => n + s.check.length, 0)
+  const done = Object.values(state).filter(Boolean).length
+  document.getElementById('count').textContent = `${done} / ${total} dicek`
+  document.getElementById('bar').style.width = `${total ? (done / total) * 100 : 0}%`
+}
+
+document.getElementById('steps').addEventListener('change', (e) => {
+  const k = e.target.dataset && e.target.dataset.k
+  if (!k) return
+  if (e.target.checked) state[k] = true; else delete state[k]
+  save(state); updateProgress()
+})
+
+const roleNames = ['Semua', ...new Set(STEPS.map((s) => s.role).filter((r) => r !== 'Semua'))]
+const filters = document.getElementById('filters')
+filters.innerHTML = roleNames.map((r) => `<button type="button" aria-pressed="${r === roleFilter}" data-r="${esc(r)}">${esc(r)}</button>`).join('')
+filters.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  roleFilter = b.dataset.r
+  filters.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+  render()
+})
+
+const zone = document.getElementById('reset-zone')
+function resetButton() {
+  zone.innerHTML = '<button class="btn danger" id="reset" type="button">Kosongkan centang</button>'
+  document.getElementById('reset').addEventListener('click', () => {
+    zone.innerHTML = '<span class="confirm">Hapus semua centang? <button class="btn danger" type="button" id="yes">Ya, kosongkan</button><button class="btn" type="button" id="no">Batal</button></span>'
+    document.getElementById('yes').addEventListener('click', () => { state = {}; save(state); render(); resetButton() })
+    document.getElementById('no').addEventListener('click', resetButton)
+  })
+}
+resetButton()
+
+function jump(id) {
+  if (roleFilter !== 'Semua') { roleFilter = 'Semua'; filters.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.r === 'Semua'))); render() }
+  const t = document.getElementById(id); if (!t) return
+  t.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+  t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1600)
+}
+document.querySelectorAll('svg .node').forEach((n) => {
+  n.addEventListener('click', () => jump(n.dataset.step))
+  n.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(n.dataset.step) } })
+})
+
+document.getElementById('roles').innerHTML = MENU.map(([name, who]) => {
+  const set = new Set(who.split(' '))
+  return `<tr><td>${esc(name)}</td>${ROLES.map((r) => set.has(r) ? '<td class="y" aria-label="boleh">✓</td>' : '<td class="n" aria-label="tidak">·</td>').join('')}</tr>`
+}).join('')
+
+render()
+</script>

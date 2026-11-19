@@ -26,7 +26,6 @@ export function RiwayatPage() {
   return (
     <ResourceListPage<Row>
       title="Riwayat Perawatan"
-      description="Riwayat perawatan pasien"
       endpoint="/perawatan"
       queryKey="perawatan-riwayat"
       columns={columns}

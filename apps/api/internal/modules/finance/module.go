@@ -201,6 +201,15 @@ func (h *Handler) Neraca(c *gin.Context) {
 	response.OK(c, res, "ok")
 }
 
+func (h *Handler) Highlights(c *gin.Context) {
+	res, err := h.svc.Highlights(c.Query("dari"), c.Query("sampai"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	response.OK(c, res, "ok")
+}
+
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	h := NewHandler(NewService(db, gen))
 	g := rg.Group("/finance")
@@ -223,5 +232,6 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.GET("/laporan/neraca-saldo", h.NeracaSaldo)
 		g.GET("/laporan/laba-rugi", h.LabaRugi)
 		g.GET("/laporan/neraca", h.Neraca)
+		g.GET("/laporan/highlights", h.Highlights)
 	}
 }

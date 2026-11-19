@@ -1,24 +1,15 @@
 import { toast as pushToast } from '@/shared/components/Toaster'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ArrowRight,
-  Gift,
-  HandCoins,
-  Info,
-  Printer,
-  Search,
-  Send,
-  Stethoscope,
-  Users,
-  Wrench,
-} from 'lucide-react'
-import { Link } from '@tanstack/react-router'
+import { Gift, HandCoins, Search, Users, Wrench } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { apiGet } from '@/shared/api/client'
+import { EmptyState } from '@/shared/components/EmptyState'
+import { KpiCard } from '@/shared/components/KpiCard'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { Button } from '@/shared/ui/button'
+import { Tabs } from '@/shared/ui/tabs'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
-import { cn } from '@/shared/lib/cn'
 import { PaymentModal, type PaymentTarget } from '@/features/pembayaran/components/PaymentModal'
 
 type TindakanRow = {
@@ -114,102 +105,47 @@ export function PembayaranPerawatanPage() {
     })
   }
 
-  const infoText =
-    activeTab === 'reguler'
-      ? 'Pasien dari Perawatan (Treatment Reguler atau EMR Kirim ke Kasir) akan muncul di sini. Setelah bayar, status menjadi selesai dan tercatat di penjualan.'
-      : 'Tagihan pembelian paket treatment (multi-sesi). Setelah dibayar, paket aktif tercatat dan bisa dibatalkan di menu Batal Paket jika ada sisa sesi.'
-
   return (
     <div className="space-y-6">
-
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Kasir — Pembayaran Perawatan</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Terima pembayaran treatment pasien setelah proses dari modul Perawatan.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-        <div className="text-xs text-blue-900">
-          <p className="font-bold">Alur: Perawatan → Kasir → Lunas</p>
-          <p className="mt-1 text-blue-800">{infoText}</p>
-          <Link
-            to="/perawatan"
-            className="mt-2 inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
-          >
-            Buka modul Perawatan <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </div>
+      <PageHeader title="Pembayaran Perawatan" description="Tagihan treatment pasien" />
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Antrian Ke Kasir</p>
-            <h3 className="mt-1 text-xl font-extrabold text-rose-600">{stats.count} Pasien</h3>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-            <Users className="h-6 w-6" />
-          </div>
-        </div>
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Total Tagihan Pending</p>
-            <h3 className="mt-1 text-xl font-extrabold text-slate-900">{formatCurrency(stats.totalPending)}</h3>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-            <HandCoins className="h-6 w-6" />
-          </div>
-        </div>
+        <KpiCard
+          label="Antrian Kasir"
+          value={stats.count}
+          icon={<Users className="h-5 w-5" />}
+          iconClass="bg-rose-50 text-rose-600"
+        />
+        <KpiCard
+          label="Total Pending"
+          value={formatCurrency(stats.totalPending)}
+          icon={<HandCoins className="h-5 w-5" />}
+          iconClass="bg-indigo-50 text-indigo-600"
+        />
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setActiveTab('reguler')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
-            activeTab === 'reguler'
-              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100',
-          )}
-        >
-          <Wrench className="h-4 w-4" />
-          Perawatan Reguler
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('paket')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-extrabold transition-all',
-            activeTab === 'paket'
-              ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-600/20'
-              : 'text-slate-600 hover:bg-slate-100',
-          )}
-        >
-          <Gift className="h-4 w-4" />
-          Perawatan Paket
-        </button>
-      </div>
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        fullWidth
+        items={[
+          { value: 'reguler', label: 'Reguler', icon: <Wrench /> },
+          { value: 'paket', label: 'Paket', icon: <Gift /> },
+        ]}
+      />
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Stethoscope className="h-4 w-4 text-rose-600" />
-            <h3 className="text-sm font-extrabold text-slate-900">
-              {activeTab === 'reguler' ? 'Queue Reguler' : 'Queue Paket'}
-            </h3>
-          </div>
+          <h3 className="text-sm font-bold text-slate-900">
+            {activeTab === 'reguler' ? 'Antrian Reguler' : 'Antrian Paket'}
+          </h3>
           <div className="relative w-full sm:w-72">
             <Search className="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari pasien / kode..."
+              placeholder="Cari pasien / kode"
               className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pr-3 pl-9 text-xs font-medium focus:border-rose-500 focus:outline-none"
             />
           </div>
@@ -218,20 +154,12 @@ export function PembayaranPerawatanPage() {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-500">Memuat antrian kasir...</div>
         ) : isError ? (
-          <div className="p-12 text-center text-xs text-rose-600">Gagal memuat data. Pastikan API server berjalan.</div>
+          <div className="p-12 text-center text-xs text-rose-600">Gagal memuat data.</div>
         ) : rows.length === 0 ? (
-          <div className="space-y-3 p-12 text-center">
-            <p className="text-sm font-bold text-slate-700">Belum ada tagihan menunggu bayar</p>
-            <ol className="mx-auto max-w-md list-decimal space-y-1 text-left text-xs text-slate-500">
-              <li>Buka menu <strong>Perawatan</strong></li>
-              <li>
-                {activeTab === 'reguler'
-                  ? 'Tab Treatment Reguler → isi pasien & treatment → klik Proses Ke Kasir'
-                  : 'Tab Treatment Paket → pilih paket → klik Proses Ke Kasir'}
-              </li>
-              <li>Kembali ke halaman ini — pasien akan muncul di tabel</li>
-            </ol>
-          </div>
+          <EmptyState
+            title="Belum ada tagihan"
+            description="Kirim pasien ke kasir dari menu Perawatan."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="table-sticky-actions w-full text-left text-sm">
@@ -266,31 +194,8 @@ export function PembayaranPerawatanPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => openPay(row)}
-                          className="h-8 rounded-lg bg-rose-600 text-[11px] font-bold text-white hover:bg-rose-700"
-                        >
+                        <Button type="button" size="sm" onClick={() => openPay(row)}>
                           Bayar
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => showToast('Print invoice — segera hadir', 'success')}
-                          className="h-8 rounded-lg px-2"
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => showToast('Kirim invoice — segera hadir', 'success')}
-                          className="h-8 rounded-lg px-2"
-                        >
-                          <Send className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </td>

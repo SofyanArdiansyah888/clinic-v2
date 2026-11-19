@@ -2,7 +2,6 @@ import { Camera, ImagePlus, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Dialog } from '@/shared/components/Dialog'
 import { Button } from '@/shared/ui/button'
-import { cn } from '@/shared/lib/cn'
 
 export type PendingPhoto = {
   id: string
@@ -125,36 +124,29 @@ export function FotoSebelumDialog({
         if (!submitting) onClose()
       }}
       title="Foto Sebelum Perawatan"
-      description={
-        queueCode
-          ? `Ambil foto pasien sebelum masuk perawatan${patientName ? ` — ${patientName}` : ''} (${queueCode})`
-          : 'Ambil foto pasien sebelum masuk perawatan'
-      }
+      description={[queueCode, patientName].filter(Boolean).join(' · ') || undefined}
       className="max-w-2xl"
     >
       <div className="space-y-4">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-900">
-          Foto wajib diunggah sebelum pasien diarahkan ke modul perawatan. File disimpan via API upload
-          (local sekarang; MinIO dapat dihubungkan nanti tanpa ubah alur UI).
-        </div>
+        <p className="text-xs text-slate-500">Wajib minimal satu foto sebelum perawatan.</p>
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => void startCamera()} disabled={submitting}>
-            <Camera className="h-3.5 w-3.5" />
-            Buka Kamera
+          <Button type="button" variant="outline" onClick={() => void startCamera()} disabled={submitting}>
+            <Camera />
+            Kamera
           </Button>
           <Button
             type="button"
             variant="outline"
-            className="rounded-xl text-xs"
+           
             onClick={() => fileRef.current?.click()}
             disabled={submitting}
           >
-            <ImagePlus className="h-3.5 w-3.5" />
-            Pilih dari Galeri
+            <ImagePlus />
+            Galeri
           </Button>
           {cameraOn ? (
-            <Button type="button" variant="ghost" className="rounded-xl text-xs" onClick={stopCamera} disabled={submitting}>
+            <Button type="button" variant="ghost" onClick={stopCamera} disabled={submitting}>
               Tutup Kamera
             </Button>
           ) : null}
@@ -178,8 +170,8 @@ export function FotoSebelumDialog({
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
             <video ref={videoRef} className="aspect-video w-full object-cover" playsInline muted />
             <div className="flex justify-center bg-slate-900 p-3">
-              <Button type="button" className="rounded-xl text-xs" onClick={() => void captureFrame()} disabled={submitting}>
-                <Camera className="h-3.5 w-3.5" />
+              <Button type="button" onClick={() => void captureFrame()} disabled={submitting}>
+                <Camera />
                 Ambil Foto
               </Button>
             </div>
@@ -187,12 +179,11 @@ export function FotoSebelumDialog({
         ) : null}
 
         <div>
-          <p className="mb-2 text-xs font-bold text-slate-700">Preview ({photos.length})</p>
+          <p className="mb-2 text-xs font-bold text-slate-700">Foto ({photos.length})</p>
           {photos.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center">
-              <Upload className="mb-2 h-6 w-6 text-slate-400" />
+              <Upload className="mb-2 h-5 w-5 text-slate-400" />
               <p className="text-xs font-semibold text-slate-600">Belum ada foto</p>
-              <p className="mt-1 text-[11px] text-slate-400">Ambil dari kamera atau pilih file gambar.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -203,10 +194,9 @@ export function FotoSebelumDialog({
                     type="button"
                     disabled={submitting}
                     onClick={() => removePhoto(p.id)}
-                    className={cn(
-                      'absolute top-2 right-2 rounded-lg bg-slate-950/70 p-1.5 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100',
-                    )}
-                    title="Hapus"
+                    className="absolute top-2 right-2 rounded-lg bg-slate-950/70 p-1.5 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Hapus foto"
+                    aria-label="Hapus foto"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -217,16 +207,16 @@ export function FotoSebelumDialog({
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
-          <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={onClose} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
             Batal
           </Button>
           <Button
             type="button"
-            className="rounded-xl text-xs"
+           
             disabled={submitting || photos.length === 0}
             onClick={() => void handleConfirm()}
           >
-            {submitting ? 'Mengunggah & membuka perawatan...' : 'Lanjut ke Perawatan'}
+            {submitting ? 'Mengunggah...' : 'Lanjut ke Perawatan'}
           </Button>
         </div>
       </div>

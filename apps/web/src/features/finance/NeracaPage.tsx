@@ -20,7 +20,7 @@ export function NeracaPage() {
   return (
     <ReportShell<Neraca>
       title="Neraca"
-      description="Posisi aset, kewajiban, dan ekuitas per tanggal. Laba berjalan dihitung dari semua pendapatan dan beban sampai tanggal itu."
+      description="Aset, kewajiban, dan ekuitas per tanggal"
       endpoint="/finance/laporan/neraca"
       mode="per"
     >
@@ -33,7 +33,7 @@ export function NeracaPage() {
             </div>
           ) : (
             <div className="flex flex-wrap justify-between gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
-              <span>Neraca tidak seimbang. Periksa jurnal manual dan saldo awal.</span>
+              <span>Tidak seimbang. Periksa jurnal manual dan saldo awal.</span>
               <span>Selisih {formatCurrency(Math.abs(d.total_aset - d.total_pasiva))}</span>
             </div>
           )}

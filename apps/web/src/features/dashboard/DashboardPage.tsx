@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { AlertTriangle, CalendarClock, Coins, Plus, UserPlus, Users } from 'lucide-react'
+import { CalendarClock, ChevronRight, Coins, Plus, UserPlus, Users } from 'lucide-react'
 import { apiGet } from '@/shared/api/client'
+import { KpiCard } from '@/shared/components/KpiCard'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { StatusBadge } from '@/shared/components/StatusBadge'
 import { formatCurrency, formatNumber, todayISO } from '@/shared/lib/formatters'
 import type { DashboardKpi } from '@/shared/types/api'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { buttonVariants } from '@/shared/ui/button'
+import { Tabs } from '@/shared/ui/tabs'
+import { DashboardCharts, type TrenHari } from './DashboardCharts'
 
 type AntrianRow = {
   id: number
@@ -20,6 +24,7 @@ type AntrianRow = {
 const ACTIVE_STATUSES = ['menunggu', 'dipanggil', 'diproses', 'bayar']
 
 export function DashboardPage() {
+  const [hari, setHari] = useState<TrenHari>('7')
   const kpiQuery = useQuery({
     queryKey: ['dashboard-kpi'],
     queryFn: () => apiGet<DashboardKpi>('/dashboard/kpi'),
@@ -37,111 +42,81 @@ export function DashboardPage() {
     .filter((r) => ACTIVE_STATUSES.includes(r.status.toLowerCase()))
     .slice(0, 8)
 
-  const cards = [
-    {
-      title: 'Pendapatan Hari Ini',
-      value: kpi ? formatCurrency(kpi.revenue_today) : null,
-      hint: 'Revenue penjualan lunas',
-      icon: Coins,
-      iconClass: 'bg-rose-50 text-rose-700',
-    },
-    {
-      title: 'Kunjungan / Antrian',
-      value: kpi ? `${formatNumber(kpi.visits_today)} Orang` : null,
-      hint: `${formatNumber(kpi?.pending_queue ?? 0)} menunggu`,
-      icon: Users,
-      iconClass: 'bg-sky-50 text-sky-700',
-    },
-    {
-      title: 'Pasien Baru',
-      value: kpi ? formatNumber(kpi.new_patients_today) : null,
-      hint: 'Registrasi hari ini',
-      icon: UserPlus,
-      iconClass: 'bg-amber-50 text-amber-700',
-    },
-    {
-      title: 'Antrian Menunggu',
-      value: kpi ? formatNumber(kpi.pending_queue) : null,
-      hint: 'Perlu diproses',
-      icon: CalendarClock,
-      iconClass: 'bg-rose-50 text-rose-700',
-      danger: true,
-    },
-  ]
+  const pending = kpi?.pending_queue ?? 0
+  const show = (value: string) => (kpiQuery.isLoading || !kpi ? '-' : value)
+
+  const quickLinks = [
+    { to: '/pembayaran/perawatan', label: 'Kasir Pembayaran' },
+    { to: '/warehouse/barang', label: 'Stok Barang' },
+    { to: '/warehouse/stok-opname', label: 'Stok Opname' },
+  ] as const
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard Operasional Klinik"
-        description="Ringkasan antrian live, status rekam medis, dan alert stok hari ini."
+        title="Dashboard"
+        description="Ringkasan operasional hari ini"
         actions={
           <>
-            <Link
-              to="/administrasi/pasien"
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 px-4 text-xs font-semibold text-white shadow-lg shadow-rose-600/25 transition-all hover:from-rose-700 hover:to-rose-600"
-            >
-              <Plus className="h-4 w-4" />
-              Registrasi Pasien
-            </Link>
-            <Link
-              to="/resepsionis/kunjungan"
-              className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-all hover:bg-slate-50"
-            >
+            <Tabs<TrenHari>
+              value={hari}
+              onChange={setHari}
+              items={[
+                { value: '7', label: '7 Hari' },
+                { value: '30', label: '30 Hari' },
+              ]}
+            />
+            <Link to="/resepsionis/kunjungan" className={buttonVariants({ variant: 'outline' })}>
               Papan Antrian
+            </Link>
+            <Link to="/administrasi/pasien" className={buttonVariants()}>
+              <Plus />
+              Registrasi Pasien
             </Link>
           </>
         }
       />
 
       {kpiQuery.isError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
-          Gagal memuat KPI dashboard. Periksa koneksi API.
-        </div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">Gagal memuat KPI.</div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {cards.map((card) => {
-            const Icon = card.icon
-            return (
-              <div
-                key={card.title}
-                className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold tracking-wider sm:text-xs text-slate-500 uppercase">{card.title}</span>
-                  <span className={`rounded-md p-1.5 ${card.iconClass}`}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                  {kpiQuery.isLoading || !card.value ? (
-                    <Skeleton className="h-8 w-28" />
-                  ) : (
-                    <span
-                      className={`kpi-val text-xl sm:text-2xl font-bold tabular-nums ${card.danger && (kpi?.pending_queue ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900'}`}
-                    >
-                      {card.value}
-                    </span>
-                  )}
-                  <span className="text-[11px] font-medium text-slate-500">{card.hint}</span>
-                </div>
-              </div>
-            )
-          })}
+          <KpiCard
+            label="Pendapatan"
+            value={show(formatCurrency(kpi?.revenue_today ?? 0))}
+            icon={<Coins className="h-5 w-5" />}
+            iconClass="bg-rose-50 text-rose-700"
+          />
+          <KpiCard
+            label="Kunjungan"
+            value={show(formatNumber(kpi?.visits_today ?? 0))}
+            icon={<Users className="h-5 w-5" />}
+            iconClass="bg-sky-50 text-sky-700"
+          />
+          <KpiCard
+            label="Pasien Baru"
+            value={show(formatNumber(kpi?.new_patients_today ?? 0))}
+            icon={<UserPlus className="h-5 w-5" />}
+            iconClass="bg-amber-50 text-amber-700"
+          />
+          <KpiCard
+            label="Menunggu"
+            value={show(formatNumber(pending))}
+            valueClass={pending > 0 ? 'text-rose-600' : 'text-slate-900'}
+            icon={<CalendarClock className="h-5 w-5" />}
+            iconClass="bg-rose-50 text-rose-700"
+          />
         </div>
       )}
 
+      <DashboardCharts hari={hari} />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-          <div className="flex flex-col justify-between gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Daftar Antrian Live</h3>
-              <p className="text-xs text-slate-500">Pasien menunggu panggilan dan dalam ruang periksa.</p>
-            </div>
-            <Link
-              to="/resepsionis/kunjungan"
-              className="text-xs font-semibold text-rose-700 hover:underline"
-            >
-              Lihat semua →
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4">
+            <h3 className="text-sm font-bold text-slate-900">Antrian Aktif</h3>
+            <Link to="/resepsionis/kunjungan" className="text-xs font-semibold text-rose-700 hover:underline">
+              Lihat semua
             </Link>
           </div>
 
@@ -149,9 +124,9 @@ export function DashboardPage() {
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
-                  <th className="px-4 py-3">No. Antrian</th>
+                  <th className="px-4 py-3">No.</th>
                   <th className="px-4 py-3">Pasien</th>
-                  <th className="px-4 py-3">Staff</th>
+                  <th className="px-4 py-3">Dokter</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
                 </tr>
@@ -181,11 +156,8 @@ export function DashboardPage() {
                       <td className="px-4 py-3">
                         <StatusBadge status={row.status} />
                       </td>
-                      <td className="space-x-1 px-4 py-3 text-right">
-                        <Link
-                          to="/perawatan"
-                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
-                        >
+                      <td className="px-4 py-3 text-right">
+                        <Link to="/perawatan" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                           Buka
                         </Link>
                       </td>
@@ -197,40 +169,19 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-xs font-bold tracking-wider text-slate-900 uppercase">Akses Cepat</h4>
-            </div>
-            <div className="space-y-2 text-xs">
+        <div className="self-start rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-bold text-slate-900">Akses Cepat</h3>
+          <div className="space-y-2 text-xs">
+            {quickLinks.map((link) => (
               <Link
-                to="/pembayaran/perawatan"
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-2.5 hover:border-rose-300"
+                key={link.to}
+                to={link.to}
+                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-semibold text-slate-900 hover:border-rose-300"
               >
-                <span className="font-bold text-slate-900">Kasir Pembayaran</span>
-                <span className="text-rose-700">→</span>
+                {link.label}
+                <ChevronRight className="h-4 w-4 text-rose-700" />
               </Link>
-              <Link
-                to="/warehouse/barang"
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-2.5 hover:border-rose-300"
-              >
-                <span className="font-bold text-slate-900">Warehouse Stok</span>
-                <span className="text-rose-700">→</span>
-              </Link>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 border-l-4 border-l-rose-500 bg-white p-4 shadow-sm">
-            <h4 className="mb-2 flex items-center gap-2 text-xs font-bold tracking-wider text-slate-900 uppercase">
-              <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
-              Alert Operasional
-            </h4>
-            <p className="text-xs text-slate-600">
-              Pantau antrian menunggu dan stok kritis di warehouse setiap shift.
-            </p>
-            <Link to="/warehouse/stok-opname" className="mt-2 inline-block text-xs font-medium text-rose-700 hover:underline">
-              Cek Stok Opname →
-            </Link>
+            ))}
           </div>
         </div>
       </div>

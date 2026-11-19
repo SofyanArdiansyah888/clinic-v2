@@ -60,7 +60,7 @@ export function FoPage() {
   return (
     <ReportShell<FoLaporan>
       title="Laporan FO"
-      description="Kunjungan, pasien baru, dan pendapatan kasir (setelah diskon) per periode."
+      description="Kunjungan, pasien baru, dan pendapatan"
       endpoint="/laporan/fo"
     >
       {(d, periode) => (
@@ -71,22 +71,21 @@ export function FoPage() {
             <KpiCard label="Appointment" value={formatNumber(d.ringkasan.appointment)} />
             <KpiCard label="Transaksi Lunas" value={formatNumber(d.ringkasan.transaksi)} />
             <KpiCard label="Pendapatan Bruto" value={formatCurrency(d.ringkasan.pendapatan_bruto)} />
-            <KpiCard label="Diskon Promo & Voucher" value={formatCurrency(d.ringkasan.diskon)} valueClass="text-rose-600" />
+            <KpiCard label="Diskon" value={formatCurrency(d.ringkasan.diskon)} valueClass="text-rose-600" />
             <KpiCard
               label="Pendapatan Bersih"
               value={formatCurrency(d.ringkasan.pendapatan_bersih)}
               valueClass="text-emerald-700"
             />
             <KpiCard
-              label="Deposit Masuk / Dipakai"
+              label="Deposit Masuk / Pakai"
               value={`${formatCurrency(d.ringkasan.deposit_masuk)} / ${formatCurrency(d.ringkasan.deposit_dipakai)}`}
               valueClass="text-base text-slate-900"
             />
           </KpiGrid>
           <p className="text-xs text-slate-500">
-            Pendapatan bersih = bruto − diskon. Dari pendapatan itu, {formatNumber(d.ringkasan.poin_dipakai)} poin dan{' '}
-            {formatCurrency(d.ringkasan.deposit_dipakai)} deposit dipakai sebagai alat bayar; tabel per jenis pembayaran
-            menghitung nilai penuh tiap transaksi menurut jenis pembayaran utamanya.
+            Bersih = bruto − diskon. Dibayar pakai {formatNumber(d.ringkasan.poin_dipakai)} poin dan{' '}
+            {formatCurrency(d.ringkasan.deposit_dipakai)} deposit.
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             <ReportTable

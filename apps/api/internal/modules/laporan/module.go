@@ -337,5 +337,9 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		g.GET("/apotek", handle(svc.Apotek))
 		g.GET("/nurse", handle(svc.Nurse))
 		g.GET("/dm", handle(svc.Dm))
+
+		ch := &catatanHandler{db: db}
+		g.GET("/catatan", ch.List)
+		g.PUT("/catatan", ch.Save)
 	}
 }

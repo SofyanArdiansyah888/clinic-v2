@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Search, X } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/shared/lib/cn'
@@ -22,6 +22,9 @@ type SearchableSelectProps = {
   required?: boolean
   className?: string
   id?: string
+  /** Shows a "Tambah" action under the list; receives the current search text. */
+  onCreate?: (query: string) => void
+  createLabel?: string
 }
 
 type Coords = {
@@ -44,6 +47,8 @@ export function SearchableSelect({
   required,
   className,
   id,
+  onCreate,
+  createLabel = 'Tambah baru',
 }: SearchableSelectProps) {
   const autoId = useId()
   const inputId = id ?? autoId
@@ -146,6 +151,13 @@ export function SearchableSelect({
     }
   }, [open])
 
+  function create() {
+    const q = query.trim()
+    setOpen(false)
+    setQuery('')
+    onCreate?.(q)
+  }
+
   function pick(next: string) {
     onChange(next)
     setOpen(false)
@@ -160,6 +172,8 @@ export function SearchableSelect({
           tabIndex={-1}
           aria-hidden
           required
+          // Validation errors for this hidden input belong to the visible trigger.
+          data-field={inputId}
           value={value}
           onChange={() => undefined}
           className="pointer-events-none absolute h-0 w-0 opacity-0"
@@ -264,6 +278,21 @@ export function SearchableSelect({
                   })
                 )}
               </ul>
+              {onCreate ? (
+                <div className="border-t border-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={create}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {createLabel}
+                      {query.trim() ? ` "${query.trim()}"` : ''}
+                    </span>
+                  </button>
+                </div>
+              ) : null}
             </div>,
             document.body,
           )

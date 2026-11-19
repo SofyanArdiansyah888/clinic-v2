@@ -16,21 +16,21 @@ type Promo = {
 }
 
 const columns: Column<Promo>[] = [
-  { key: 'kode', header: 'Kode Promo', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
-  { key: 'nama', header: 'Nama Promo / Program', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
-  { key: 'tipe', header: 'Tipe Diskon', cell: (r) => (r.tipe_diskon === 'percent' ? 'Persentase (%)' : 'Nominal (Rp)') },
+  { key: 'kode', header: 'Kode', cell: (r) => <span className="font-mono font-bold text-rose-700">{r.kode}</span> },
+  { key: 'nama', header: 'Nama Promo', cell: (r) => <span className="font-bold text-slate-900">{r.nama}</span> },
+  { key: 'tipe', header: 'Tipe', cell: (r) => (r.tipe_diskon === 'percent' ? 'Persentase (%)' : 'Nominal (Rp)') },
   {
     key: 'nilai',
-    header: 'Nilai Potongan',
+    header: 'Nilai',
     cell: (r) =>
       r.tipe_diskon === 'percent' ? `${r.nilai_diskon}%` : formatCurrency(r.nilai_diskon),
   },
-  { key: 'status', header: 'Status Active', cell: (r) => <StatusBadge status={r.is_active} /> },
+  { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
 const formFields: FormField[] = [
-  { name: 'nama', label: 'Nama Promo Program', required: true },
-  { name: 'deskripsi', label: 'Deskripsi Promo / Syarat & Ketentuan', type: 'textarea' },
+  { name: 'nama', label: 'Nama Promo', required: true },
+  { name: 'deskripsi', label: 'Deskripsi', type: 'textarea' },
   {
     name: 'tipe_diskon',
     label: 'Tipe Diskon',
@@ -41,15 +41,15 @@ const formFields: FormField[] = [
     ],
   },
   { name: 'nilai_diskon', label: 'Nilai Diskon', type: 'number', required: true },
-  { name: 'tanggal_mulai', label: 'Tanggal Mulai Promo', type: 'date' },
-  { name: 'tanggal_selesai', label: 'Tanggal Selesai Promo', type: 'date' },
+  { name: 'tanggal_mulai', label: 'Tanggal Mulai', type: 'date' },
+  { name: 'tanggal_selesai', label: 'Tanggal Selesai', type: 'date' },
 ]
 
 export function PromoPage() {
   return (
     <ResourceListPage<Promo>
-      title="Promo Perawatan & Produk"
-      description="Pengaturan promo khusus, potongan harga berkala, dan diskon paket"
+      title="Promo"
+      description="Diskon perawatan dan produk"
       endpoint="/promo"
       queryKey="promo"
       columns={columns}

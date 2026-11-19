@@ -39,24 +39,21 @@ export function DmPage() {
   return (
     <ReportShell<DmLaporan>
       title="Laporan DM"
-      description="Laporan dokter / medis: perawatan per dokter, komisi, dan diagnosa terbanyak."
+      description="Perawatan, komisi, dan diagnosa dokter"
       endpoint="/laporan/dm"
     >
       {(d, periode) => (
         <>
           <KpiGrid>
             <KpiCard
-              label="Perawatan (dibayar)"
+              label="Perawatan (Lunas)"
               value={`${formatNumber(d.ringkasan.perawatan)} (${formatNumber(d.ringkasan.selesai)})`}
             />
             <KpiCard label="Pasien Unik" value={formatNumber(d.ringkasan.pasien)} />
             <KpiCard label="Nilai Tindakan" value={formatCurrency(d.ringkasan.nilai)} />
             <KpiCard label="Komisi Dokter" value={formatCurrency(d.ringkasan.komisi_dokter)} valueClass="text-emerald-700" />
           </KpiGrid>
-          <p className="text-xs text-slate-500">
-            Nilai dan komisi hanya dari perawatan yang sudah dibayar. Komisi = komisi dokter di master Treatment × jumlah
-            tindakan.
-          </p>
+          <p className="text-xs text-slate-500">Hanya perawatan lunas. Komisi = komisi dokter × jumlah tindakan.</p>
           <ReportTable
             title="Per Dokter"
             columns={dokterColumns}
@@ -67,7 +64,7 @@ export function DmPage() {
           />
           <ReportTable
             title="Diagnosa Terbanyak"
-            description="Dikelompokkan berdasarkan teks diagnosa (20 teratas)."
+            description="20 teratas"
             columns={diagnosaColumns}
             rows={d.diagnosa}
             rowKey={(r) => r.diagnosa}

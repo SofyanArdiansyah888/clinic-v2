@@ -22,7 +22,7 @@ export function NeracaSaldoPage() {
   return (
     <ReportShell<NeracaSaldo>
       title="Neraca Saldo"
-      description="Saldo setiap akun per tanggal. Total debit dan kredit harus sama."
+      description="Saldo setiap akun per tanggal"
       endpoint="/finance/laporan/neraca-saldo"
       mode="per"
     >

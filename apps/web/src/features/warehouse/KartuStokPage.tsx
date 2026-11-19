@@ -68,21 +68,21 @@ export function KartuStokPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
+    <div className="space-y-6">
+      <div className="grid gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
         <div className="space-y-1.5">
           <label htmlFor="kartustokpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Barang</label>
           <BarangSelect id="kartustokpage-f1" value={barangId} onChange={(v) => setBarangId(v)} placeholder="Semua barang" />
         </div>
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="ks-dari">
-            Dari tanggal
+            Dari
           </label>
           <input id="ks-dari" type="date" value={dari} onChange={(e) => setDari(e.target.value)} className={`w-full ${inputClass}`} />
         </div>
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="ks-sampai">
-            Sampai tanggal
+            Sampai
           </label>
           <input
             id="ks-sampai"
@@ -95,7 +95,6 @@ export function KartuStokPage() {
         <Button
           type="button"
           variant="outline"
-          className="gap-1.5"
           disabled={!barangId && !dari && !sampai}
           onClick={() => {
             setBarangId('')
@@ -103,14 +102,14 @@ export function KartuStokPage() {
             setSampai('')
           }}
         >
-          <X className="h-4 w-4" />
+          <X />
           Reset
         </Button>
       </div>
 
       <ResourceListPage<Row>
         title="Kartu Stok"
-        description="Riwayat keluar-masuk stok per barang: pembelian, penjualan, resep, konversi, produksi, dan stok opname."
+        description="Riwayat keluar-masuk stok per barang"
         endpoint="/kartu-stok"
         queryKey="kartu-stok"
         columns={columns}

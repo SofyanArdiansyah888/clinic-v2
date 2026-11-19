@@ -11,7 +11,9 @@ import { Pagination } from '@/shared/components/Pagination'
 import { toast } from '@/shared/components/Toaster'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Field, FormAlert } from '@/shared/ui/field'
 import { Input } from '@/shared/ui/input'
+import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { TableSkeleton } from '@/shared/ui/skeleton'
 import { cn } from '@/shared/lib/cn'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
@@ -72,20 +74,20 @@ export function JurnalPage() {
   })
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {confirmDialog}
       <PageHeader
         title="Jurnal Umum"
-        description="Semua jurnal otomatis dari transaksi dan jurnal manual. Koreksi dilakukan dengan jurnal pembalik, bukan menghapus."
+        description="Koreksi lewat jurnal pembalik, bukan hapus"
         actions={
-          <Button onClick={() => setOpen(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
+          <Button onClick={() => setOpen(true)}>
+            <Plus />
             Jurnal Manual
           </Button>
         }
       />
 
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
         <div className="space-y-1.5">
           <label className={fieldLabel} htmlFor="j-dari">Dari</label>
           <input id="j-dari" type="date" value={dari} max={sampai} onChange={(e) => { setDari(e.target.value); setPage(1) }} className={inputClass} />
@@ -110,7 +112,7 @@ export function JurnalPage() {
             aria-label="Cari jurnal"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Cari kode, referensi, keterangan..."
+            placeholder="Cari jurnal..."
             className="pl-9"
           />
         </div>
@@ -122,7 +124,7 @@ export function JurnalPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             title="Tidak ada jurnal"
-            description={`Tidak ada jurnal pada ${formatDate(dari)} – ${formatDate(sampai)}${sourceType || search ? ' dengan filter ini' : ''}. Coba perluas periode atau ubah filter.`}
+            description="Coba ubah periode atau filter."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -189,18 +191,17 @@ export function JurnalPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="gap-1"
                               onClick={async (e) => {
                                 e.stopPropagation()
                                 const ok = await confirm({
                                   title: `Balik jurnal ${j.kode}?`,
-                                  description: `Sistem membuat jurnal pembalik bertanggal hari ini (${formatDate(todayISO())}) dengan debit dan kredit ditukar. Jurnal asli tetap tersimpan.`,
-                                  confirmLabel: 'Ya, buat pembalik',
+                                  description: `Jurnal pembalik dibuat per ${formatDate(todayISO())}; jurnal asli tetap ada.`,
+                                  confirmLabel: 'Ya, balik',
                                 })
                                 if (ok) reverseMutation.mutate(j.id)
                               }}
                             >
-                              <RotateCcw className="h-3.5 w-3.5" />
+                              <RotateCcw />
                               Balik
                             </Button>
                           ) : null}
@@ -273,6 +274,15 @@ function JurnalManualDialog({ open, onClose, onSaved }: { open: boolean; onClose
   const [referensi, setReferensi] = useState('')
   const [lines, setLines] = useState<Line[]>(() => [emptyLine(), emptyLine()])
   const [error, setError] = useState<string | null>(null)
+  const validation = useFormValidation()
+
+  useEffect(() => {
+    if (open) {
+      setError(null)
+      validation.reset()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const totalD = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0)
   const totalK = lines.reduce((s, l) => s + (Number(l.kredit) || 0), 0)
@@ -302,99 +312,109 @@ function JurnalManualDialog({ open, onClose, onSaved }: { open: boolean; onClose
 
   function submit(e: FormEvent) {
     e.preventDefault()
+    if (!balanced) {
+      setError(totalD > 0 ? 'Total debit dan kredit harus sama' : 'Isi minimal satu baris debit dan satu baris kredit')
+      return
+    }
     setError(null)
     mutation.mutate()
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Jurnal Manual" description="Untuk beban operasional, saldo awal, atau koreksi." className="max-w-3xl">
-      <form onSubmit={submit} className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-[160px_1fr_160px]">
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="jm-tgl">Tanggal</label>
-            <Input id="jm-tgl" type="date" required value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+    <Dialog open={open} onClose={onClose} title="Jurnal Manual" description="Beban, saldo awal, atau koreksi" className="max-w-3xl">
+      <FieldErrorsContext.Provider value={validation.errors}>
+        <form {...validation.formProps} onSubmit={submit} className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-[160px_1fr_160px]">
+            <Field label="Tanggal" htmlFor="jm-tgl" required>
+              <Input id="jm-tgl" type="date" required value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+            </Field>
+            <Field label="Keterangan" htmlFor="jm-ket" required>
+              <Input id="jm-ket" required value={keterangan} onChange={(e) => setKeterangan(e.target.value)} placeholder="Bayar listrik" />
+            </Field>
+            <Field label="Referensi" htmlFor="jm-ref">
+              <Input id="jm-ref" value={referensi} onChange={(e) => setReferensi(e.target.value)} placeholder="No. bukti" />
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="jm-ket">Keterangan</label>
-            <Input id="jm-ket" required value={keterangan} onChange={(e) => setKeterangan(e.target.value)} placeholder="Contoh: Bayar listrik November" />
-          </div>
-          <div className="space-y-1.5">
-            <label className={fieldLabel} htmlFor="jm-ref">Referensi</label>
-            <Input id="jm-ref" value={referensi} onChange={(e) => setReferensi(e.target.value)} placeholder="No. bukti" />
-          </div>
-        </div>
 
-        <div className="space-y-2">
-          <div className="hidden grid-cols-[1.6fr_1fr_1fr_1fr_32px] gap-2 text-[11px] font-bold tracking-wider text-slate-500 uppercase sm:grid">
-            <span>Akun</span>
-            <span>Keterangan</span>
-            <span className="text-right">Debit</span>
-            <span className="text-right">Kredit</span>
-            <span />
-          </div>
-          {lines.map((l, i) => (
-            <div key={i} className="grid gap-2 rounded-xl border border-slate-100 p-2 sm:grid-cols-[1.6fr_1fr_1fr_1fr_32px] sm:border-0 sm:p-0">
-              <p className="text-[11px] font-bold text-slate-500 sm:hidden">Baris {i + 1}</p>
-              <AkunSelect value={l.akun_id} onChange={(v) => update(i, { akun_id: v })} />
-              <Input aria-label={`Keterangan baris ${i + 1}`} value={l.keterangan} onChange={(e) => update(i, { keterangan: e.target.value })} placeholder="Keterangan (opsional)" />
-              <LineAmount label="Debit">
-              <Input
-                aria-label={`Debit baris ${i + 1}`}
-                type="number"
-                min={0}
-                step="0.01"
-                className="text-right"
-                value={l.debit}
-                onChange={(e) => update(i, { debit: e.target.value, kredit: e.target.value ? '' : l.kredit })}
-                placeholder="0"
-              />
-              </LineAmount>
-              <LineAmount label="Kredit">
-              <Input
-                aria-label={`Kredit baris ${i + 1}`}
-                type="number"
-                min={0}
-                step="0.01"
-                className="text-right"
-                value={l.kredit}
-                onChange={(e) => update(i, { kredit: e.target.value, debit: e.target.value ? '' : l.debit })}
-                placeholder="0"
-              />
-              </LineAmount>
-              <button
-                type="button"
-                disabled={lines.length <= 2}
-                onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
-                className="flex h-10 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
-                title="Hapus baris"
-                aria-label={`Hapus baris ${i + 1}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+          <div className="space-y-2">
+            <div className="hidden grid-cols-[1.6fr_1fr_1fr_1fr_40px] gap-2 text-[11px] font-bold tracking-wider text-slate-500 uppercase sm:grid">
+              <span>Akun</span>
+              <span>Keterangan</span>
+              <span className="text-right">Debit</span>
+              <span className="text-right">Kredit</span>
+              <span />
             </div>
-          ))}
-          <Button variant="outline" size="sm" onClick={() => setLines((ls) => [...ls, emptyLine()])} className="gap-1">
-            <Plus className="h-3.5 w-3.5" />
-            Tambah Baris
-          </Button>
-        </div>
+            {lines.map((l, i) => (
+              <div key={i} className="grid gap-2 rounded-xl border border-slate-100 p-2 sm:grid-cols-[1.6fr_1fr_1fr_1fr_40px] sm:border-0 sm:p-0">
+                <p className="text-[11px] font-bold text-slate-500 sm:hidden">Baris {i + 1}</p>
+                {/* Blank rows are skipped on save; a row needs an akun once it has an amount, and vice versa. */}
+                <AkunSelect
+                  id={`jm-akun-${i}`}
+                  value={l.akun_id}
+                  onChange={(v) => update(i, { akun_id: v })}
+                  required={!!(l.debit || l.kredit)}
+                />
+                <Input id={`jm-ket-${i}`} aria-label={`Keterangan baris ${i + 1}`} value={l.keterangan} onChange={(e) => update(i, { keterangan: e.target.value })} placeholder="Opsional" />
+                <LineAmount label="Debit">
+                <Input
+                  id={`jm-debit-${i}`}
+                  aria-label={`Debit baris ${i + 1}`}
+                  type="number"
+                  required={!!l.akun_id && !l.kredit}
+                  min={0}
+                  step="0.01"
+                  className="text-right"
+                  value={l.debit}
+                  onChange={(e) => update(i, { debit: e.target.value, kredit: e.target.value ? '' : l.kredit })}
+                  placeholder="0"
+                />
+                </LineAmount>
+                <LineAmount label="Kredit">
+                <Input
+                  id={`jm-kredit-${i}`}
+                  aria-label={`Kredit baris ${i + 1}`}
+                  type="number"
+                  required={!!l.akun_id && !l.debit}
+                  min={0}
+                  step="0.01"
+                  className="text-right"
+                  value={l.kredit}
+                  onChange={(e) => update(i, { kredit: e.target.value, debit: e.target.value ? '' : l.debit })}
+                  placeholder="0"
+                />
+                </LineAmount>
+                <Button
+                  variant="ghost-danger"
+                  size="icon"
+                  disabled={lines.length <= 2}
+                  onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
+                  title="Hapus baris"
+                  aria-label={`Hapus baris ${i + 1}`}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={() => setLines((ls) => [...ls, emptyLine()])}>
+              <Plus />
+              Tambah Baris
+            </Button>
+          </div>
 
-        <div className={cn('flex flex-wrap items-center justify-between gap-2 rounded-xl p-3 text-xs font-semibold', balanced ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800')}>
-          <span>Total Debit {formatCurrency(totalD)} · Total Kredit {formatCurrency(totalK)}</span>
-          <span>{balanced ? 'Seimbang' : `Selisih ${formatCurrency(Math.abs(totalD - totalK))}`}</span>
-        </div>
-        {error ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</div> : null}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>Batal</Button>
-          <Button
-            type="submit"
-            disabled={!balanced || mutation.isPending}
-            title={balanced ? undefined : 'Total debit dan kredit harus sama dan lebih dari 0'}
-          >
-            Simpan Jurnal
-          </Button>
-        </div>
-      </form>
+          <div className={cn('flex flex-wrap items-center justify-between gap-2 rounded-xl p-3 text-xs font-semibold', balanced ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800')}>
+            <span>Total Debit {formatCurrency(totalD)} · Total Kredit {formatCurrency(totalK)}</span>
+            <span>{balanced ? 'Seimbang' : `Selisih ${formatCurrency(Math.abs(totalD - totalK))}`}</span>
+          </div>
+          <FormAlert>{error}</FormAlert>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>Batal</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              Simpan
+            </Button>
+          </div>
+        </form>
+      </FieldErrorsContext.Provider>
+
     </Dialog>
   )
 }

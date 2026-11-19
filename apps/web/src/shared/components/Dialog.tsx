@@ -12,16 +12,23 @@ type DialogProps = {
   className?: string
 }
 
+// Open dialogs, innermost last: Escape only closes the top one (a quick-create
+// dialog opened from a select inside another dialog).
+const openStack: symbol[] = []
+
 export function Dialog({ open, onClose, title, description, children, className }: DialogProps) {
   useEffect(() => {
     if (!open) return
+    const token = Symbol('dialog')
+    openStack.push(token)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && openStack[openStack.length - 1] === token) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => {
+      openStack.splice(openStack.indexOf(token), 1)
       document.body.style.overflow = prev
       window.removeEventListener('keydown', onKey)
     }
@@ -47,8 +54,8 @@ export function Dialog({ open, onClose, title, description, children, className 
       >
         <div className="flex items-center justify-between border-b border-slate-100 bg-rose-50/40 px-5 py-4">
           <div>
-            <h2 className="text-sm font-extrabold text-slate-900">{title}</h2>
-            {description ? <p className="text-xs text-slate-500">{description}</p> : null}
+            <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+            {description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}
           </div>
           <button
             type="button"

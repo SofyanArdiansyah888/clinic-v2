@@ -417,3 +417,49 @@ func TestAntreanKasirMenampilkanTotalTagihan(t *testing.T) {
 		t.Errorf("queue tindakan lacks treatment name: %+v", rows[0].Tindakans)
 	}
 }
+
+// Dashboard charts: revenue fields only reach the roles that may see Laporan FO.
+func TestDashboardTrenPerRole(t *testing.T) {
+	e := newEnv(t)
+	type tren struct {
+		Harian             []map[string]any  `json:"harian"`
+		TopTreatment       []map[string]any  `json:"top_treatment"`
+		StatusAppointment  []map[string]any  `json:"status_appointment"`
+		PerJenisPembayaran *[]map[string]any `json:"per_jenis_pembayaran"`
+	}
+	get := func(role string, hari int) tren {
+		t.Helper()
+		r := e.call(role, "GET", fmt.Sprintf("/dashboard/tren?hari=%d", hari), nil)
+		if r.Code != http.StatusOK {
+			t.Fatalf("%s tren: %d %s", role, r.Code, r.Message)
+		}
+		var out tren
+		if err := json.Unmarshal(r.Data, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	for _, hari := range []int{7, 30} {
+		if got := len(get("admin", hari).Harian); got != hari {
+			t.Errorf("admin tren hari=%d harian = %d rows, want one per day", hari, got)
+		}
+	}
+	admin := get("finance", 7)
+	if _, ok := admin.Harian[0]["pendapatan"]; !ok {
+		t.Errorf("finance tren harian missing pendapatan: %+v", admin.Harian[0])
+	}
+	nurse := get("nurse", 7)
+	if _, ok := nurse.Harian[0]["pendapatan"]; ok {
+		t.Errorf("nurse tren harian exposes pendapatan: %+v", nurse.Harian[0])
+	}
+	if nurse.PerJenisPembayaran != nil {
+		t.Errorf("nurse tren exposes per_jenis_pembayaran: %+v", *nurse.PerJenisPembayaran)
+	}
+	if nurse.TopTreatment == nil || nurse.StatusAppointment == nil {
+		t.Errorf("nurse tren lists must be arrays, got %+v / %+v", nurse.TopTreatment, nurse.StatusAppointment)
+	}
+	if r := e.call("admin", "GET", "/dashboard/tren?hari=99", nil); r.Code != http.StatusBadRequest {
+		t.Errorf("tren hari=99 = %d, want 400", r.Code)
+	}
+}
