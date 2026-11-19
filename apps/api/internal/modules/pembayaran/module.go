@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
+	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
@@ -217,6 +218,16 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 		if err := s.linkMembership(tx, req, item); err != nil {
 			return err
 		}
+		// Deposit usage is not money at the counter; top-ups and member fees are.
+		if item.Jenis != jenisPemakaianDeposit {
+			if err := kasir.Catat(tx, req.UserID, kasir.Mutasi{
+				SourceType: kasir.SourceDeposit, SourceID: item.ID, Referensi: item.Kwitansi,
+				JenisPembayaran: item.JenisPembayaran, BankID: item.BankID, Masuk: item.Jumlah,
+				Keterangan: "Deposit " + item.Jenis + " " + item.Kode,
+			}); err != nil {
+				return err
+			}
+		}
 		return s.jurnalDeposit(tx, item)
 	})
 	if err != nil {
@@ -368,6 +379,13 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 		if req.Refund == 0 {
 			return nil
 		}
+		if err := kasir.Catat(tx, req.UserID, kasir.Mutasi{
+			SourceType: kasir.SourcePaketRefund, SourceID: item.ID, Referensi: item.Kode,
+			JenisPembayaran: req.JenisPembayaran, BankID: req.BankID, Keluar: req.Refund,
+			Keterangan: "Refund batal paket " + item.Kode,
+		}); err != nil {
+			return err
+		}
 		_, err := finance.Post(tx, s.gen, finance.Entry{
 			Tanggal: tgl, SourceType: finance.SourcePaket, SourceID: item.ID, Referensi: item.Kode,
 			Keterangan: "Refund batal paket " + item.Kode,
@@ -510,6 +528,10 @@ func (h *Handler) Deposit(c *gin.Context) {
 	}
 	req.UserID = c.GetUint(middleware.ContextUserID)
 	item, err := h.svc.CreateDeposit(req)
+	if errors.Is(err, kasir.ErrBelumBuka) {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		response.BadRequest(c, "deposit failed", err.Error())
 		return

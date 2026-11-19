@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { api, apiData, loginAs, today, uniq, watchProblems, expectOwnStaff, ownStaffId } from './support'
+import { api, apiData, bukaShift, loginAs, today, uniq, watchProblems, expectOwnStaff, ownStaffId } from './support'
 
 async function pick(page: Page, id: string, label: string | RegExp) {
   await page.locator(`#${id}`).click()
@@ -17,6 +17,8 @@ test('kunjungan sampai pembayaran perawatan lewat UI kasir', async ({ page, cont
       w.__printed++
     }
   })
+  // The kasir takes money only on an open shift.
+  await bukaShift('staff')
   const admin = await api('admin')
   const id = uniq()
   const staffList = await apiData<{ id: number; nama: string }[]>(admin, 'get', '/staff?per_page=1')
@@ -93,6 +95,7 @@ test('kunjungan sampai pembayaran perawatan lewat UI kasir', async ({ page, cont
 })
 
 test('deposit pasien lewat UI tercatat di data transaksi', async ({ page }) => {
+  await bukaShift('staff')
   const fo = await api('staff')
   const id = uniq()
   const pasien = await apiData<{ id: number }>(fo, 'post', '/pasien', { nama: `Deposit E2E ${id}`, no_telp: '0813' + id.slice(-6) })

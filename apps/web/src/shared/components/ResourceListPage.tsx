@@ -38,6 +38,11 @@ type ResourceListPageProps<T extends { id: number | string }> = {
   onDeleteClick?: (row: T) => void
   extraActions?: ReactNode
   filterParams?: Record<string, string | number | undefined>
+  /** Rendered between the page header and the table, e.g. KPI cards and a filter bar. */
+  summary?: ReactNode
+  /** Called with the applied search text so a page can pass it to its summary. */
+  onSearchChange?: (search: string) => void
+  emptyDescription?: string
 }
 
 export function ResourceListPage<T extends { id: number | string }>({
@@ -60,6 +65,9 @@ export function ResourceListPage<T extends { id: number | string }>({
   onDeleteClick,
   extraActions,
   filterParams,
+  summary,
+  onSearchChange,
+  emptyDescription = 'Coba ubah kata kunci pencarian atau tambah data baru.',
 }: ResourceListPageProps<T>) {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
@@ -85,6 +93,15 @@ export function ResourceListPage<T extends { id: number | string }>({
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const filterKey = JSON.stringify(filterParams ?? {})
+
+  // A changed filter starts again from the first page.
+  useEffect(() => {
+    setPage(1)
+  }, [filterKey])
+
+  useEffect(() => {
+    onSearchChange?.(search)
+  }, [search, onSearchChange])
   const params = useMemo(
     () => ({
       page,
@@ -292,6 +309,8 @@ export function ResourceListPage<T extends { id: number | string }>({
         }
       />
 
+      {summary ? <div className="mt-6 space-y-4">{summary}</div> : null}
+
       <Card className="mt-6 overflow-hidden">
         <div className="border-b border-slate-200 bg-white p-3.5">
           <form onSubmit={onSubmitSearch} role="search">
@@ -320,7 +339,7 @@ export function ResourceListPage<T extends { id: number | string }>({
             loading={isLoading}
             rowKey={(row) => row.id}
             emptyTitle="Tidak ada data"
-            emptyDescription="Coba ubah kata kunci pencarian atau tambah data baru."
+            emptyDescription={emptyDescription}
           />
         )}
 

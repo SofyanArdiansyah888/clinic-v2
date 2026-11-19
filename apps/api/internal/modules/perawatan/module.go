@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -436,18 +437,90 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 	response.OK(c, item, "status updated")
 }
 
-func (s *Service) ListResep(p pagination.Params, status string) ([]PerawatanResep, pagination.Meta, error) {
-	q := s.repo.db.Model(&PerawatanResep{}).Preload("Pasien").Preload("Staff").Preload("Barangs")
-	if status != "" {
-		q = q.Where("status IN ?", strings.Split(status, ","))
+// ResepFilter narrows the resep list; Status is a comma-separated list of resep statuses.
+type ResepFilter struct {
+	Status  string
+	Periode filter.DateRange
+	StaffID uint // dokter
+	PasienID uint
+}
+
+func resepFilter(c *gin.Context) (ResepFilter, error) {
+	r, err := filter.DateRangeFromContext(c)
+	return ResepFilter{
+		Status: c.Query("status"), Periode: r,
+		StaffID: filter.UintQuery(c, "staff_id"), PasienID: filter.UintQuery(c, "pasien_id"),
+	}, err
+}
+
+// resepQuery applies every filter except status, which the summary breaks down instead.
+func (s *Service) resepQuery(f ResepFilter, search string) *gorm.DB {
+	q := f.Periode.Apply(s.repo.db.Model(&PerawatanResep{}), "tanggal")
+	if f.StaffID > 0 {
+		q = q.Where("staff_id = ?", f.StaffID)
 	}
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
+	if f.PasienID > 0 {
+		q = q.Where("pasien_id = ?", f.PasienID)
+	}
+	if search != "" {
+		like := "%" + search + "%"
 		q = q.Where("kode ILIKE ? OR pasien_id IN (SELECT id FROM pasiens WHERE nama ILIKE ? OR kode ILIKE ?)", like, like, like)
+	}
+	return q
+}
+
+func (s *Service) ListResep(p pagination.Params, f ResepFilter) ([]PerawatanResep, pagination.Meta, error) {
+	q := s.resepQuery(f, p.Search).Preload("Pasien").Preload("Staff").Preload("Barangs")
+	if f.Status != "" {
+		q = q.Where("status IN ?", strings.Split(f.Status, ","))
 	}
 	var items []PerawatanResep
 	meta, err := pagination.Paginate(q, p, &items)
-	return items, meta, err
+	if err != nil || len(items) == 0 {
+		return items, meta, err
+	}
+	ids := make([]uint, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.PerawatanID)
+	}
+	var pws []struct {
+		ID     uint
+		Kode   string
+		Status string
+	}
+	if err := s.repo.db.Table("perawatans").Select("id, kode, status").Where("id IN ?", ids).Scan(&pws).Error; err != nil {
+		return nil, meta, err
+	}
+	byID := make(map[uint]int, len(pws))
+	for i, pw := range pws {
+		byID[pw.ID] = i
+	}
+	for i := range items {
+		if j, ok := byID[items[i].PerawatanID]; ok {
+			items[i].PerawatanKode, items[i].PerawatanStatus = pws[j].Kode, pws[j].Status
+		}
+	}
+	return items, meta, nil
+}
+
+// ResepSummary counts reseps per status; MenungguKasir is the part of Draft whose
+// perawatan has been sent to the kasir (status "bayar") and can be paid now.
+type ResepSummary struct {
+	Draft         int64 `json:"draft"`
+	MenungguKasir int64 `json:"menunggu_kasir"`
+	Dibayar       int64 `json:"dibayar"`
+	Diserahkan    int64 `json:"diserahkan"`
+}
+
+func (s *Service) ResepSummary(f ResepFilter, search string) (ResepSummary, error) {
+	var out ResepSummary
+	err := s.resepQuery(f, search).Select(`
+		COUNT(*) FILTER (WHERE status = 'draft') AS draft,
+		COUNT(*) FILTER (WHERE status = 'draft' AND perawatan_id IN (SELECT id FROM perawatans WHERE status = 'bayar')) AS menunggu_kasir,
+		COUNT(*) FILTER (WHERE status = ?) AS dibayar,
+		COUNT(*) FILTER (WHERE status = ?) AS diserahkan`, ResepStatusDibayar, ResepStatusDiserahkan).
+		Scan(&out).Error
+	return out, err
 }
 
 func (s *Service) SerahkanResep(id uint) (*PerawatanResep, error) {
@@ -468,12 +541,31 @@ func (s *Service) SerahkanResep(id uint) (*PerawatanResep, error) {
 }
 
 func (h *Handler) IndexResep(c *gin.Context) {
-	items, meta, err := h.svc.ListResep(pagination.FromContext(c), c.Query("status"))
+	f, err := resepFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.ListResep(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
 	response.OKWithMeta(c, items, meta, "ok")
+}
+
+func (h *Handler) SummaryResep(c *gin.Context) {
+	f, err := resepFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	out, err := h.svc.ResepSummary(f, c.Query("search"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, out, "ok")
 }
 
 func (h *Handler) SerahkanResep(c *gin.Context) {
@@ -500,6 +592,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	r := rg.Group("/resep")
 	{
 		r.GET("", h.IndexResep)
+		r.GET("/summary", h.SummaryResep)
 		r.PATCH("/:id/serahkan", h.SerahkanResep)
 	}
 }

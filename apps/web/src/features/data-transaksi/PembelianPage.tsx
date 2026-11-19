@@ -1,9 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Wallet } from 'lucide-react'
+import { AlertCircle, HandCoins, Plus, ShoppingCart, Wallet } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
 import { BankSelect } from '@/shared/components/BankSelect'
 import { Dialog } from '@/shared/components/Dialog'
+import { KpiCard } from '@/shared/components/KpiCard'
+import { FilterBar, FilterField, FilterSelect, PeriodeFilter } from '@/shared/components/ListFilters'
+import { EMPTY_PERIODE, useListSummary, type Periode } from '@/shared/lib/listFilters'
+import { SupplierSelect } from '@/shared/components/SupplierSelect'
 import { JenisPembayaranSelect } from '@/shared/components/JenisPembayaranSelect'
 import { ResourceListPage } from '@/shared/components/ResourceListPage'
 import { StatusBadge } from '@/shared/components/StatusBadge'
@@ -13,7 +17,7 @@ import { Field, FormAlert } from '@/shared/ui/field'
 import { Input } from '@/shared/ui/input'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { cn } from '@/shared/lib/cn'
-import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
+import { formatCurrency, formatDate, formatNumber, todayISO } from '@/shared/lib/formatters'
 import { useAuthStore } from '@/features/auth/store'
 import { apiErrorMessage } from '@/features/finance/types'
 import { StokDokumenDialog } from '@/features/warehouse/components/StokDokumenDialog'
@@ -66,11 +70,39 @@ const columns: Column<Row>[] = [
   },
 ]
 
+type Summary = {
+  jumlah: number
+  nilai: number
+  dibayar: number
+  utang: number
+  belum_lunas: number
+}
+
+const BAYAR_OPTIONS = [
+  { value: '', label: 'Semua pembayaran' },
+  { value: 'utang', label: 'Belum lunas (semua)' },
+  { value: 'belum', label: 'Belum dibayar' },
+  { value: 'sebagian', label: 'Dibayar sebagian' },
+  { value: 'lunas', label: 'Lunas' },
+]
+
 export function PembelianPage() {
   const role = useAuthStore((s) => s.user?.role)
   const [open, setOpen] = useState(false)
   const [bayarTarget, setBayarTarget] = useState<Row | null>(null)
   const canCreate = role === 'admin' || role === 'apoteker'
+  const [periode, setPeriode] = useState<Periode>(EMPTY_PERIODE)
+  const [supplierId, setSupplierId] = useState('')
+  const [statusBayar, setStatusBayar] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filterParams = {
+    dari: periode.dari || undefined,
+    sampai: periode.sampai || undefined,
+    supplier_id: supplierId || undefined,
+    status_bayar: statusBayar || undefined,
+  }
+  const { data: s } = useListSummary<Summary>('/pembelian', 'pembelian', { ...filterParams, search })
 
   return (
     <>
@@ -83,6 +115,56 @@ export function PembelianPage() {
         enableCreate={false}
         enableEdit={false}
         enableDelete={role === 'admin'}
+        filterParams={filterParams}
+        onSearchChange={setSearch}
+        emptyDescription="Tidak ada pembelian pada periode / filter ini."
+        summary={
+          <>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <KpiCard
+                label="Total Transaksi"
+                value={formatNumber(s?.jumlah ?? 0)}
+                icon={<ShoppingCart className="h-5 w-5" />}
+                iconClass="bg-teal-50 text-teal-600"
+              />
+              <KpiCard
+                label="Nilai Pembelian"
+                value={formatCurrency(s?.nilai ?? 0)}
+                icon={<Wallet className="h-5 w-5" />}
+                iconClass="bg-indigo-50 text-indigo-600"
+              />
+              <KpiCard
+                label="Sudah Dibayar"
+                value={formatCurrency(s?.dibayar ?? 0)}
+                icon={<HandCoins className="h-5 w-5" />}
+                iconClass="bg-emerald-50 text-emerald-600"
+              />
+              <KpiCard
+                label={`Utang Belum Dibayar · ${formatNumber(s?.belum_lunas ?? 0)} faktur`}
+                value={formatCurrency(s?.utang ?? 0)}
+                icon={<AlertCircle className="h-5 w-5" />}
+                iconClass="bg-rose-50 text-rose-600"
+                valueClass={s?.utang ? 'text-rose-700' : undefined}
+              />
+            </div>
+            <FilterBar
+              canReset={Boolean(periode.dari || periode.sampai || supplierId || statusBayar)}
+              onReset={() => {
+                setPeriode(EMPTY_PERIODE)
+                setSupplierId('')
+                setStatusBayar('')
+              }}
+            >
+              <PeriodeFilter idPrefix="pembelian-periode" value={periode} onChange={setPeriode} />
+              <FilterField label="Supplier" htmlFor="pembelian-supplier" className="min-w-[220px]">
+                <SupplierSelect id="pembelian-supplier" value={supplierId} onChange={setSupplierId} placeholder="Semua supplier" />
+              </FilterField>
+              <FilterField label="Pembayaran" htmlFor="pembelian-bayar">
+                <FilterSelect id="pembelian-bayar" value={statusBayar} onChange={setStatusBayar} options={BAYAR_OPTIONS} />
+              </FilterField>
+            </FilterBar>
+          </>
+        }
         customRowActions={(r) =>
           r.status_bayar !== 'lunas' && sisa(r) > 0 ? (
             <Button variant="outline" size="sm" onClick={() => setBayarTarget(r)}>

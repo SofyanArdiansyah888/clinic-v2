@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, CreditCard, Loader2, Printer, Tag } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
@@ -12,6 +12,8 @@ import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
 import { openPrintTab } from '@/shared/lib/print'
+import { SHIFT_AKTIF_KEY, useShiftAktif } from '../kasir-shift'
+import { ShiftBelumDibukaAlert } from './ShiftBelumDibukaAlert'
 
 export type PaymentLineItem = {
   nama: string
@@ -86,6 +88,9 @@ export function PaymentModal({
   const [deposit, setDeposit] = useState('')
   const [paid, setPaid] = useState<PaidPenjualan | null>(null)
   const validation = useFormValidation()
+  const queryClient = useQueryClient()
+  // Money is only taken on an open cashier shift (the server refuses it otherwise).
+  const shiftAktif = useShiftAktif(open)
 
   useEffect(() => {
     if (target) {
@@ -159,6 +164,7 @@ export function PaymentModal({
     onSuccess: (res) => {
       // Stay open on a success panel so the kasir can print the receipt.
       setPaid(res.data ?? null)
+      void queryClient.invalidateQueries({ queryKey: SHIFT_AKTIF_KEY })
       onSuccess()
       if (!res.data) onClose()
     },
@@ -172,8 +178,10 @@ export function PaymentModal({
   const melebihi = potonganPoin + depositDipakai > total
   const poinKelebihan = !!tagihan && poinDipakai > tagihan.poin_tersedia
   const depositKelebihan = !!tagihan && depositDipakai > tagihan.saldo_deposit
+  // A bill settled fully by poin/deposit moves no money, so it needs no shift.
+  const shiftKurang = sisaBayar > 0 && shiftAktif.checked && !shiftAktif.isOpen
   const canPay =
-    !!tagihan && !tagihanError && !melebihi && !poinKelebihan && !depositKelebihan && !payMutation.isPending
+    !!tagihan && !tagihanError && !melebihi && !poinKelebihan && !depositKelebihan && !shiftKurang && !payMutation.isPending
 
   function applyKode() {
     setKode({ promo: promoInput.trim(), voucher: voucherInput.trim() })
@@ -362,6 +370,8 @@ export function PaymentModal({
               Lunas dengan poin/deposit.
             </p>
           )}
+
+          {shiftKurang ? <ShiftBelumDibukaAlert /> : null}
 
           <div className="flex gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">

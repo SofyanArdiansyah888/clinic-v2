@@ -53,6 +53,7 @@ const NAV: NavSection[] = [
         label: 'Kasir',
         icon: CreditCard,
         children: [
+          { label: 'Buka/Tutup Kasir', to: '/pembayaran/kasir' },
           { label: 'Perawatan', to: '/pembayaran/perawatan' },
           { label: 'Produk', to: '/pembayaran/produk' },
           { label: 'Deposit & Member', to: '/pembayaran/deposit' },
@@ -90,6 +91,7 @@ const NAV: NavSection[] = [
           { label: 'Penjualan', to: '/data-transaksi/penjualan' },
           { label: 'Pembelian', to: '/data-transaksi/pembelian' },
           { label: 'Deposit & Member', to: '/data-transaksi/deposit' },
+          { label: 'Shift Kasir', to: '/data-transaksi/shift' },
         ],
       },
     ],

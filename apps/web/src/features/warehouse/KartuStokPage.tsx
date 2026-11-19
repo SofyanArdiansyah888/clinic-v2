@@ -1,10 +1,12 @@
-import { X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, History, Scale } from 'lucide-react'
 import { useState } from 'react'
 import { BarangSelect } from '@/shared/components/BarangSelect'
+import { KpiCard } from '@/shared/components/KpiCard'
+import { FilterBar, FilterField, PeriodeFilter } from '@/shared/components/ListFilters'
+import { EMPTY_PERIODE, useListSummary, type Periode } from '@/shared/lib/listFilters'
 import { ResourceListPage } from '@/shared/components/ResourceListPage'
 import type { Column } from '@/shared/components/DataTable'
-import { Button } from '@/shared/ui/button'
-import { formatDate } from '@/shared/lib/formatters'
+import { formatDate, formatNumber } from '@/shared/lib/formatters'
 
 type Row = {
   id: number
@@ -53,71 +55,83 @@ const columns: Column<Row>[] = [
   },
 ]
 
-const inputClass =
-  'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none'
+type Summary = {
+  jumlah_mutasi: number
+  jumlah_barang: number
+  total_masuk: number
+  total_keluar: number
+}
 
 export function KartuStokPage() {
   const [barangId, setBarangId] = useState('')
-  const [dari, setDari] = useState('')
-  const [sampai, setSampai] = useState('')
+  const [periode, setPeriode] = useState<Periode>(EMPTY_PERIODE)
+  const [search, setSearch] = useState('')
 
   const filterParams = {
     barang_id: barangId || undefined,
-    dari: dari || undefined,
-    sampai: sampai || undefined,
+    dari: periode.dari || undefined,
+    sampai: periode.sampai || undefined,
   }
+  const { data: s } = useListSummary<Summary>('/kartu-stok', 'kartu-stok', { ...filterParams, search })
+  const net = (s?.total_masuk ?? 0) - (s?.total_keluar ?? 0)
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:grid-cols-[2fr_1fr_1fr_auto] md:items-end">
-        <div className="space-y-1.5">
-          <label htmlFor="kartustokpage-f1" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Barang</label>
-          <BarangSelect id="kartustokpage-f1" value={barangId} onChange={(v) => setBarangId(v)} placeholder="Semua barang" />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="ks-dari">
-            Dari
-          </label>
-          <input id="ks-dari" type="date" value={dari} onChange={(e) => setDari(e.target.value)} className={`w-full ${inputClass}`} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="ks-sampai">
-            Sampai
-          </label>
-          <input
-            id="ks-sampai"
-            type="date"
-            value={sampai}
-            onChange={(e) => setSampai(e.target.value)}
-            className={`w-full ${inputClass}`}
-          />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!barangId && !dari && !sampai}
-          onClick={() => {
-            setBarangId('')
-            setDari('')
-            setSampai('')
-          }}
-        >
-          <X />
-          Reset
-        </Button>
-      </div>
-
-      <ResourceListPage<Row>
-        title="Kartu Stok"
-        description="Riwayat keluar-masuk stok per barang"
-        endpoint="/kartu-stok"
-        queryKey="kartu-stok"
-        columns={columns}
-        enableCreate={false}
-        enableEdit={false}
-        enableDelete={false}
-        filterParams={filterParams}
-      />
-    </div>
+    <ResourceListPage<Row>
+      title="Kartu Stok"
+      description="Riwayat keluar-masuk stok per barang"
+      endpoint="/kartu-stok"
+      queryKey="kartu-stok"
+      columns={columns}
+      enableCreate={false}
+      enableEdit={false}
+      enableDelete={false}
+      filterParams={filterParams}
+      onSearchChange={setSearch}
+      emptyDescription="Tidak ada mutasi stok pada filter ini."
+      summary={
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <KpiCard
+              label="Jumlah Mutasi"
+              value={formatNumber(s?.jumlah_mutasi ?? 0)}
+              icon={<History className="h-5 w-5" />}
+              iconClass="bg-indigo-50 text-indigo-600"
+            />
+            <KpiCard
+              label="Total Masuk"
+              value={`+${formatNumber(s?.total_masuk ?? 0)}`}
+              icon={<ArrowDownToLine className="h-5 w-5" />}
+              iconClass="bg-emerald-50 text-emerald-600"
+              valueClass="text-emerald-700"
+            />
+            <KpiCard
+              label="Total Keluar"
+              value={`−${formatNumber(s?.total_keluar ?? 0)}`}
+              icon={<ArrowUpFromLine className="h-5 w-5" />}
+              iconClass="bg-rose-50 text-rose-600"
+              valueClass="text-rose-600"
+            />
+            <KpiCard
+              label={barangId ? 'Perubahan Bersih' : `Perubahan Bersih · ${formatNumber(s?.jumlah_barang ?? 0)} barang`}
+              value={`${net > 0 ? '+' : net < 0 ? '−' : ''}${formatNumber(Math.abs(net))}`}
+              icon={<Scale className="h-5 w-5" />}
+              iconClass="bg-slate-100 text-slate-600"
+            />
+          </div>
+          <FilterBar
+            canReset={Boolean(barangId || periode.dari || periode.sampai)}
+            onReset={() => {
+              setBarangId('')
+              setPeriode(EMPTY_PERIODE)
+            }}
+          >
+            <FilterField label="Barang" htmlFor="kartustokpage-f1" className="min-w-[240px] flex-[2]">
+              <BarangSelect id="kartustokpage-f1" value={barangId} onChange={(v) => setBarangId(v)} placeholder="Semua barang" />
+            </FilterField>
+            <PeriodeFilter idPrefix="ks" value={periode} onChange={setPeriode} />
+          </FilterBar>
+        </>
+      }
+    />
   )
 }

@@ -56,6 +56,9 @@ import { HighlightsPage } from '@/features/finance/HighlightsPage'
 import { MajalahPage } from '@/features/majalah/MajalahPage'
 import { NeracaPage } from '@/features/finance/NeracaPage'
 import { KwitansiPrintPage } from '@/features/pembayaran/KwitansiPrintPage'
+import { KasirShiftPage } from '@/features/pembayaran/KasirShiftPage'
+import { ShiftPrintPage } from '@/features/pembayaran/ShiftPrintPage'
+import { ShiftKasirPage } from '@/features/data-transaksi/ShiftKasirPage'
 import { ConsentPrintPage } from '@/features/perawatan/ConsentPrintPage'
 
 
@@ -124,6 +127,13 @@ const cetakConsentRoute = createRoute({
   component: ConsentPrintPage,
 })
 
+const cetakShiftRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/cetak/shift/$id',
+  beforeLoad: ({ location }) => requirePrintAccess(location.pathname),
+  component: ShiftPrintPage,
+})
+
 const dashboardRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
@@ -158,6 +168,12 @@ const perawatanRiwayatRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/perawatan/riwayat',
   component: RiwayatPage,
+})
+
+const kasirShiftRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/pembayaran/kasir',
+  component: KasirShiftPage,
 })
 
 const bayarPerawatanRoute = createRoute({
@@ -242,6 +258,12 @@ const depositRiwayatRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/data-transaksi/deposit',
   component: DepositPage,
+})
+
+const shiftRiwayatRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/data-transaksi/shift',
+  component: ShiftKasirPage,
 })
 
 const pengaturanUmumRoute = createRoute({
@@ -405,6 +427,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   cetakKwitansiRoute,
   cetakConsentRoute,
+  cetakShiftRoute,
   appRoute.addChildren([
     dashboardRoute,
     kunjunganRoute,
@@ -412,6 +435,7 @@ const routeTree = rootRoute.addChildren([
     perawatanRoute,
     perawatanDetailRoute,
     perawatanRiwayatRoute,
+    kasirShiftRoute,
     bayarPerawatanRoute,
     bayarProdukRoute,
     bayarDepositRoute,
@@ -426,6 +450,7 @@ const routeTree = rootRoute.addChildren([
     penjualanRoute,
     pembelianRoute,
     depositRiwayatRoute,
+    shiftRiwayatRoute,
     pengaturanUmumRoute,
     pasienRoute,
     staffRoute,

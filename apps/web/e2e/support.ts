@@ -24,6 +24,7 @@ export const ALL_PAGES = [
   '/resepsionis/appointment',
   '/perawatan',
   '/perawatan/riwayat',
+  '/pembayaran/kasir',
   '/pembayaran/perawatan',
   '/pembayaran/produk',
   '/pembayaran/deposit',
@@ -38,6 +39,7 @@ export const ALL_PAGES = [
   '/data-transaksi/penjualan',
   '/data-transaksi/pembelian',
   '/data-transaksi/deposit',
+  '/data-transaksi/shift',
   '/administrasi/pengaturan-umum',
   '/administrasi/pasien',
   '/administrasi/staff',
@@ -86,6 +88,24 @@ export async function apiData<T = any>(ctx: APIRequestContext, method: 'get' | '
   const body = await res.json().catch(() => ({}))
   expect(res.ok(), `${method.toUpperCase()} ${path}: ${res.status()} ${body?.message ?? ''}`).toBeTruthy()
   return body.data as T
+}
+
+type ShiftAktif = { shift: { id: number; kode: string }; expected_tunai: number } | undefined
+
+/** Opens a cashier shift for the role's account through the API; money is only taken on an open shift (no-op when one is open). */
+export async function bukaShift(role: Role = 'staff', saldoAwal = 0) {
+  const ctx = await api(role)
+  const aktif = await apiData<ShiftAktif>(ctx, 'get', '/kasir/shift/aktif')
+  if (!aktif) await apiData(ctx, 'post', '/kasir/shift/buka', { saldo_awal: saldoAwal, catatan: 'E2E' })
+  await ctx.dispose()
+}
+
+/** Closes the role's open cashier shift (counted cash = expected), so a test can start from a closed cashier. */
+export async function tutupShift(role: Role = 'staff') {
+  const ctx = await api(role)
+  const aktif = await apiData<ShiftAktif>(ctx, 'get', '/kasir/shift/aktif')
+  if (aktif) await apiData(ctx, 'post', `/kasir/shift/${aktif.shift.id}/tutup`, { saldo_akhir_fisik: aktif.expected_tunai, catatan: 'E2E reset' })
+  await ctx.dispose()
 }
 
 /** Skips the login form by putting the tokens where the app keeps them. */

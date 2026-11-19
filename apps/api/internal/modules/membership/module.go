@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
+	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
@@ -38,15 +39,78 @@ type Handler struct{ svc *Service }
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
-func (s *Service) List(p pagination.Params) ([]Membership, pagination.Meta, error) {
-	q := s.repo.db.Model(&Membership{}).Preload("Pasien")
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
-		q = q.Where("kode ILIKE ? OR tipe ILIKE ?", like, like)
+// ListFilters narrows the membership list; Periode filters by registration date.
+type ListFilters struct {
+	Tipe    string
+	Status  string // aktif | nonaktif
+	Periode filter.DateRange
+}
+
+func listFilters(c *gin.Context) (ListFilters, error) {
+	r, err := filter.DateRangeFromContext(c)
+	return ListFilters{Tipe: c.Query("tipe"), Status: c.Query("status"), Periode: r}, err
+}
+
+func applyFilters(q *gorm.DB, f ListFilters, search string) *gorm.DB {
+	if f.Tipe != "" {
+		// An empty tipe is shown as Silver, so it filters as Silver too.
+		q = q.Where("COALESCE(NULLIF(tipe, ''), 'Silver') ILIKE ?", f.Tipe)
 	}
+	switch f.Status {
+	case "aktif":
+		q = q.Where("is_active = ?", true)
+	case "nonaktif":
+		q = q.Where("is_active = ?", false)
+	}
+	q = f.Periode.Apply(q, "created_at::date")
+	if search != "" {
+		like := "%" + search + "%"
+		q = q.Where("kode ILIKE ? OR tipe ILIKE ? OR pasien_id IN (SELECT id FROM pasiens WHERE nama ILIKE ? OR kode ILIKE ?)", like, like, like, like)
+	}
+	return q
+}
+
+func (s *Service) List(p pagination.Params, f ListFilters) ([]Membership, pagination.Meta, error) {
+	q := applyFilters(s.repo.db.Model(&Membership{}).Preload("Pasien"), f, p.Search)
 	var items []Membership
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
+}
+
+// Summary is the overview shown above the membership list.
+type Summary struct {
+	Total      int64            `json:"total"`
+	Aktif      int64            `json:"aktif"`
+	TotalPoin  int64            `json:"total_poin"`
+	PerTipe    map[string]int64 `json:"per_tipe"`
+}
+
+func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
+	out := Summary{PerTipe: map[string]int64{}}
+	// Scan into the counts only; GORM cannot scan into the PerTipe map.
+	var counts struct {
+		Total     int64
+		Aktif     int64
+		TotalPoin int64
+	}
+	err := applyFilters(s.repo.db.Model(&Membership{}), f, search).
+		Select("COUNT(*) AS total, COUNT(*) FILTER (WHERE is_active) AS aktif, COALESCE(SUM(points), 0) AS total_poin").
+		Scan(&counts).Error
+	if err != nil {
+		return out, err
+	}
+	out.Total, out.Aktif, out.TotalPoin = counts.Total, counts.Aktif, counts.TotalPoin
+	var rows []struct {
+		Tipe  string
+		Jumlah int64
+	}
+	err = applyFilters(s.repo.db.Model(&Membership{}), f, search).
+		Select("COALESCE(NULLIF(tipe, ''), 'Silver') AS tipe, COUNT(*) AS jumlah").
+		Group("COALESCE(NULLIF(tipe, ''), 'Silver')").Scan(&rows).Error
+	for _, r := range rows {
+		out.PerTipe[r.Tipe] += r.Jumlah
+	}
+	return out, err
 }
 
 func (s *Service) Get(id uint) (*Membership, error) {
@@ -121,7 +185,12 @@ func (s *Service) UsePoints(id uint, points int) (*Membership, error) {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	f, err := listFilters(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.List(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -207,11 +276,26 @@ func (h *Handler) UsePoints(c *gin.Context) {
 	response.OK(c, item, "points used")
 }
 
+func (h *Handler) Summary(c *gin.Context) {
+	f, err := listFilters(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	out, err := h.svc.Summary(f, c.Query("search"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, out, "ok")
+}
+
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	h := NewHandler(NewService(NewRepository(db), gen))
 	g := rg.Group("/membership")
 	{
 		g.GET("", h.Index)
+		g.GET("/summary", h.Summary)
 		g.POST("", h.Store)
 		g.GET("/:id", h.Show)
 		g.PUT("/:id", h.Update)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
+	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
@@ -377,6 +378,15 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 			return err
 		}
 		penjualanID = pj.ID
+
+		// The money actually kept at the counter is the remaining bill; change goes back to the pasien.
+		if err := kasir.Catat(tx, req.UserID, kasir.Mutasi{
+			SourceType: kasir.SourcePenjualan, SourceID: pj.ID, Referensi: pj.NoInvoice,
+			JenisPembayaran: jenis, BankID: req.BankID, Masuk: t.SisaBayar,
+			Keterangan: "Pembayaran " + pj.Kode,
+		}); err != nil {
+			return err
+		}
 
 		if t.PoinDipakai > 0 {
 			if err := tx.Model(&membership.Membership{}).Where("id = ?", *t.MembershipID).

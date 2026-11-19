@@ -113,8 +113,8 @@ func ApplyStockMove(tx *gorm.DB, gen *generator.Service, barangID uint, qty int,
 
 // ── Konversi Stok ──
 
-func (s *Service) ListKonversi(p pagination.Params) ([]KonversiStok, pagination.Meta, error) {
-	q := s.repo.db.Model(&KonversiStok{}).Preload("Details.Barang")
+func (s *Service) ListKonversi(p pagination.Params, f DokumenFilter) ([]KonversiStok, pagination.Meta, error) {
+	q := f.apply(s.repo.db.Model(&KonversiStok{}).Preload("Details.Barang"), tblKonversi)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR keterangan ILIKE ?", like, like)
@@ -191,8 +191,8 @@ func (s *Service) DeleteKonversi(id uint) error {
 
 // ── Produksi Barang ──
 
-func (s *Service) ListProduksi(p pagination.Params) ([]ProduksiBarang, pagination.Meta, error) {
-	q := s.repo.db.Model(&ProduksiBarang{}).Preload("Details.Barang")
+func (s *Service) ListProduksi(p pagination.Params, f DokumenFilter) ([]ProduksiBarang, pagination.Meta, error) {
+	q := f.apply(s.repo.db.Model(&ProduksiBarang{}).Preload("Details.Barang"), tblProduksi)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR keterangan ILIKE ?", like, like)
@@ -269,8 +269,8 @@ func (s *Service) DeleteProduksi(id uint) error {
 
 // ── Stok Opname ──
 
-func (s *Service) ListOpname(p pagination.Params) ([]StokOpname, pagination.Meta, error) {
-	q := s.repo.db.Model(&StokOpname{}).Preload("Details.Barang")
+func (s *Service) ListOpname(p pagination.Params, f DokumenFilter) ([]StokOpname, pagination.Meta, error) {
+	q := f.apply(s.repo.db.Model(&StokOpname{}).Preload("Details.Barang"), tblOpname)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR keterangan ILIKE ?", like, like)
@@ -406,20 +406,7 @@ type KartuStokFilter struct {
 }
 
 func (s *Service) ListKartuStok(p pagination.Params, f KartuStokFilter) ([]KartuStok, pagination.Meta, error) {
-	q := s.repo.db.Model(&KartuStok{}).Preload("Barang")
-	if f.BarangID > 0 {
-		q = q.Where("barang_id = ?", f.BarangID)
-	}
-	if f.Dari != "" {
-		q = q.Where("tanggal >= ?", f.Dari)
-	}
-	if f.Sampai != "" {
-		q = q.Where("tanggal <= ?", f.Sampai)
-	}
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
-		q = q.Where("kode ILIKE ? OR keterangan ILIKE ? OR referensi ILIKE ?", like, like, like)
-	}
+	q := s.kartuStokQuery(f, p.Search).Preload("Barang")
 	var items []KartuStok
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
@@ -436,7 +423,12 @@ func (s *Service) GetKartuStok(id uint) (*KartuStok, error) {
 // ── Handlers ──
 
 func (h *Handler) IndexKonversi(c *gin.Context) {
-	items, meta, err := h.svc.ListKonversi(pagination.FromContext(c))
+	f, err := dokumenFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.ListKonversi(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -478,7 +470,12 @@ func (h *Handler) DestroyKonversi(c *gin.Context) {
 }
 
 func (h *Handler) IndexProduksi(c *gin.Context) {
-	items, meta, err := h.svc.ListProduksi(pagination.FromContext(c))
+	f, err := dokumenFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.ListProduksi(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -520,7 +517,12 @@ func (h *Handler) DestroyProduksi(c *gin.Context) {
 }
 
 func (h *Handler) IndexOpname(c *gin.Context) {
-	items, meta, err := h.svc.ListOpname(pagination.FromContext(c))
+	f, err := dokumenFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.ListOpname(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -589,6 +591,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	ks := rg.Group("/konversi-stok")
 	{
 		ks.GET("", h.IndexKonversi)
+		ks.GET("/summary", h.dokumenSummaryHandler(tblKonversi))
 		ks.POST("", h.StoreKonversi)
 		ks.GET("/:id", h.ShowKonversi)
 		ks.DELETE("/:id", h.DestroyKonversi)
@@ -596,6 +599,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	pb := rg.Group("/produksi-barang")
 	{
 		pb.GET("", h.IndexProduksi)
+		pb.GET("/summary", h.dokumenSummaryHandler(tblProduksi))
 		pb.POST("", h.StoreProduksi)
 		pb.GET("/:id", h.ShowProduksi)
 		pb.DELETE("/:id", h.DestroyProduksi)
@@ -603,6 +607,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	so := rg.Group("/stok-opname")
 	{
 		so.GET("", h.IndexOpname)
+		so.GET("/summary", h.dokumenSummaryHandler(tblOpname))
 		so.POST("", h.StoreOpname)
 		so.GET("/:id", h.ShowOpname)
 		so.DELETE("/:id", h.DestroyOpname)
@@ -610,6 +615,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	kst := rg.Group("/kartu-stok")
 	{
 		kst.GET("", h.IndexKartuStok)
+		kst.GET("/summary", h.SummaryKartuStok)
 		kst.GET("/:id", h.ShowKartuStok)
 	}
 }

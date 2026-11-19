@@ -12,6 +12,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
+	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -64,15 +65,71 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
-func (s *Service) List(p pagination.Params) ([]Pembelian, pagination.Meta, error) {
-	q := s.repo.db.Model(&Pembelian{}).Preload("Supplier").Preload("Staff").Preload("Details.Barang")
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
-		q = q.Where("kode ILIKE ? OR no_invoice ILIKE ? OR status ILIKE ?", like, like, like)
+// ListFilters narrows the purchase list. StatusBayar is belum | sebagian | lunas, or
+// "utang" for every purchase not yet fully paid.
+type ListFilters struct {
+	Status      string
+	StatusBayar string
+	SupplierID  uint
+	Periode     filter.DateRange
+}
+
+func filtersFromContext(c *gin.Context) (ListFilters, error) {
+	r, err := filter.DateRangeFromContext(c)
+	return ListFilters{
+		Status: c.Query("status"), StatusBayar: c.Query("status_bayar"),
+		SupplierID: filter.UintQuery(c, "supplier_id"), Periode: r,
+	}, err
+}
+
+func applyFilters(q *gorm.DB, f ListFilters, search string) *gorm.DB {
+	if f.Status != "" {
+		q = q.Where("status = ?", f.Status)
 	}
+	switch f.StatusBayar {
+	case "":
+	case "utang":
+		q = q.Where("status_bayar <> ?", "lunas")
+	default:
+		q = q.Where("status_bayar = ?", f.StatusBayar)
+	}
+	if f.SupplierID > 0 {
+		q = q.Where("supplier_id = ?", f.SupplierID)
+	}
+	q = f.Periode.Apply(q, "tanggal")
+	if search != "" {
+		like := "%" + search + "%"
+		q = q.Where("kode ILIKE ? OR no_invoice ILIKE ? OR status ILIKE ? OR supplier_id IN (SELECT id FROM suppliers WHERE nama ILIKE ?)",
+			like, like, like, like)
+	}
+	return q
+}
+
+func (s *Service) List(p pagination.Params, f ListFilters) ([]Pembelian, pagination.Meta, error) {
+	q := applyFilters(s.repo.db.Model(&Pembelian{}).Preload("Supplier").Preload("Staff").Preload("Details.Barang"), f, p.Search)
 	var items []Pembelian
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
+}
+
+// Summary is the overview above the purchase list; Utang is what is still owed to suppliers.
+type Summary struct {
+	Jumlah     int64   `json:"jumlah"`
+	Nilai      float64 `json:"nilai"`
+	Dibayar    float64 `json:"dibayar"`
+	Utang      float64 `json:"utang"`
+	BelumLunas int64   `json:"belum_lunas"`
+}
+
+func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
+	var out Summary
+	err := applyFilters(s.repo.db.Model(&Pembelian{}), f, search).Select(`
+		COUNT(*) AS jumlah,
+		COALESCE(SUM(total_harga), 0) AS nilai,
+		COALESCE(SUM(jumlah_dibayar), 0) AS dibayar,
+		COALESCE(SUM(GREATEST(total_harga - jumlah_dibayar, 0)) FILTER (WHERE status_bayar <> 'lunas'), 0) AS utang,
+		COUNT(*) FILTER (WHERE status_bayar <> 'lunas') AS belum_lunas`).Scan(&out).Error
+	return out, err
 }
 
 func (s *Service) Get(id uint) (*Pembelian, error) {
@@ -272,12 +329,31 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	f, err := filtersFromContext(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.List(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
 	response.OKWithMeta(c, items, meta, "ok")
+}
+
+func (h *Handler) Summary(c *gin.Context) {
+	f, err := filtersFromContext(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	out, err := h.svc.Summary(f, c.Query("search"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, out, "ok")
 }
 
 func (h *Handler) Show(c *gin.Context) {
@@ -355,6 +431,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	g := rg.Group("/pembelian")
 	{
 		g.GET("", h.Index)
+		g.GET("/summary", h.Summary)
 		g.POST("", h.Store)
 		g.GET("/:id", h.Show)
 		g.DELETE("/:id", h.Destroy)

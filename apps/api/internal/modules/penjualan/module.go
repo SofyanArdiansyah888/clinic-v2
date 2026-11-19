@@ -12,6 +12,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
+	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -68,6 +69,7 @@ type ListFilters struct {
 	Tanggal    string
 	PasienID   uint
 	Keterangan string
+	Periode    filter.DateRange
 }
 
 type Handler struct{ svc *Service }
@@ -89,7 +91,8 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
 
-func filtersFromContext(c *gin.Context) ListFilters {
+func filtersFromContext(c *gin.Context) (ListFilters, error) {
+	periode, err := filter.DateRangeFromContext(c)
 	var pasienID uint
 	if v := c.Query("pasien_id"); v != "" {
 		if id, err := strconv.ParseUint(v, 10, 64); err == nil {
@@ -101,7 +104,8 @@ func filtersFromContext(c *gin.Context) ListFilters {
 		Tanggal:    c.Query("tanggal"),
 		PasienID:   pasienID,
 		Keterangan: c.Query("keterangan"),
-	}
+		Periode:    periode,
+	}, err
 }
 
 func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
@@ -117,19 +121,48 @@ func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
 	if f.Keterangan != "" {
 		q = q.Where("keterangan ILIKE ?", "%"+f.Keterangan+"%")
 	}
-	return q
+	return f.Periode.Apply(q, "tanggal")
+}
+
+// applySearch matches the kode, invoice, status or the pasien's name / kode.
+func applySearch(q *gorm.DB, search string) *gorm.DB {
+	if search == "" {
+		return q
+	}
+	like := "%" + search + "%"
+	return q.Where("kode ILIKE ? OR no_invoice ILIKE ? OR status ILIKE ? OR pasien_id IN (SELECT id FROM pasiens WHERE nama ILIKE ? OR kode ILIKE ?)",
+		like, like, like, like, like)
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Penjualan, pagination.Meta, error) {
 	q := s.repo.db.Model(&Penjualan{}).Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").Preload("Details.Barang")
-	q = applyListFilters(q, f)
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
-		q = q.Where("kode ILIKE ? OR no_invoice ILIKE ? OR status ILIKE ?", like, like, like)
-	}
+	q = applySearch(applyListFilters(q, f), p.Search)
 	var items []Penjualan
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
+}
+
+// Summary is the overview above the sales list. Cancelled sales count only in Batal;
+// BelumLunas covers draft and confirmed sales not yet paid at the kasir.
+type Summary struct {
+	Jumlah          int64   `json:"jumlah"`
+	NilaiLunas      float64 `json:"nilai_lunas"`
+	JumlahLunas     int64   `json:"jumlah_lunas"`
+	BelumLunas      int64   `json:"belum_lunas"`
+	NilaiBelumLunas float64 `json:"nilai_belum_lunas"`
+	Batal           int64   `json:"batal"`
+}
+
+func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
+	var out Summary
+	err := applySearch(applyListFilters(s.repo.db.Model(&Penjualan{}), f), search).Select(`
+		COUNT(*) FILTER (WHERE status <> 'cancelled') AS jumlah,
+		COALESCE(SUM(total_harga) FILTER (WHERE status = 'paid'), 0) AS nilai_lunas,
+		COUNT(*) FILTER (WHERE status = 'paid') AS jumlah_lunas,
+		COUNT(*) FILTER (WHERE status IN ('draft', 'confirmed')) AS belum_lunas,
+		COALESCE(SUM(total_harga) FILTER (WHERE status IN ('draft', 'confirmed')), 0) AS nilai_belum_lunas,
+		COUNT(*) FILTER (WHERE status = 'cancelled') AS batal`).Scan(&out).Error
+	return out, err
 }
 
 func (s *Service) Get(id uint) (*Penjualan, error) {
@@ -370,12 +403,31 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
+	f, err := filtersFromContext(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	items, meta, err := h.svc.List(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
 	response.OKWithMeta(c, items, meta, "ok")
+}
+
+func (h *Handler) Summary(c *gin.Context) {
+	f, err := filtersFromContext(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	out, err := h.svc.Summary(f, c.Query("search"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, out, "ok")
 }
 
 func (h *Handler) Show(c *gin.Context) {
@@ -439,6 +491,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	g := rg.Group("/penjualan")
 	{
 		g.GET("", h.Index)
+		g.GET("/summary", h.Summary)
 		g.POST("", h.Store)
 		g.GET("/:id", h.Show)
 		g.GET("/:id/kwitansi", h.Kwitansi)

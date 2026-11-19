@@ -6,6 +6,8 @@ import { metodeLabel } from '@/shared/lib/pembayaran'
 import { openPrintTab } from '@/shared/lib/print'
 import { Button } from '@/shared/ui/button'
 import { Printer } from 'lucide-react'
+import { PenjualanOverview } from '@/features/data-transaksi/components/PenjualanOverview'
+import { usePenjualanFilters } from '@/features/data-transaksi/components/usePenjualanFilters'
 
 type Row = {
   id: number
@@ -53,6 +55,7 @@ const columns: Column<Row>[] = [
 ]
 
 export function PenjualanPage() {
+  const filters = usePenjualanFilters()
   return (
     <ResourceListPage<Row>
       title="Data Penjualan"
@@ -64,6 +67,9 @@ export function PenjualanPage() {
       // There is no PUT /penjualan/:id; sales change only through the cashier or status actions.
       enableEdit={false}
       customRowActions={kwitansiAction}
+      filterParams={filters.params}
+      onSearchChange={filters.setSearch}
+      summary={<PenjualanOverview filters={filters} />}
       createFields={[
         { name: 'pasien_id', label: 'ID Pasien', type: 'number', required: true, placeholder: '1' },
         { name: 'staff_id', label: 'ID Staff Kasir', type: 'number', required: true, placeholder: '1' },

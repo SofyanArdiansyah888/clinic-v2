@@ -41,6 +41,8 @@ var policy = []rule{
 	{read, "/laporan/fo", []string{RoleAdmin, RoleStaff, RoleFinance}},
 	{read, "/laporan/apotek", []string{RoleAdmin, RoleApoteker, RoleFinance}},
 	{read, "/finance", []string{RoleAdmin, RoleFinance}},
+	// Cashier shifts: staff see their own (enforced in the handler), finance reviews all.
+	{read, "/kasir", []string{RoleAdmin, RoleStaff, RoleFinance}},
 	{read, "/laporan/nurse", []string{RoleAdmin, RoleNurse}},
 	{read, "/laporan/dm", []string{RoleAdmin, RoleDoctor}},
 
@@ -59,6 +61,8 @@ var policy = []rule{
 	{write, "/antrian", []string{RoleAdmin, RoleStaff}},
 	{write, "/appointment", []string{RoleAdmin, RoleStaff}},
 	{write, "/pembayaran", []string{RoleAdmin, RoleStaff}},
+	// Closing someone else's shift is refused in the handler unless admin.
+	{write, "/kasir", []string{RoleAdmin, RoleStaff}},
 	{write, "/membership", []string{RoleAdmin, RoleStaff}},
 	{write, "/promo/validate", []string{RoleAdmin, RoleStaff}},
 	{write, "/voucher/validate", []string{RoleAdmin, RoleStaff}},

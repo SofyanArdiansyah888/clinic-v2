@@ -14,6 +14,8 @@ import { Field, FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
+import { ShiftBelumDibukaAlert } from './components/ShiftBelumDibukaAlert'
+import { SHIFT_AKTIF_KEY, useShiftAktif } from './kasir-shift'
 
 type PaketRow = {
   id: number
@@ -38,6 +40,7 @@ export function PembatalanPaketPage() {
   const [bankId, setBankId] = useState('')
   const needsBank = metodeRefund === 'transfer' || metodeRefund === 'e_money' || metodeRefund === 'kartu_debit'
   const validation = useFormValidation()
+  const shiftAktif = useShiftAktif()
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
     pushToast(message, tone)
@@ -60,6 +63,7 @@ export function PembatalanPaketPage() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['pembayaran-paket-sisa'] })
+      void queryClient.invalidateQueries({ queryKey: SHIFT_AKTIF_KEY })
       setCancelTarget(null)
       setKeterangan('')
       setRefund('')
@@ -73,9 +77,12 @@ export function PembatalanPaketPage() {
       (cancelMutation.error instanceof Error ? cancelMutation.error.message : 'Gagal membatalkan paket'))
     : null
 
+  // A refund pays money out of the drawer, so it needs an open shift; a cancellation without refund does not.
+  const shiftKurang = Number(refund) > 0 && shiftAktif.checked && !shiftAktif.isOpen
+
   function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!cancelTarget) return
+    if (!cancelTarget || shiftKurang) return
     cancelMutation.mutate({
       id: cancelTarget.id,
       keterangan,
@@ -200,12 +207,13 @@ export function PembatalanPaketPage() {
                 placeholder="Alasan pembatalan"
               />
             </Field>
+            {shiftKurang ? <ShiftBelumDibukaAlert /> : null}
             <FormAlert>{cancelError}</FormAlert>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} className="flex-1">
                 Batal
               </Button>
-              <Button type="submit" variant="destructive" disabled={cancelMutation.isPending} className="flex-1">
+              <Button type="submit" variant="destructive" disabled={cancelMutation.isPending || shiftKurang} className="flex-1">
                 Batalkan Paket
               </Button>
             </div>

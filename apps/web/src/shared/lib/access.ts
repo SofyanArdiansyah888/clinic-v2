@@ -17,6 +17,9 @@ const PAGE_ACCESS: [prefix: string, roles: Role[]][] = [
   // Print pages opened in a new tab from the kasir / data penjualan and the EMR.
   ['/cetak/kwitansi', ['admin', 'staff', 'apoteker']],
   ['/cetak/consent', KLINIS],
+  // Cashier shifts: the kasir sees their own (API-enforced), finance reviews every shift.
+  ['/cetak/shift', ['admin', 'staff', 'finance']],
+  ['/data-transaksi/shift', ['admin', 'staff', 'finance']],
   ['/data-transaksi/pembelian', ['admin', 'apoteker', 'finance']],
   ['/data-transaksi/deposit', FO],
   ['/administrasi/pasien', FO],

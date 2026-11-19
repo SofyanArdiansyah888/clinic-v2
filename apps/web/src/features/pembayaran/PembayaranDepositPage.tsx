@@ -16,6 +16,8 @@ import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
 import { RupiahInput } from '@/shared/ui/rupiah-input'
 import { DepositSidePanel } from './components/DepositSidePanel'
+import { ShiftBelumDibukaAlert } from './components/ShiftBelumDibukaAlert'
+import { SHIFT_AKTIF_KEY, useShiftAktif } from './kasir-shift'
 
 const JENIS_OPTIONS = [
   { value: 'pembayaran_deposit', label: 'Pembayaran Deposit' },
@@ -41,6 +43,8 @@ export function PembayaranDepositPage() {
   })
   const validation = useFormValidation()
   const queryClient = useQueryClient()
+  const shiftAktif = useShiftAktif()
+  const shiftKurang = shiftAktif.checked && !shiftAktif.isOpen
 
   function showToast(message: string, tone: 'success' | 'error' = 'success') {
     pushToast(message, tone)
@@ -71,6 +75,7 @@ export function PembayaranDepositPage() {
     onSuccess: () => {
       // The history, balance and membership next to the form show the new transaction.
       for (const key of ['deposit-riwayat', 'deposit-saldo', 'membership']) void queryClient.invalidateQueries({ queryKey: [key] })
+      void queryClient.invalidateQueries({ queryKey: SHIFT_AKTIF_KEY })
       setLastSuccessJenis(form.jenis)
       showToast('Pembayaran deposit berhasil dicatat!', 'success')
       validation.reset()
@@ -88,12 +93,15 @@ export function PembayaranDepositPage() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (shiftKurang) return
     submitMutation.mutate()
   }
 
   return (
     <div className="space-y-6">
       <PageHeader title="Deposit & Member" description="Deposit pasien dan membership" />
+
+      {shiftKurang ? <ShiftBelumDibukaAlert /> : null}
 
       {lastSuccessJenis ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -122,7 +130,7 @@ export function PembayaranDepositPage() {
         >
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <h3 className="text-sm font-bold text-slate-900">Form Transaksi</h3>
-            <Button type="submit" disabled={submitMutation.isPending}>
+            <Button type="submit" disabled={submitMutation.isPending || shiftKurang}>
               {submitMutation.isPending ? <Loader2 className="animate-spin" /> : <CreditCard />}
               Bayar
             </Button>

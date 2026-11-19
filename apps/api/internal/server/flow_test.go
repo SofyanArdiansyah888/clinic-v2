@@ -635,3 +635,176 @@ func TestInformedConsentPerawatan(t *testing.T) {
 		t.Errorf("GET consent = %d", r.Code)
 	}
 }
+
+// Money is only taken on an open cashier shift; closing it compares the counted cash with the drawer.
+func TestShiftKasir(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(20)
+	// The kasir starts without a shift; admin keeps the one from fixtures.
+	e.db.Exec("DELETE FROM kasir_shifts WHERE user_id = (SELECT id FROM users WHERE username = 't_staff')")
+
+	type ringkasan struct {
+		JenisPembayaran string  `json:"jenis_pembayaran"`
+		Masuk           float64 `json:"masuk"`
+		Keluar          float64 `json:"keluar"`
+	}
+	type detail struct {
+		Shift struct {
+			ID              uint     `json:"id"`
+			Kode            string   `json:"kode"`
+			Status          string   `json:"status"`
+			SaldoAkhirFisik *float64 `json:"saldo_akhir_fisik"`
+			ExpectedTunai   *float64 `json:"expected_tunai"`
+			Selisih         *float64 `json:"selisih"`
+		} `json:"shift"`
+		Ringkasan     []ringkasan `json:"ringkasan"`
+		ExpectedTunai float64     `json:"expected_tunai"`
+		Mutasi        []struct {
+			SourceType string  `json:"source_type"`
+			Masuk      float64 `json:"masuk"`
+			Keluar     float64 `json:"keluar"`
+		} `json:"mutasi"`
+	}
+	bayar := func(role string, pj uint, jenis string, jumlah float64) resp {
+		return e.call(role, "POST", "/pembayaran/bayar", map[string]any{"source_type": "penjualan", "source_id": pj, "staff_id": f.staff, "jenis_pembayaran": jenis, "jumlah_bayar": jumlah, "tanggal": tanggal})
+	}
+	deposit := func(jumlah float64) resp {
+		return e.call("staff", "POST", "/pembayaran/deposit", map[string]any{"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "jenis": "pembayaran_deposit", "jumlah": jumlah, "jenis_pembayaran": "tunai"})
+	}
+
+	pj := e.penjualanLangsung(f, 10) // 10 x 10.000
+	if r := bayar("staff", pj, "tunai", 150000); r.Code != http.StatusBadRequest || !strings.Contains(r.Message, "Kasir belum dibuka") {
+		t.Fatalf("bayar without shift: %d %s", r.Code, r.Message)
+	}
+	if r := deposit(50000); r.Code != http.StatusBadRequest || !strings.Contains(r.Message, "Kasir belum dibuka") {
+		t.Fatalf("deposit without shift: %d %s", r.Code, r.Message)
+	}
+	if got := e.stok(f.barang); got != 10 {
+		t.Errorf("stok after refused payment = %d, want 10", got)
+	}
+	r := e.call("staff", "GET", "/kasir/shift/aktif", nil)
+	if r.Code != http.StatusOK || (len(r.Data) > 0 && string(r.Data) != "null") {
+		t.Fatalf("aktif without shift: %d %s", r.Code, r.Data)
+	}
+
+	r = e.call("staff", "POST", "/kasir/shift/buka", map[string]any{"saldo_awal": 500000, "catatan": "Laci pagi"})
+	if r.Code != http.StatusCreated {
+		t.Fatalf("buka: %d %s", r.Code, r.Message)
+	}
+	var d detail
+	_ = json.Unmarshal(r.Data, &d)
+	if d.Shift.Status != "open" || !strings.HasPrefix(d.Shift.Kode, "SHF-") || d.ExpectedTunai != 500000 {
+		t.Fatalf("shift dibuka = %+v", d)
+	}
+	shiftID := d.Shift.ID
+	if r := e.call("staff", "POST", "/kasir/shift/buka", map[string]any{"saldo_awal": 0}); r.Code != http.StatusBadRequest {
+		t.Errorf("second open shift: %d %s, want 400", r.Code, r.Message)
+	}
+	if r := e.call("doctor", "POST", "/kasir/shift/buka", map[string]any{"saldo_awal": 0}); r.Code != http.StatusForbidden {
+		t.Errorf("doctor buka kasir: %d, want 403", r.Code)
+	}
+
+	// Tunai 100.000 paid with 150.000: only the bill stays in the drawer.
+	if r := bayar("staff", pj, "tunai", 150000); r.Code != http.StatusOK {
+		t.Fatalf("bayar tunai: %d %s", r.Code, r.Message)
+	}
+	if r := deposit(50000); r.Code != http.StatusCreated {
+		t.Fatalf("deposit tunai: %d %s", r.Code, r.Message)
+	}
+	if r := bayar("staff", e.penjualanLangsung(f, 2), "transfer", 20000); r.Code != http.StatusOK {
+		t.Fatalf("bayar transfer: %d %s", r.Code, r.Message)
+	}
+
+	// Admin sells a paket on admin's own shift; the kasir refunds 600.000 tunai from theirs.
+	var tr struct{ ID uint }
+	e.must("POST", "/treatment", map[string]any{"nama": "Paket Peeling 5x", "kategori": "Paket", "harga": 1000000, "sesi_paket": 5}, &tr)
+	var pw struct{ ID uint }
+	e.must("POST", "/perawatan", map[string]any{
+		"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "status": "bayar",
+		"tindakans": []map[string]any{{"treatment_id": tr.ID, "jumlah": 1, "harga": 1000000, "total": 1000000, "tanggal": tanggal}},
+	}, &pw)
+	if r := e.call("admin", "POST", "/pembayaran/bayar", map[string]any{"source_type": "perawatan", "source_id": pw.ID, "staff_id": f.staff, "jenis_pembayaran": "tunai", "jumlah_bayar": 1000000, "tanggal": tanggal}); r.Code != http.StatusOK {
+		t.Fatalf("admin bayar paket: %d %s", r.Code, r.Message)
+	}
+	var sisa []struct{ ID uint }
+	e.must("GET", "/pembayaran/paket/sisa", nil, &sisa)
+	if len(sisa) != 1 {
+		t.Fatalf("paket sisa = %+v", sisa)
+	}
+	if r := e.call("staff", "POST", fmt.Sprintf("/pembayaran/paket/%d/batal", sisa[0].ID), map[string]any{"refund": 600000, "jenis_pembayaran": "tunai", "tanggal": tanggal}); r.Code != http.StatusOK {
+		t.Fatalf("refund paket: %d %s", r.Code, r.Message)
+	}
+
+	r = e.call("staff", "GET", "/kasir/shift/aktif", nil)
+	d = detail{}
+	_ = json.Unmarshal(r.Data, &d)
+	// 500.000 awal + 100.000 penjualan + 50.000 deposit - 600.000 refund; transfer stays out of the drawer.
+	if d.Shift.ID != shiftID || d.ExpectedTunai != 50000 || len(d.Mutasi) != 4 {
+		t.Fatalf("aktif = %+v", d)
+	}
+	if len(d.Ringkasan) != 2 || d.Ringkasan[0] != (ringkasan{"tunai", 150000, 600000}) || d.Ringkasan[1] != (ringkasan{"transfer", 20000, 0}) {
+		t.Errorf("ringkasan = %+v", d.Ringkasan)
+	}
+
+	var adminShift struct{ ID uint }
+	e.db.Table("kasir_shifts").Select("id").Where("user_id = (SELECT id FROM users WHERE username = 't_admin') AND status = 'open'").Scan(&adminShift)
+	var ad detail
+	e.must("GET", fmt.Sprintf("/kasir/shift/%d", adminShift.ID), nil, &ad)
+	if ad.ExpectedTunai != 1000000 || len(ad.Mutasi) != 1 || ad.Mutasi[0].SourceType != "penjualan" {
+		t.Errorf("admin shift = %+v", ad)
+	}
+
+	// Only the owner or an admin closes a shift; staff only see their own.
+	tutupAdmin := fmt.Sprintf("/kasir/shift/%d/tutup", adminShift.ID)
+	if r := e.call("staff", "POST", tutupAdmin, map[string]any{"saldo_akhir_fisik": 1000000}); r.Code != http.StatusForbidden {
+		t.Errorf("staff closes admin's shift: %d %s, want 403", r.Code, r.Message)
+	}
+	if r := e.call("finance", "POST", tutupAdmin, map[string]any{"saldo_akhir_fisik": 1000000}); r.Code != http.StatusForbidden {
+		t.Errorf("finance closes a shift: %d, want 403", r.Code)
+	}
+	if r := e.call("staff", "GET", fmt.Sprintf("/kasir/shift/%d", adminShift.ID), nil); r.Code != http.StatusForbidden {
+		t.Errorf("staff reads admin's shift: %d, want 403", r.Code)
+	}
+	var list []struct{ ID uint }
+	r = e.call("staff", "GET", "/kasir/shift", nil)
+	_ = json.Unmarshal(r.Data, &list)
+	if r.Code != http.StatusOK || len(list) != 1 || list[0].ID != shiftID {
+		t.Errorf("staff shift list = %d %+v", r.Code, list)
+	}
+	r = e.call("finance", "GET", "/kasir/shift?status=open", nil)
+	_ = json.Unmarshal(r.Data, &list)
+	if r.Code != http.StatusOK || len(list) != 2 {
+		t.Errorf("finance shift list = %d %+v", r.Code, list)
+	}
+
+	tutup := fmt.Sprintf("/kasir/shift/%d/tutup", shiftID)
+	if r := e.call("staff", "POST", tutup, map[string]any{"catatan": "lupa hitung"}); r.Code != http.StatusBadRequest {
+		t.Errorf("tutup without saldo_akhir_fisik: %d, want 400", r.Code)
+	}
+	r = e.call("staff", "POST", tutup, map[string]any{"saldo_akhir_fisik": 45000, "catatan": "kurang 5rb"})
+	if r.Code != http.StatusOK {
+		t.Fatalf("tutup: %d %s", r.Code, r.Message)
+	}
+	d = detail{}
+	_ = json.Unmarshal(r.Data, &d)
+	if d.Shift.Status != "closed" || d.Shift.ExpectedTunai == nil || *d.Shift.ExpectedTunai != 50000 || d.Shift.Selisih == nil || *d.Shift.Selisih != -5000 {
+		t.Fatalf("shift ditutup = %+v", d.Shift)
+	}
+	if r := e.call("staff", "POST", tutup, map[string]any{"saldo_akhir_fisik": 45000}); r.Code != http.StatusBadRequest {
+		t.Errorf("closing twice: %d, want 400", r.Code)
+	}
+	if r := bayar("staff", e.penjualanLangsung(f, 1), "tunai", 10000); r.Code != http.StatusBadRequest || !strings.Contains(r.Message, "Kasir belum dibuka") {
+		t.Errorf("bayar after close: %d %s", r.Code, r.Message)
+	}
+
+	// A new shift may be opened after closing, and admin may close it for the kasir.
+	r = e.call("staff", "POST", "/kasir/shift/buka", map[string]any{"saldo_awal": 100000})
+	if r.Code != http.StatusCreated {
+		t.Fatalf("buka lagi: %d %s", r.Code, r.Message)
+	}
+	_ = json.Unmarshal(r.Data, &d)
+	if r := e.call("admin", "POST", fmt.Sprintf("/kasir/shift/%d/tutup", d.Shift.ID), map[string]any{"saldo_akhir_fisik": 100000}); r.Code != http.StatusOK {
+		t.Errorf("admin closes kasir's shift: %d %s", r.Code, r.Message)
+	}
+	e.expectBalanced()
+}

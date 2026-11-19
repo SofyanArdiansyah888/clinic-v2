@@ -9,6 +9,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/informedconsent"
 	"github.com/scaleup/clinic-v2/api/internal/modules/jadwaldokter"
+	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/laporan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
@@ -73,7 +74,13 @@ func AutoMigrate(db *gorm.DB) error {
 		&finance.AkunMapping{},
 		&finance.Jurnal{},
 		&finance.JurnalDetail{},
+		&kasir.Shift{},
+		&kasir.Mutasi{},
 	); err != nil {
+		return err
+	}
+	// One open cashier shift per account (partial index; AutoMigrate cannot declare it).
+	if err := db.Exec(kasir.UniqueOpenIndexSQL).Error; err != nil {
 		return err
 	}
 	// AutoMigrate never relaxes NOT NULL. barang_id became optional when treatment

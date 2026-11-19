@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/staff"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
@@ -122,7 +123,25 @@ func (e *env) fixtures(stok int) fixtures {
 	}
 	// Non-admin accounts act as this staff, so their transactions pass the own-staff rule.
 	e.db.Model(&user.User{}).Where("role <> ?", "admin").Update("staff_id", s.ID)
+	// Money is only taken on an open cashier shift; admin and the kasir staff start with one.
+	for _, role := range []string{"admin", "staff"} {
+		e.bukaShift(role, 0)
+	}
 	return fixtures{p.ID, s.ID, tr.ID, b.ID}
+}
+
+// bukaShift opens a cashier shift for the role's account directly in the database.
+func (e *env) bukaShift(role string, saldoAwal float64) kasir.Shift {
+	e.t.Helper()
+	var u user.User
+	if err := e.db.Where("username = ?", "t_"+role).First(&u).Error; err != nil {
+		e.t.Fatal(err)
+	}
+	sh := kasir.Shift{Kode: "SHF-T-" + role, UserID: u.ID, StaffID: u.StaffID, SaldoAwal: saldoAwal, OpenedAt: time.Now(), Status: kasir.StatusOpen}
+	if err := e.db.Create(&sh).Error; err != nil {
+		e.t.Fatal(err)
+	}
+	return sh
 }
 
 // perawatan creates a perawatan waiting at the cashier: one Facial (350.000) and a resep of 2 Obat Uji (2 x 10.000).

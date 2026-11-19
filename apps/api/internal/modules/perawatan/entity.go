@@ -81,6 +81,10 @@ type PerawatanResep struct {
 	Pasien      *pasien.Pasien         `gorm:"foreignKey:PasienID" json:"pasien,omitempty"`
 	Staff       *staff.Staff           `gorm:"foreignKey:StaffID" json:"staff,omitempty"`
 	Barangs     []PerawatanResepBarang `gorm:"foreignKey:PerawatanResepID" json:"barangs,omitempty"`
+	// PerawatanKode and PerawatanStatus are filled by the resep list (not stored) so the
+	// depo can tell whether an unpaid resep is still with the doctor or waiting at the kasir.
+	PerawatanKode   string `gorm:"-" json:"perawatan_kode,omitempty"`
+	PerawatanStatus string `gorm:"-" json:"perawatan_status,omitempty"`
 }
 
 func (PerawatanResep) TableName() string { return "perawatan_resep" }

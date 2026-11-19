@@ -43,15 +43,93 @@ type Handler struct{ svc *Service }
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
-func (s *Service) List(p pagination.Params) ([]Barang, pagination.Meta, error) {
-	q := s.repo.db.Model(&Barang{})
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
+// ListFilters narrows the barang list; Stok is "menipis" (at or below stok_minimal but
+// not empty), "habis" (zero or below) or "aman".
+type ListFilters struct {
+	Kategori string
+	Status   string // aktif | nonaktif
+	Stok     string
+}
+
+func filtersFromContext(c *gin.Context) ListFilters {
+	return ListFilters{Kategori: c.Query("kategori"), Status: c.Query("status"), Stok: c.Query("stok")}
+}
+
+const (
+	sqlHabis   = "stok_aktual <= 0"
+	sqlMenipis = "stok_aktual > 0 AND stok_aktual <= stok_minimal"
+)
+
+// applyMasterFilters applies the kategori and status filters shared by the list and its summary.
+func applyMasterFilters(q *gorm.DB, f ListFilters, search string) *gorm.DB {
+	if f.Kategori != "" {
+		q = q.Where("kategori = ?", f.Kategori)
+	}
+	switch f.Status {
+	case "aktif":
+		q = q.Where("is_active = ?", true)
+	case "nonaktif":
+		q = q.Where("is_active = ?", false)
+	}
+	if search != "" {
+		like := "%" + search + "%"
 		q = q.Where("nama ILIKE ? OR kode ILIKE ? OR kategori ILIKE ?", like, like, like)
+	}
+	return q
+}
+
+func (s *Service) List(p pagination.Params, f ListFilters) ([]Barang, pagination.Meta, error) {
+	q := applyMasterFilters(s.repo.db.Model(&Barang{}), f, p.Search)
+	switch f.Stok {
+	case "habis":
+		q = q.Where(sqlHabis)
+	case "menipis":
+		q = q.Where(sqlMenipis)
+	case "aman":
+		q = q.Where("stok_aktual > stok_minimal")
 	}
 	var items []Barang
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
+}
+
+// Summary is the stock overview for the barang page.
+type Summary struct {
+	Total     int64    `json:"total"`
+	Aktif     int64    `json:"aktif"`
+	Menipis   int64    `json:"menipis"`
+	Habis     int64    `json:"habis"`
+	NilaiStok float64  `json:"nilai_stok"` // stok on hand valued at harga_beli
+	Kategoris []string `json:"kategoris"`  // every kategori in use, for the filter
+}
+
+// Summary counts the barang matching the kategori, status and search filters (the stok
+// filter is ignored so the cards keep showing the whole breakdown).
+func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
+	var out Summary
+	// Scan into the counts only; GORM cannot scan into the Kategoris slice.
+	var counts struct {
+		Total     int64
+		Aktif     int64
+		Menipis   int64
+		Habis     int64
+		NilaiStok float64
+	}
+	err := applyMasterFilters(s.repo.db.Model(&Barang{}), f, search).
+		Select(`COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE is_active) AS aktif,
+			COUNT(*) FILTER (WHERE ` + sqlMenipis + `) AS menipis,
+			COUNT(*) FILTER (WHERE ` + sqlHabis + `) AS habis,
+			COALESCE(SUM(GREATEST(stok_aktual, 0) * harga_beli), 0) AS nilai_stok`).
+		Scan(&counts).Error
+	if err != nil {
+		return out, err
+	}
+	out.Total, out.Aktif, out.Menipis, out.Habis, out.NilaiStok = counts.Total, counts.Aktif, counts.Menipis, counts.Habis, counts.NilaiStok
+	out.Kategoris = []string{}
+	err = s.repo.db.Model(&Barang{}).Where("kategori <> ''").
+		Distinct("kategori").Order("kategori").Pluck("kategori", &out.Kategoris).Error
+	return out, err
 }
 
 func (s *Service) Get(id uint) (*Barang, error) {
@@ -120,12 +198,21 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
 	response.OKWithMeta(c, items, meta, "ok")
+}
+
+func (h *Handler) Summary(c *gin.Context) {
+	out, err := h.svc.Summary(filtersFromContext(c), c.Query("search"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, out, "ok")
 }
 
 func (h *Handler) Show(c *gin.Context) {
@@ -196,6 +283,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 	g := rg.Group("/barang")
 	{
 		g.GET("", h.Index)
+		g.GET("/summary", h.Summary)
 		g.POST("", h.Store)
 		g.GET("/:id", h.Show)
 		g.PUT("/:id", h.Update)
