@@ -1,8 +1,10 @@
-import { ChevronDown, ChevronRight, Download } from 'lucide-react'
+import { Download, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { EmptyState } from '@/shared/components/EmptyState'
 import { KpiCard } from '@/shared/components/KpiCard'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/lib/cn'
 import { downloadCsv } from '@/shared/lib/csv'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
@@ -10,9 +12,7 @@ import { KpiGrid, ReportShell } from '@/features/laporan/ReportShell'
 import { AkunSelect } from '@/features/finance/components/AkunSelect'
 import { Rp } from '@/features/finance/components/Statement'
 import { BukuBesarMagazine } from '@/features/finance/print/magazines'
-import { SOURCE_LABEL, TIPE_LABEL, type BukuBesarAkun, type BukuBesarSemuaData, type TipeAkun } from '@/features/finance/types'
-
-const TIPE_ORDER: TipeAkun[] = ['aset', 'kewajiban', 'ekuitas', 'pendapatan', 'beban']
+import { SOURCE_LABEL, TIPE_LABEL, type BukuBesarAkun, type BukuBesarRow, type BukuBesarSemuaData } from '@/features/finance/types'
 
 type Filter = { akunId: string; hanyaBermutasi: boolean }
 
@@ -64,11 +64,29 @@ export function BukuBesarPage() {
   )
 }
 
+// Same cell rhythm and header style as DataTable (the master-data lists, e.g. Perusahaan Mitra).
+const TH = 'px-4 py-3'
+const TD = 'px-4 py-3 align-middle text-slate-700'
+const NUM = 'text-right tabular-nums whitespace-nowrap'
+
 function Ledger({ d, dari, sampai }: { d: BukuBesarSemuaData; dari: string; sampai: string }) {
-  const groups = useMemo(
-    () => TIPE_ORDER.map((tipe) => ({ tipe, akuns: d.akuns.filter((a) => a.akun.tipe === tipe) })).filter((g) => g.akuns.length),
-    [d.akuns],
-  )
+  const [searchInput, setSearchInput] = useState('')
+  const q = searchInput.trim().toLowerCase()
+
+  // Search like the master-data lists: an account match keeps all its lines,
+  // otherwise only the lines that match (kode jurnal, keterangan, referensi, sumber).
+  const view = useMemo(() => {
+    if (!q) return d.akuns.map((a) => ({ a, rows: a.rows }))
+    return d.akuns
+      .map((a) => {
+        const akunHit = `${a.akun.kode} ${a.akun.nama}`.toLowerCase().includes(q)
+        const rows = akunHit
+          ? a.rows
+          : a.rows.filter((r) => `${r.kode} ${r.keterangan} ${r.referensi} ${SOURCE_LABEL[r.source_type] ?? r.source_type}`.toLowerCase().includes(q))
+        return { a, rows, keep: akunHit || rows.length > 0 }
+      })
+      .filter((x) => x.keep)
+  }, [d.akuns, q])
 
   function exportCsv() {
     const rows = d.akuns.flatMap((a) => [
@@ -88,115 +106,113 @@ function Ledger({ d, dari, sampai }: { d: BukuBesarSemuaData; dari: string; samp
         <KpiCard label="Total kredit" value={formatCurrency(d.total_kredit)} />
       </KpiGrid>
 
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">
-          {formatDate(dari)} – {formatDate(sampai)} · {d.akuns.length} akun
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-3.5">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-slate-400" />
+            <Input
+              type="search"
+              aria-label="Cari di buku besar"
+              className="h-10 pl-9"
+              placeholder="Ketik untuk mencari..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <Button type="button" variant="outline" className="h-10" disabled={!d.akuns.length} onClick={exportCsv}>
+            <Download />
+            Export CSV
+          </Button>
+        </div>
+
+        {view.length === 0 ? (
+          <EmptyState
+            title="Tidak ada data"
+            description={q ? 'Tidak ada akun atau transaksi yang cocok dengan pencarian.' : 'Tidak ada akun yang cocok dengan filter.'}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="ui-table w-full min-w-[860px] border-collapse text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
+                  <th className={TH}>Tanggal</th>
+                  <th className={TH}>Jurnal</th>
+                  <th className={TH}>Sumber</th>
+                  <th className={TH}>Keterangan</th>
+                  <th className={cn(TH, 'text-right')}>Debit</th>
+                  <th className={cn(TH, 'text-right')}>Kredit</th>
+                  <th className={cn(TH, 'text-right')}>Saldo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-medium">
+                {view.map(({ a, rows }) => (
+                  <AkunRows key={a.akun.id} a={a} rows={rows} filtered={rows.length !== a.rows.length} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+          {formatDate(dari)} – {formatDate(sampai)} · menampilkan {view.length} dari {d.akuns.length} akun
         </p>
-        <Button type="button" variant="outline" size="sm" disabled={!d.akuns.length} onClick={exportCsv}>
-          <Download />
-          Export CSV
-        </Button>
-      </div>
-
-      {groups.length === 0 ? <p className="py-10 text-center text-sm text-slate-400">Tidak ada akun yang cocok dengan filter.</p> : null}
-
-      {groups.map((g) => (
-        <section key={g.tipe} className="space-y-3" aria-label={TIPE_LABEL[g.tipe]}>
-          <h3 className="text-xs font-extrabold tracking-wider text-slate-500 uppercase">
-            {TIPE_LABEL[g.tipe]} <span className="font-semibold text-slate-400">· {g.akuns.length} akun</span>
-          </h3>
-          {g.akuns.map((a) => (
-            <AkunLedger key={a.akun.id} a={a} />
-          ))}
-        </section>
-      ))}
+      </Card>
     </>
   )
 }
 
-function AkunLedger({ a }: { a: BukuBesarAkun }) {
-  const ada = a.rows.length > 0
-  const [open, setOpen] = useState(ada)
-  const th = 'px-3 py-2 text-left text-[11px] font-bold tracking-wider text-slate-500 uppercase'
-
+/** One account inside the ledger table: its header row, its lines, then the closing row. */
+function AkunRows({ a, rows, filtered }: { a: BukuBesarAkun; rows: BukuBesarRow[]; filtered: boolean }) {
   return (
-    <Card className="overflow-hidden">
-      <button
-        type="button"
-        aria-expanded={open}
-        disabled={!ada}
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left enabled:hover:bg-slate-50"
-      >
-        <span className="text-slate-400">
-          {ada ? open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" /> : <span className="inline-block h-4 w-4" />}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="font-mono text-xs font-bold text-rose-700">{a.akun.kode}</span>{' '}
-          <span className="text-sm font-bold text-slate-900">{a.akun.nama}</span>
-          <span className="ml-2 text-[11px] text-slate-500">saldo normal {a.akun.saldo_normal}</span>
-        </span>
-        <span className="text-xs text-slate-500">{ada ? `${a.rows.length} mutasi` : 'Tidak ada mutasi'}</span>
-        <span className="text-xs whitespace-nowrap text-slate-600 tabular-nums">
-          <Rp value={a.saldo_awal} /> <span className="text-slate-400">→</span> <b className="text-slate-900"><Rp value={a.saldo_akhir} /></b>
-        </span>
-      </button>
-
-      {open && ada ? (
-        <div className="overflow-x-auto border-t border-slate-100">
-          <table className="w-full min-w-[720px] text-[13px]">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className={th}>Tanggal</th>
-                <th className={th}>Jurnal</th>
-                <th className={th}>Sumber</th>
-                <th className={th}>Keterangan</th>
-                <th className={cn(th, 'text-right')}>Debit</th>
-                <th className={cn(th, 'text-right')}>Kredit</th>
-                <th className={cn(th, 'text-right')}>Saldo</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              <tr className="text-slate-500 italic">
-                <td className="px-3 py-2" colSpan={6}>
-                  Saldo awal
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <Rp value={a.saldo_awal} />
-                </td>
-              </tr>
-              {a.rows.map((r, i) => (
-                <tr key={`${r.jurnal_id}-${i}`} className="text-slate-700">
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.tanggal)}</td>
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-rose-700">{r.kode}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{SOURCE_LABEL[r.source_type] ?? r.source_type}</td>
-                  <td className="px-3 py-2">
-                    <p>{r.keterangan}</p>
-                    {r.referensi ? <p className="font-mono text-[11px] text-slate-500">{r.referensi}</p> : null}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.debit ? formatCurrency(r.debit) : ''}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.kredit ? formatCurrency(r.kredit) : ''}</td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    <Rp value={r.saldo} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-slate-300 font-bold text-slate-900">
-                <td className="px-3 py-2" colSpan={4}>
-                  Total mutasi & saldo akhir
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(a.total_debit)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(a.total_kredit)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  <Rp value={a.saldo_akhir} />
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      ) : null}
-    </Card>
+    <>
+      <tr className="bg-slate-50/70">
+        <td colSpan={6} className="px-4 py-2.5">
+          <span className="font-mono font-bold text-rose-700">{a.akun.kode}</span>{' '}
+          <span className="font-bold text-slate-900">{a.akun.nama}</span>
+          <span className="ml-2 text-[11px] font-medium text-slate-500">
+            {TIPE_LABEL[a.akun.tipe]} · saldo normal {a.akun.saldo_normal}
+          </span>
+        </td>
+        <td className={cn('px-4 py-2.5 text-[11px] text-slate-500', NUM)}>
+          Saldo awal{' '}
+          <b className="text-slate-700">
+            <Rp value={a.saldo_awal} />
+          </b>
+        </td>
+      </tr>
+      {a.rows.length === 0 ? (
+        <tr>
+          <td colSpan={7} className={cn(TD, 'text-slate-400 italic')}>
+            Tidak ada mutasi pada periode ini.
+          </td>
+        </tr>
+      ) : (
+        rows.map((r, i) => (
+          <tr key={`${r.jurnal_id}-${i}`} className="transition-colors hover:bg-slate-50">
+            <td className={cn(TD, 'whitespace-nowrap')}>{formatDate(r.tanggal)}</td>
+            <td className={cn(TD, 'font-mono font-bold whitespace-nowrap text-rose-700')}>{r.kode}</td>
+            <td className={cn(TD, 'whitespace-nowrap')}>{SOURCE_LABEL[r.source_type] ?? r.source_type}</td>
+            <td className={TD}>
+              <p className="text-slate-900">{r.keterangan}</p>
+              {r.referensi ? <p className="font-mono text-[11px] text-slate-500">{r.referensi}</p> : null}
+            </td>
+            <td className={cn(TD, NUM)}>{r.debit ? formatCurrency(r.debit) : '-'}</td>
+            <td className={cn(TD, NUM)}>{r.kredit ? formatCurrency(r.kredit) : '-'}</td>
+            <td className={cn(TD, NUM, 'font-semibold text-slate-900')}>
+              <Rp value={r.saldo} />
+            </td>
+          </tr>
+        ))
+      )}
+      <tr className="border-b-2 border-slate-300">
+        <td colSpan={4} className={cn(TD, 'font-bold text-slate-900')}>
+          {filtered ? 'Total akun (semua mutasi) & saldo akhir' : 'Total & saldo akhir'}
+        </td>
+        <td className={cn(TD, NUM, 'font-bold text-slate-900')}>{formatCurrency(a.total_debit)}</td>
+        <td className={cn(TD, NUM, 'font-bold text-slate-900')}>{formatCurrency(a.total_kredit)}</td>
+        <td className={cn(TD, NUM, 'font-bold text-slate-900')}>
+          <Rp value={a.saldo_akhir} />
+        </td>
+      </tr>
+    </>
   )
 }
