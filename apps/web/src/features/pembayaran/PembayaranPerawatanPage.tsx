@@ -109,7 +109,8 @@ export function PembayaranPerawatanPage() {
     <div className="space-y-6">
       <PageHeader title="Pembayaran Perawatan" description="Tagihan treatment pasien" />
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* Same overview grid as the other pages: cards keep their size instead of stretching. */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Antrian Kasir"
           value={stats.count}
@@ -127,7 +128,6 @@ export function PembayaranPerawatanPage() {
       <Tabs
         value={activeTab}
         onChange={setActiveTab}
-        fullWidth
         items={[
           { value: 'reguler', label: 'Reguler', icon: <Wrench /> },
           { value: 'paket', label: 'Paket', icon: <Gift /> },

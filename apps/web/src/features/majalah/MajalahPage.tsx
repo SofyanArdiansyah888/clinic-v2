@@ -369,17 +369,20 @@ export function MajalahPage() {
               <ol className="space-y-4">
                 {withSummary ? (
                   <li className="flex items-baseline gap-4 border-b border-white/15 pb-3">
-                    <span className="w-6 text-sm font-bold text-rose-300 tabular-nums">2</span>
+                    <span className="w-12 shrink-0 text-[10px] font-bold tracking-wider text-rose-300 uppercase">Ikhtisar</span>
                     <span className="flex-1 text-lg font-bold">Ringkasan eksekutif</span>
+                    <span className="shrink-0 text-xs text-white/50 tabular-nums">hlm. 2</span>
                   </li>
                 ) : null}
                 {chapters.map((d, i) => (
                   <li key={d.key} className="flex items-baseline gap-4 border-b border-white/15 pb-3">
-                    <span className="w-6 text-sm font-bold text-rose-300 tabular-nums">{firstChapterPage + i}</span>
+                    {/* Left: the chapter number printed on its band (Bab 1, 2...). Right: the page it starts on (the cover is page 1). */}
+                    <span className="w-12 shrink-0 text-[10px] font-bold tracking-wider text-rose-300 uppercase">Bab {i + 1}</span>
                     <span className="flex-1">
                       <span className="block text-lg leading-tight font-bold">{d.nama}</span>
                       <span className="text-xs text-white/60">{d.tagline}</span>
                     </span>
+                    <span className="shrink-0 text-xs text-white/50 tabular-nums">hlm. {firstChapterPage + i}</span>
                   </li>
                 ))}
               </ol>

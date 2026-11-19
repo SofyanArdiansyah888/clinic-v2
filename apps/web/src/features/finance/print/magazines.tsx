@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { apiGet } from '@/shared/api/client'
+import { BarChart } from '@/shared/components/charts/BarChart'
 import { BarList } from '@/shared/components/charts/BarList'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
-import type { Insight } from '@/features/majalah/insights'
+import { financeInsights, type Insight } from '@/features/majalah/insights'
 import { periodeLabel, previousPeriode, type Periode } from '@/features/majalah/data'
 import {
   ChapterBand,
+  ContinuationBand,
   DetailSheets,
   InsightList,
   KpiTile,
@@ -23,6 +25,9 @@ import {
   TIPE_LABEL,
   type AkunSaldo,
   type BukuBesarSemuaData,
+  type HighlightsData,
+  type HighlightsPosisi,
+  type HighlightsRingkasan,
   type LabaRugiData,
   type NeracaData,
   type NeracaSaldoData,
@@ -398,6 +403,210 @@ export function BukuBesarMagazine({ d }: { d: BukuBesarSemuaData }) {
         ]}
         lines={lines}
         firstPage={2}
+        footer={footer}
+      />
+    </>
+  )
+}
+
+// ── Financial Highlights ──
+
+const bulanLabel = (b: string, full = false) => {
+  const [y, m] = b.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('id-ID', full ? { month: 'long', year: 'numeric' } : { month: 'short', year: '2-digit' })
+}
+const rangeText = (r: { dari: string; sampai: string }) => `${formatDate(r.dari)} – ${formatDate(r.sampai)}`
+
+function PctCell({ cur, base }: { cur: number; base: number }) {
+  if (base === 0) return <td className="px-1.5 py-1 text-right text-slate-400">—</td>
+  const c = ((cur - base) / Math.abs(base)) * 100
+  return (
+    <td className={`px-1.5 py-1 text-right font-bold tabular-nums ${c >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+      {c >= 0 ? '+' : '−'}
+      {Math.abs(c).toLocaleString('id-ID', { maximumFractionDigits: 1 })}%
+    </td>
+  )
+}
+
+type FoRingkasan = { ringkasan: { kunjungan: number; pasien_baru: number; transaksi: number; pendapatan_bersih: number } }
+
+export function HighlightsMagazine({ d, periode }: { d: HighlightsData; periode: Periode }) {
+  const klinik = useKlinikNama()
+  const label = periodeLabel(periode)
+  const footer = footerOf(klinik, 'Financial Highlights', label)
+  const p = d.periode
+  // Same cache key as the on-screen Operasional block, so it is already loaded when printing.
+  const fo = useQuery({
+    queryKey: ['laporan', '/laporan/fo', 'range', periode.dari, periode.sampai, undefined],
+    queryFn: () => apiGet<FoRingkasan>('/laporan/fo', { ...periode }),
+  }).data?.data?.ringkasan
+
+  const rows: { label: string; key: keyof HighlightsRingkasan; pct?: boolean; strong?: boolean }[] = [
+    { label: 'Pendapatan', key: 'pendapatan' },
+    { label: 'HPP', key: 'hpp' },
+    { label: 'Laba kotor', key: 'laba_kotor', strong: true },
+    { label: 'Beban operasional', key: 'beban_operasional' },
+    { label: 'Laba bersih', key: 'laba_bersih', strong: true },
+    { label: 'Margin kotor', key: 'margin_kotor', pct: true },
+    { label: 'Margin bersih', key: 'margin_bersih', pct: true },
+  ]
+  const posisiRows: { label: string; key: keyof HighlightsPosisi; strong?: boolean }[] = [
+    { label: 'Kas & bank', key: 'kas_bank' },
+    { label: 'Total aset', key: 'total_aset', strong: true },
+    { label: 'Utang usaha', key: 'utang_usaha' },
+    { label: 'Utang deposit pasien', key: 'utang_deposit_pasien' },
+    { label: 'Total kewajiban', key: 'total_kewajiban', strong: true },
+    { label: 'Ekuitas', key: 'total_ekuitas', strong: true },
+  ]
+  const fmt = (pct: boolean | undefined, v: number) => (pct ? `${v.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%` : money(v))
+  const potongan = d.komposisi_pendapatan.filter((a) => a.saldo < 0)
+  const th = 'h-6 px-1.5 text-right text-[9px] font-bold tracking-wider text-slate-500 uppercase first:text-left'
+
+  const trenLines: DetailLine[] = d.tren.map((t) => ({
+    kind: 'row',
+    cells: [bulanLabel(t.bulan, true), money(t.pendapatan), money(t.beban), money(t.laba_bersih)],
+  }))
+  const sum = (k: 'pendapatan' | 'beban' | 'laba_bersih') => d.tren.reduce((s, t) => s + t[k], 0)
+  trenLines.push({ kind: 'total', label: 'Total 12 bulan', cells: [money(sum('pendapatan')), money(sum('beban')), money(sum('laba_bersih'))] })
+  const lastBulan = d.tren[d.tren.length - 1]?.bulan ?? periode.sampai.slice(0, 7)
+  const operasional: [string, string][] = [
+    ['Kunjungan', fo ? fo.kunjungan.toLocaleString('id-ID') : '…'],
+    ['Pasien baru', fo ? fo.pasien_baru.toLocaleString('id-ID') : '…'],
+    ['Transaksi kasir', fo ? fo.transaksi.toLocaleString('id-ID') : '…'],
+    ['Rata-rata / transaksi', fo ? formatCurrency(fo.transaksi ? fo.pendapatan_bersih / fo.transaksi : 0) : '…'],
+  ]
+
+  return (
+    <>
+      <SummarySheet
+        title="Financial Highlights"
+        tagline="Ringkasan kinerja keuangan untuk owner"
+        periodeText={label}
+        compareText={rangeText(d.pembanding)}
+        kpis={[
+          { label: 'Pendapatan', value: p.pendapatan, prev: d.pembanding.pendapatan, money: true },
+          { label: 'Laba kotor', value: p.laba_kotor, prev: d.pembanding.laba_kotor, money: true, note: `margin ${p.margin_kotor.toLocaleString('id-ID')}%` },
+          {
+            label: p.laba_bersih >= 0 ? 'Laba bersih' : 'Rugi bersih',
+            value: p.laba_bersih,
+            prev: d.pembanding.laba_bersih,
+            money: true,
+            note: `margin ${p.margin_bersih.toLocaleString('id-ID')}%`,
+          },
+          { label: 'Kas & bank', value: d.posisi.kas_bank, prev: d.posisi_pembanding.kas_bank, money: true, note: `per ${formatDate(d.posisi.per)}` },
+        ]}
+        charts={[
+          {
+            title: 'Tren pendapatan 12 bulan',
+            node: (
+              <BarChart
+                className="h-44"
+                data={d.tren.map((t) => ({ key: t.bulan, label: bulanLabel(t.bulan), value: Math.max(0, t.pendapatan) }))}
+                formatValue={formatCurrency}
+              />
+            ),
+          },
+          { title: 'Komposisi pendapatan', node: <BarList items={top5(d.komposisi_pendapatan)} formatValue={formatCurrency} emptyText="Belum ada pendapatan" /> },
+        ]}
+        insights={financeInsights(d)}
+        footer={footer}
+      />
+
+      <section className={SHEET} aria-label="Perbandingan dan posisi keuangan">
+        <ContinuationBand title="Perbandingan & posisi keuangan" subtitle={label} />
+        <div className="grid min-h-0 flex-1 grid-cols-[1.45fr_1fr] gap-6 px-8 pt-4">
+          <div className="flex min-h-0 flex-col gap-4">
+            <div>
+              <SectionLabel>Laba rugi dibanding periode sebelumnya dan tahun lalu</SectionLabel>
+              <table className="w-full border-collapse text-[10.5px]">
+                <thead>
+                  <tr className="border-b border-slate-300">
+                    <th className={th}>Pos</th>
+                    <th className={th}>{rangeText(p)}</th>
+                    <th className={th}>{rangeText(d.pembanding)}</th>
+                    <th className={th}>Δ</th>
+                    <th className={th}>{rangeText(d.tahun_lalu)}</th>
+                    <th className={th}>Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const cur = p[r.key] as number
+                    const prev = d.pembanding[r.key] as number
+                    const yoy = d.tahun_lalu[r.key] as number
+                    return (
+                      <tr key={r.key} className={`border-b border-slate-100 ${r.strong ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
+                        <td className="px-1.5 py-1">{r.label}</td>
+                        <td className="px-1.5 py-1 text-right tabular-nums">{fmt(r.pct, cur)}</td>
+                        <td className="px-1.5 py-1 text-right tabular-nums">{fmt(r.pct, prev)}</td>
+                        {r.pct ? <td className="px-1.5 py-1 text-right text-slate-400">—</td> : <PctCell cur={cur} base={prev} />}
+                        <td className="px-1.5 py-1 text-right tabular-nums">{fmt(r.pct, yoy)}</td>
+                        {r.pct ? <td className="px-1.5 py-1 text-right text-slate-400">—</td> : <PctCell cur={cur} base={yoy} />}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <SectionLabel>Operasional (dari transaksi kasir)</SectionLabel>
+              <div className="grid grid-cols-4 gap-2">
+                {operasional.map(([k, v]) => (
+                  <div key={k} className="rounded-lg bg-slate-50 p-2">
+                    <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">{k}</p>
+                    <p className="text-sm font-extrabold text-slate-900 tabular-nums">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-col gap-4">
+            <div>
+              <SectionLabel>Posisi keuangan</SectionLabel>
+              <table className="w-full border-collapse text-[10.5px]">
+                <thead>
+                  <tr className="border-b border-slate-300">
+                    <th className={th}>Pos</th>
+                    <th className={th}>{formatDate(d.posisi.per)}</th>
+                    <th className={th}>{formatDate(d.posisi_pembanding.per)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {posisiRows.map((r) => (
+                    <tr key={r.key} className={`border-b border-slate-100 ${r.strong ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
+                      <td className="px-1.5 py-1">{r.label}</td>
+                      <td className="px-1.5 py-1 text-right tabular-nums">{money(d.posisi[r.key] as number)}</td>
+                      <td className="px-1.5 py-1 text-right tabular-nums">{money(d.posisi_pembanding[r.key] as number)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="min-h-0 overflow-hidden">
+              <SectionLabel>5 beban terbesar</SectionLabel>
+              <BarList items={top5(d.beban_terbesar)} formatValue={formatCurrency} emptyText="Belum ada beban di periode ini" />
+              {potongan.length ? (
+                <p className="mt-2 text-[9.5px] text-slate-500">
+                  Pendapatan sudah dikurangi {potongan.map((a) => `${a.akun.nama} ${formatCurrency(-a.saldo)}`).join(', ')}.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <SheetFooter page={2} left={footer} />
+      </section>
+
+      <DetailSheets
+        title="Laba / rugi per bulan"
+        subtitle={`12 bulan sampai ${bulanLabel(lastBulan, true)}`}
+        columns={[
+          { header: 'Bulan' },
+          { header: 'Pendapatan', align: 'right', width: '22%' },
+          { header: 'Beban', align: 'right', width: '22%' },
+          { header: 'Laba / rugi', align: 'right', width: '22%' },
+        ]}
+        lines={trenLines}
+        firstPage={3}
         footer={footer}
       />
     </>

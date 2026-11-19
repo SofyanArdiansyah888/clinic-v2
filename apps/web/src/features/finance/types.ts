@@ -145,3 +145,37 @@ export type BukuBesarSemuaData = {
   jumlah_transaksi: number
   akun_bermutasi: number
 }
+
+export type HighlightsRingkasan = {
+  dari: string
+  sampai: string
+  pendapatan: number
+  hpp: number
+  laba_kotor: number
+  beban_operasional: number
+  laba_bersih: number
+  margin_kotor: number
+  margin_bersih: number
+}
+
+export type HighlightsPosisi = {
+  per: string
+  total_aset: number
+  total_kewajiban: number
+  total_ekuitas: number
+  kas_bank: number
+  utang_deposit_pasien: number
+  utang_usaha: number
+}
+
+// GET /finance/laporan/highlights
+export type HighlightsData = {
+  periode: HighlightsRingkasan
+  pembanding: HighlightsRingkasan
+  tahun_lalu: HighlightsRingkasan
+  posisi: HighlightsPosisi
+  posisi_pembanding: HighlightsPosisi
+  tren: { bulan: string; pendapatan: number; beban: number; laba_bersih: number }[]
+  komposisi_pendapatan: AkunSaldo[]
+  beban_terbesar: AkunSaldo[]
+}

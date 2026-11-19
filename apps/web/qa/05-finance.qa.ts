@@ -56,15 +56,19 @@ test.describe('QA · Finance: Financial Highlights & PDF', () => {
         expect(title).toBe(`Financial Highlights ${h.periode.dari} sd ${h.periode.sampai}`)
       })
 
-      await test.step('Tampilan cetak: kop klinik tampil, menu dan tombol tersembunyi', async () => {
+      await test.step('Cetak di halaman ini (bukan pindah ke Majalah Kinerja): 3 lembar majalah A4 landscape', async () => {
+        await expect(page, 'PDF tidak berpindah halaman').toHaveURL(/\/finance\/highlights/)
         await page.emulateMedia({ media: 'print' })
-        await expect(page.getByText('Dicetak oleh', { exact: false })).toBeVisible()
+        await expect(page.getByRole('region', { name: 'Ringkasan Financial Highlights' })).toBeVisible()
+        await expect(page.getByRole('region', { name: 'Perbandingan dan posisi keuangan' })).toBeVisible()
+        await expect(page.getByRole('region', { name: 'Laba / rugi per bulan halaman 1' })).toBeVisible()
         await expect(page.getByText('Disetujui oleh', { exact: false })).toBeVisible()
         await expect(page.getByRole('button', { name: 'PDF', exact: true })).toBeHidden()
         await expect(page.getByRole('link', { name: 'Financial Highlights' })).toBeHidden()
         const path = info.outputPath('financial-highlights.pdf')
-        const pdf = await page.pdf({ path, format: 'A4', landscape: true, printBackground: true, preferCSSPageSize: true })
-        expect(pdf.byteLength).toBeGreaterThan(10_000)
+        const pdf = await page.pdf({ path, format: 'A4', landscape: true, printBackground: true, margin: { top: '12mm', bottom: '12mm', left: '12mm', right: '12mm' } })
+        const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+        expect(pages, 'ringkasan + perbandingan + laba rugi per bulan').toBe(3)
         await info.attach('financial-highlights.pdf', { path, contentType: 'application/pdf' })
         await page.emulateMedia({ media: 'screen' })
       })
@@ -78,7 +82,7 @@ test.describe('QA · Finance: Financial Highlights & PDF', () => {
   test('TC-FIN-02 Laba rugi bisa disimpan sebagai PDF A4', async ({ page }, info) => {
     await loginAs(page, 'finance')
     await page.goto('/finance/laba-rugi')
-    await expect(page.getByText(/LABA BERSIH|RUGI BERSIH/)).toBeVisible()
+    await expect(page.getByText(/LABA BERSIH|RUGI BERSIH/).filter({ visible: true }).first()).toBeVisible()
     const title = await clickPdf(page)
     expect(title).toMatch(/^Laba Rugi \d{4}-\d{2}-\d{2} sd \d{4}-\d{2}-\d{2}$/)
     await page.emulateMedia({ media: 'print' })

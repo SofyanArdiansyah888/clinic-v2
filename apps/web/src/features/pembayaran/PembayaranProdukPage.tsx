@@ -62,7 +62,8 @@ export function PembayaranProdukPage() {
     <div className="space-y-6">
       <PageHeader title="Pembayaran Produk" description="Tagihan obat & produk dari depo" />
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* Same overview grid as the other pages: cards keep their size instead of stretching. */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
           label="Invoice Pending"
           value={stats.count}
@@ -80,7 +81,6 @@ export function PembayaranProdukPage() {
       <Tabs
         value={activeTab}
         onChange={setActiveTab}
-        fullWidth
         items={[
           { value: 'langsung', label: 'Langsung', icon: <ShoppingCart /> },
           { value: 'online', label: 'Online', icon: <Laptop /> },

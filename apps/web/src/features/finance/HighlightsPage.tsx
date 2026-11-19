@@ -8,40 +8,12 @@ import { cn } from '@/shared/lib/cn'
 import { formatCurrency, formatDate, formatNumber } from '@/shared/lib/formatters'
 import { ReportShell, type Periode } from '@/features/laporan/ReportShell'
 import { Rp } from '@/features/finance/components/Statement'
-import type { AkunSaldo } from '@/features/finance/types'
+import { HighlightsMagazine } from '@/features/finance/print/magazines'
+import type { HighlightsData, HighlightsPosisi, HighlightsRingkasan } from '@/features/finance/types'
 
-type Ringkasan = {
-  dari: string
-  sampai: string
-  pendapatan: number
-  hpp: number
-  laba_kotor: number
-  beban_operasional: number
-  laba_bersih: number
-  margin_kotor: number
-  margin_bersih: number
-}
-
-type Posisi = {
-  per: string
-  total_aset: number
-  total_kewajiban: number
-  total_ekuitas: number
-  kas_bank: number
-  utang_deposit_pasien: number
-  utang_usaha: number
-}
-
-type Highlights = {
-  periode: Ringkasan
-  pembanding: Ringkasan
-  tahun_lalu: Ringkasan
-  posisi: Posisi
-  posisi_pembanding: Posisi
-  tren: { bulan: string; pendapatan: number; beban: number; laba_bersih: number }[]
-  komposisi_pendapatan: AkunSaldo[]
-  beban_terbesar: AkunSaldo[]
-}
+type Ringkasan = HighlightsRingkasan
+type Posisi = HighlightsPosisi
+type Highlights = HighlightsData
 
 type FoRingkasan = {
   ringkasan: { kunjungan: number; pasien_baru: number; transaksi: number; pendapatan_bersih: number }
@@ -141,7 +113,8 @@ export function HighlightsPage() {
       title="Financial Highlights"
       description="Ringkasan kinerja keuangan untuk owner, dibandingkan dengan periode sebelumnya dan tahun lalu"
       endpoint="/finance/laporan/highlights"
-      pdf={{ majalah: 'finance' }}
+      // PDF prints this report's own magazine sheets on this page (A4 landscape).
+      magazine={(d, periode) => <HighlightsMagazine d={d} periode={periode} />}
     >
       {(h, periode) => {
         const p = h.periode
