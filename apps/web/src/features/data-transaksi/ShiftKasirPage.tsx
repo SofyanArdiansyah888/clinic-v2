@@ -16,7 +16,7 @@ import { selisihInfo, type KasirShift } from '@/features/pembayaran/kasir-shift'
 const filterClass =
   'rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium focus:border-rose-500 focus:outline-none'
 
-const rp = (v: number) => (v < 0 ? `- ${formatCurrency(-v)}` : formatCurrency(v))
+const rp = (v: number) => (v < 0 ? `- ${formatCurrency(-v)}` : formatCurrency(v || 0))
 
 /** Read-only history of cashier shifts; the kasir sees their own, admin and finance see all. */
 export function ShiftKasirPage() {

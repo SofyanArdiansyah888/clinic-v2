@@ -12,7 +12,7 @@ import { metodeLabel } from '@/shared/lib/pembayaran'
 import { PAGE_CSS, printDocument, waitForImages } from '@/shared/lib/print'
 import { SUMBER_MUTASI, selisihInfo, type KasirShiftDetail } from './kasir-shift'
 
-const rp = (v: number) => (v < 0 ? `- ${formatCurrency(-v)}` : formatCurrency(v))
+const rp = (v: number) => (v < 0 ? `- ${formatCurrency(-v)}` : formatCurrency(v || 0))
 const cetak = (kode: string) => printDocument(`Tutup Kasir ${kode}`, PAGE_CSS.A4)
 
 /** A4 cash-up report for one cashier shift; opened in its own tab and printed once loaded. */
