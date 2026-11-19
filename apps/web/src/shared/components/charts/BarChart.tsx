@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SERIES } from '@/shared/components/charts/palette'
 import { cn } from '@/shared/lib/cn'
 import { formatCompact } from '@/shared/lib/formatters'
 
@@ -15,6 +16,8 @@ type BarChartProps = {
   formatValue: (value: number) => string
   /** Full label for the tooltip (e.g. "Kam, 19 Nov"). */
   formatLabel?: (d: BarDatum) => string
+  /** Series colour (CSS colour). One series = one colour; defaults to the chart blue. */
+  color?: string
   className?: string
 }
 
@@ -33,7 +36,7 @@ function niceMax(max: number) {
  * Single-series column chart: one hue, thin columns with a rounded data end,
  * hairline grid, per-column hover tooltip. Built from divs so it stays fluid.
  */
-export function BarChart({ data, formatValue, formatLabel, className }: BarChartProps) {
+export function BarChart({ data, formatValue, formatLabel, color = SERIES.pendapatan, className }: BarChartProps) {
   const [hover, setHover] = useState<number | null>(null)
   const max = niceMax(Math.max(0, ...data.map((d) => d.value)))
   const ticks = Array.from({ length: TICKS + 1 }, (_, i) => (max / TICKS) * (TICKS - i))
@@ -83,11 +86,11 @@ export function BarChart({ data, formatValue, formatLabel, className }: BarChart
                 >
                   <div
                     className={cn(
-                      'w-full max-w-6 rounded-t-[4px] transition-colors',
-                      hover === i ? 'bg-rose-600' : 'bg-rose-500',
+                      'w-full max-w-6 rounded-t-[4px] transition-[filter]',
+                      hover === i && 'brightness-90',
                       d.value > 0 && 'min-h-0.5',
                     )}
-                    style={{ height: `${pct}%` }}
+                    style={{ height: `${pct}%`, background: color }}
                   />
                 </div>
                 {/* label centred on its column but free to overflow it (30 narrow columns) */}

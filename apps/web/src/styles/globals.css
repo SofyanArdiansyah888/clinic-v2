@@ -42,6 +42,20 @@
   --radius-2xl: calc(var(--radius) + 8px);
 }
 
+/* Categorical chart palette (validated for colour-vision deficiency in this order).
+   Deliberately not tied to the theme brand colour; dark.css swaps in dark-surface steps. */
+:root {
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #6250d6;
+  --chart-8: #e34948;
+  --chart-other: #898781;
+}
+
 * {
   border-color: hsl(var(--border));
 }

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/features/auth/store'
 import { apiGet } from '@/shared/api/client'
 import { BarChart, type BarDatum } from '@/shared/components/charts/BarChart'
 import { BarList } from '@/shared/components/charts/BarList'
+import { SERIES } from '@/shared/components/charts/palette'
 import { formatCurrency, formatDate, formatNumber } from '@/shared/lib/formatters'
 import { jenisPembayaranLabel } from '@/shared/lib/pembayaran'
 import { statusLabel } from '@/shared/lib/status'
@@ -90,6 +91,7 @@ export function DashboardCharts({ hari }: { hari: TrenHari }) {
           ) : (
             <BarChart
               data={bars}
+              color={activeMetric === 'pendapatan' ? SERIES.pendapatan : SERIES.kunjungan}
               formatValue={activeMetric === 'pendapatan' ? formatCurrency : (v) => `${formatNumber(v)} kunjungan`}
               formatLabel={(d) => formatDate(d.key, 'EEE, d MMM')}
             />
