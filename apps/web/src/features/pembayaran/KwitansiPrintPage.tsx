@@ -9,7 +9,7 @@ import type { Klinik } from '@/shared/components/print/useKlinik'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn'
 import { formatCurrency, formatDate, formatDateTime, terbilang } from '@/shared/lib/formatters'
-import { PAGE_CSS, printDocument, waitForImages } from '@/shared/lib/print'
+import { PAGE_CSS, pageCss80mm, printDocument, waitForImages } from '@/shared/lib/print'
 import { metodeLabel } from '@/shared/lib/pembayaran'
 
 type KwitansiItem = { nama: string; jenis: string; qty: number; harga: number; subtotal: number }
@@ -73,11 +73,16 @@ export function KwitansiPrintPage() {
   })
   const k = query.data?.data
 
+  const receiptRef = useRef<HTMLDivElement>(null)
+  const cetak = (no: string) => printDocument(`Kwitansi ${no}`, format === '80mm' ? pageCss80mm(receiptRef.current) : PAGE_CSS[format])
+
   const printed = useRef(false)
   useEffect(() => {
     if (!k || printed.current) return
     printed.current = true
-    void waitForImages().then(() => printDocument(`Kwitansi ${k.no_invoice}`, PAGE_CSS[format]))
+    void waitForImages().then(() => cetak(k.no_invoice))
+    // cetak only reads the ref and format at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [k, format])
 
   function setFormat(next: Format) {
@@ -93,7 +98,7 @@ export function KwitansiPrintPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 py-6 print:bg-white print:py-0">
-      <style>{PAGE_CSS[format]}</style>
+      {format === 'A5' ? <style>{PAGE_CSS.A5}</style> : null}
       <div className="print-hide mx-auto mb-4 flex max-w-xl flex-wrap items-center justify-between gap-2 px-4">
         <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
           {(['A5', '80mm'] as const).map((f) => (
@@ -111,7 +116,7 @@ export function KwitansiPrintPage() {
             </button>
           ))}
         </div>
-        <Button type="button" size="sm" disabled={!k} onClick={() => k && printDocument(`Kwitansi ${k.no_invoice}`, PAGE_CSS[format])}>
+        <Button type="button" size="sm" disabled={!k} onClick={() => k && cetak(k.no_invoice)}>
           <Printer />
           Cetak
         </Button>
@@ -127,6 +132,7 @@ export function KwitansiPrintPage() {
         </p>
       ) : (
         <div
+          ref={receiptRef}
           className={cn(
             'relative mx-auto overflow-hidden bg-white text-slate-900 shadow-sm print:shadow-none',
             format === 'A5' ? 'w-[148mm] p-[8mm] text-[11px] print:w-auto print:p-0' : 'w-[80mm] p-[3mm] text-[10px] print:w-auto print:p-0',

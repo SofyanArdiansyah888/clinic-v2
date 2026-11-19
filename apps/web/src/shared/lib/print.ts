@@ -3,10 +3,19 @@ export const PAGE_CSS = {
   A4: '@page { size: A4; margin: 14mm 12mm; }',
   'A4-landscape': '@page { size: A4 landscape; margin: 12mm; }',
   A5: '@page { size: A5; margin: 8mm; }',
-  '80mm': '@page { size: 80mm auto; margin: 3mm; }',
+  // Chrome has no `auto` page height, so receipts use pageCss80mm() with the measured length;
+  // this fixed length is only the fallback before the receipt is measured.
+  '80mm': '@page { size: 80mm 200mm; margin: 3mm; }',
 } as const
 
 export type PageFormat = keyof typeof PAGE_CSS
+
+/** 80mm thermal roll: one page exactly as long as the receipt (element height + margins). */
+export function pageCss80mm(el: HTMLElement | null) {
+  if (!el) return PAGE_CSS['80mm']
+  const mm = Math.ceil((el.scrollHeight * 25.4) / 96) + 6
+  return `@page { size: 80mm ${mm}mm; margin: 3mm; }`
+}
 
 /**
  * Opens the browser's print dialog for the current page. The document title becomes the
