@@ -183,16 +183,16 @@ func (s *Service) LabaRugi(dari, sampai string) (*LabaRugi, error) {
 // ── Neraca ──
 
 type Neraca struct {
-	Per              string      `json:"per"`
-	Aset             []AkunSaldo `json:"aset"`
-	Kewajiban        []AkunSaldo `json:"kewajiban"`
-	Ekuitas          []AkunSaldo `json:"ekuitas"`
-	LabaBerjalan     float64     `json:"laba_berjalan"`
-	TotalAset        float64     `json:"total_aset"`
-	TotalKewajiban   float64     `json:"total_kewajiban"`
-	TotalEkuitas     float64     `json:"total_ekuitas"`
-	TotalPasiva      float64     `json:"total_pasiva"`
-	Seimbang         bool        `json:"seimbang"`
+	Per            string      `json:"per"`
+	Aset           []AkunSaldo `json:"aset"`
+	Kewajiban      []AkunSaldo `json:"kewajiban"`
+	Ekuitas        []AkunSaldo `json:"ekuitas"`
+	LabaBerjalan   float64     `json:"laba_berjalan"`
+	TotalAset      float64     `json:"total_aset"`
+	TotalKewajiban float64     `json:"total_kewajiban"`
+	TotalEkuitas   float64     `json:"total_ekuitas"`
+	TotalPasiva    float64     `json:"total_pasiva"`
+	Seimbang       bool        `json:"seimbang"`
 }
 
 // Neraca reports balances as of a date. Without period closing, all pendapatan and
@@ -271,14 +271,8 @@ type BukuBesar struct {
 	SaldoAkhir  float64        `json:"saldo_akhir"`
 }
 
-func (s *Service) BukuBesar(akunID uint, dari, sampai string) (*BukuBesar, error) {
-	if akunID == 0 {
-		return nil, errors.New("akun_id wajib diisi")
-	}
-	a, err := s.GetAkun(akunID)
-	if err != nil {
-		return nil, errors.New("akun tidak ditemukan")
-	}
+// ledgerRange defaults an empty range to the current month and validates it.
+func ledgerRange(dari, sampai string) (string, string, error) {
 	now := time.Now()
 	if dari == "" {
 		dari = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
@@ -287,13 +281,28 @@ func (s *Service) BukuBesar(akunID uint, dari, sampai string) (*BukuBesar, error
 		sampai = now.Format("2006-01-02")
 	}
 	if err := checkDate(dari); err != nil {
-		return nil, err
+		return "", "", err
 	}
 	if err := checkDate(sampai); err != nil {
-		return nil, err
+		return "", "", err
 	}
 	if sampai < dari {
-		return nil, errors.New("tanggal sampai harus setelah tanggal dari")
+		return "", "", errors.New("tanggal sampai harus setelah tanggal dari")
+	}
+	return dari, sampai, nil
+}
+
+func (s *Service) BukuBesar(akunID uint, dari, sampai string) (*BukuBesar, error) {
+	if akunID == 0 {
+		return nil, errors.New("akun_id wajib diisi")
+	}
+	a, err := s.GetAkun(akunID)
+	if err != nil {
+		return nil, errors.New("akun tidak ditemukan")
+	}
+	dari, sampai, err = ledgerRange(dari, sampai)
+	if err != nil {
+		return nil, err
 	}
 
 	var awal saldoRow
@@ -329,5 +338,93 @@ func (s *Service) BukuBesar(akunID uint, dari, sampai string) (*BukuBesar, error
 	}
 	res.TotalDebit, res.TotalKredit = Round(res.TotalDebit), Round(res.TotalKredit)
 	res.SaldoAkhir = Round(run)
+	return res, nil
+}
+
+// ── Buku besar semua akun ──
+
+type BukuBesarSemua struct {
+	Dari            string      `json:"dari"`
+	Sampai          string      `json:"sampai"`
+	Akuns           []BukuBesar `json:"akuns"`
+	TotalDebit      float64     `json:"total_debit"`
+	TotalKredit     float64     `json:"total_kredit"`
+	JumlahTransaksi int         `json:"jumlah_transaksi"`
+	AkunBermutasi   int         `json:"akun_bermutasi"`
+}
+
+type bukuBesarLine struct {
+	AkunID uint
+	BukuBesarRow
+}
+
+// BukuBesarSemua returns the ledger of every postable account for the period, each with its
+// opening balance, the period's lines (running balance) and closing balance, in kode order.
+// Two queries in total: opening sums per account, then every line in the period.
+func (s *Service) BukuBesarSemua(dari, sampai string) (*BukuBesarSemua, error) {
+	dari, sampai, err := ledgerRange(dari, sampai)
+	if err != nil {
+		return nil, err
+	}
+	akuns, err := s.postableAkuns()
+	if err != nil {
+		return nil, err
+	}
+
+	var awal []saldoRow
+	if err := s.db.Table("jurnal_details d").
+		Select("d.akun_id, COALESCE(SUM(d.debit),0) AS debit, COALESCE(SUM(d.kredit),0) AS kredit").
+		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
+		Where("j.tanggal < ?", dari).
+		Group("d.akun_id").
+		Scan(&awal).Error; err != nil {
+		return nil, err
+	}
+	awalBy := make(map[uint]saldoRow, len(awal))
+	for _, r := range awal {
+		awalBy[r.AkunID] = r
+	}
+
+	var lines []bukuBesarLine
+	if err := s.db.Table("jurnal_details d").
+		Select("d.akun_id, j.id AS jurnal_id, j.kode, j.tanggal, j.referensi, j.source_type, COALESCE(NULLIF(d.keterangan, ''), j.keterangan) AS keterangan, d.debit, d.kredit").
+		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
+		Where("j.tanggal BETWEEN ? AND ?", dari, sampai).
+		Order("d.akun_id ASC, j.tanggal ASC, j.id ASC, d.id ASC").
+		Scan(&lines).Error; err != nil {
+		return nil, err
+	}
+	linesBy := make(map[uint][]BukuBesarRow)
+	for _, l := range lines {
+		linesBy[l.AkunID] = append(linesBy[l.AkunID], l.BukuBesarRow)
+	}
+
+	res := &BukuBesarSemua{Dari: dari, Sampai: sampai, Akuns: make([]BukuBesar, 0, len(akuns))}
+	for _, a := range akuns {
+		o := awalBy[a.ID]
+		bb := BukuBesar{Akun: a, Dari: dari, Sampai: sampai, SaldoAwal: saldo(a, o.Debit, o.Kredit), Rows: []BukuBesarRow{}}
+		run := bb.SaldoAwal
+		for _, r := range linesBy[a.ID] {
+			if a.SaldoNormal == SaldoDebit {
+				run += r.Debit - r.Kredit
+			} else {
+				run += r.Kredit - r.Debit
+			}
+			r.Saldo = Round(run)
+			bb.TotalDebit += r.Debit
+			bb.TotalKredit += r.Kredit
+			bb.Rows = append(bb.Rows, r)
+		}
+		bb.TotalDebit, bb.TotalKredit = Round(bb.TotalDebit), Round(bb.TotalKredit)
+		bb.SaldoAkhir = Round(run)
+		res.TotalDebit += bb.TotalDebit
+		res.TotalKredit += bb.TotalKredit
+		res.JumlahTransaksi += len(bb.Rows)
+		if len(bb.Rows) > 0 {
+			res.AkunBermutasi++
+		}
+		res.Akuns = append(res.Akuns, bb)
+	}
+	res.TotalDebit, res.TotalKredit = Round(res.TotalDebit), Round(res.TotalKredit)
 	return res, nil
 }

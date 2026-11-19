@@ -141,7 +141,7 @@ export function HighlightsPage() {
       title="Financial Highlights"
       description="Ringkasan kinerja keuangan untuk owner, dibandingkan dengan periode sebelumnya dan tahun lalu"
       endpoint="/finance/laporan/highlights"
-      pdf={{ orientation: 'landscape' }}
+      pdf={{ majalah: 'finance' }}
     >
       {(h, periode) => {
         const p = h.periode

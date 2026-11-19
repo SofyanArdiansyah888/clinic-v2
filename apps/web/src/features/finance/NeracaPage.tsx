@@ -1,20 +1,10 @@
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { ReportShell } from '@/features/laporan/ReportShell'
+import { NeracaMagazine } from '@/features/finance/print/magazines'
 import { Rp, StatementCard, StatementSection } from '@/features/finance/components/Statement'
-import { saldoCsv, type AkunSaldo } from '@/features/finance/types'
+import { saldoCsv, type NeracaData } from '@/features/finance/types'
 
-type Neraca = {
-  per: string
-  aset: AkunSaldo[]
-  kewajiban: AkunSaldo[]
-  ekuitas: AkunSaldo[]
-  laba_berjalan: number
-  total_aset: number
-  total_kewajiban: number
-  total_ekuitas: number
-  total_pasiva: number
-  seimbang: boolean
-}
+type Neraca = NeracaData
 
 export function NeracaPage() {
   return (
@@ -22,6 +12,7 @@ export function NeracaPage() {
       title="Neraca"
       description="Aset, kewajiban, dan ekuitas per tanggal"
       endpoint="/finance/laporan/neraca"
+      magazine={(d, periode) => <NeracaMagazine d={d} periode={periode} />}
       mode="per"
     >
       {(d) => (

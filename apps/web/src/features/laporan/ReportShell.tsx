@@ -39,7 +39,10 @@ type ReportShellProps<T> = {
   // "PDF" prints the page on A4 with the clinic letterhead; false hides the button.
   // With `majalah`, it instead opens that division's chapter of Majalah Kinerja for the
   // same period and prints it there (A4 landscape magazine).
-  pdf?: false | { orientation?: 'portrait' | 'landscape'; majalah?: 'fo' | 'dokter' | 'terapis' | 'apotek' }
+  pdf?: false | { orientation?: 'portrait' | 'landscape'; majalah?: 'fo' | 'dokter' | 'terapis' | 'apotek' | 'finance' }
+  // Magazine-style print version of this report (A4 landscape sheets from features/majalah/sheet).
+  // When given, "PDF" prints these sheets instead of the screen.
+  magazine?: (data: T, periode: Periode, ctx: { fileName: string; periodeLabel: string }) => ReactNode
 }
 
 const inputClass =
@@ -59,6 +62,7 @@ export function ReportShell<T>({
   idleMessage,
   actions,
   pdf = {},
+  magazine,
 }: ReportShellProps<T>) {
   const [periode, setPeriode] = useState<Periode>(() => PRESETS[2].range())
   const navigate = useNavigate()
@@ -79,6 +83,10 @@ export function ReportShell<T>({
 
   return (
     <div className="space-y-6">
+      {magazine && data?.data ? (
+        <div className="print-only sheet-stack">{magazine(data.data, periode, { fileName, periodeLabel })}</div>
+      ) : null}
+      <div className={magazine ? 'print-hide space-y-6' : 'space-y-6'}>
       <PageHeader
         title={title}
         description={description}
@@ -99,7 +107,7 @@ export function ReportShell<T>({
                           to: '/laporan/majalah',
                           search: { bab: pdf.majalah, dari: periode.dari, sampai: periode.sampai, cetak: 1 },
                         })
-                      : printReport(fileName, pdf.orientation)
+                      : printReport(fileName, magazine ? 'landscape' : pdf.orientation)
                   }
                 >
                   <FileDown />
@@ -110,7 +118,7 @@ export function ReportShell<T>({
           ) : undefined
         }
       />
-      <PrintHeader title={title} periode={periodeLabel} />
+      {magazine ? null : <PrintHeader title={title} periode={periodeLabel} />}
 
       <div className="ui-card print-hide flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
         {filters}
@@ -155,7 +163,8 @@ export function ReportShell<T>({
       {isLoading ? <p className="text-sm text-slate-500">Memuat laporan...</p> : null}
       {isError ? <div className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{errorMessage}</div> : null}
       {data?.data ? children(data.data, periode) : null}
-      {data?.data && pdf ? <PrintFooter /> : null}
+      {data?.data && pdf && !magazine ? <PrintFooter /> : null}
+      </div>
     </div>
   )
 }

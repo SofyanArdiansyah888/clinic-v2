@@ -174,6 +174,15 @@ func (h *Handler) BukuBesar(c *gin.Context) {
 	response.OK(c, res, "ok")
 }
 
+func (h *Handler) BukuBesarSemua(c *gin.Context) {
+	res, err := h.svc.BukuBesarSemua(c.Query("dari"), c.Query("sampai"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	response.OK(c, res, "ok")
+}
+
 func (h *Handler) NeracaSaldo(c *gin.Context) {
 	res, err := h.svc.NeracaSaldo(c.Query("sampai"))
 	if err != nil {
@@ -229,6 +238,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.POST("/jurnal/:id/reverse", h.ReverseJurnal)
 
 		g.GET("/laporan/buku-besar", h.BukuBesar)
+		g.GET("/laporan/buku-besar/semua", h.BukuBesarSemua)
 		g.GET("/laporan/neraca-saldo", h.NeracaSaldo)
 		g.GET("/laporan/laba-rugi", h.LabaRugi)
 		g.GET("/laporan/neraca", h.Neraca)

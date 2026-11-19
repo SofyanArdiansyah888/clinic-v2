@@ -1,9 +1,10 @@
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { ReportShell, ReportTable, type ReportColumn } from '@/features/laporan/ReportShell'
-import { TIPE_LABEL, type Akun } from '@/features/finance/types'
+import { NeracaSaldoMagazine } from '@/features/finance/print/magazines'
+import { TIPE_LABEL, type NeracaSaldoData, type NeracaSaldoRow } from '@/features/finance/types'
 
-type Row = { akun: Akun; debit: number; kredit: number }
-type NeracaSaldo = { sampai: string; rows: Row[]; total_debit: number; total_kredit: number }
+type Row = NeracaSaldoRow
+type NeracaSaldo = NeracaSaldoData
 
 const columns: ReportColumn<Row>[] = [
   {
@@ -24,6 +25,7 @@ export function NeracaSaldoPage() {
       title="Neraca Saldo"
       description="Saldo setiap akun per tanggal"
       endpoint="/finance/laporan/neraca-saldo"
+      magazine={(d) => <NeracaSaldoMagazine d={d} />}
       mode="per"
     >
       {(d, periode) => {

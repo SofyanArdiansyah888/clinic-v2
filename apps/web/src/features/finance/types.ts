@@ -86,3 +86,62 @@ export function apiErrorMessage(err: unknown, fallback = 'Terjadi kesalahan') {
 export function saldoCsv(section: string, rows: AkunSaldo[]): CsvValue[][] {
   return rows.map((r) => [section, r.akun.kode, r.akun.nama, r.saldo])
 }
+
+// ── Report payloads (/finance/laporan/*) ──
+
+export type LabaRugiData = {
+  dari: string
+  sampai: string
+  pendapatan: AkunSaldo[]
+  beban: AkunSaldo[]
+  total_pendapatan: number
+  total_beban: number
+  laba_bersih: number
+}
+
+export type NeracaData = {
+  per: string
+  aset: AkunSaldo[]
+  kewajiban: AkunSaldo[]
+  ekuitas: AkunSaldo[]
+  laba_berjalan: number
+  total_aset: number
+  total_kewajiban: number
+  total_ekuitas: number
+  total_pasiva: number
+  seimbang: boolean
+}
+
+export type NeracaSaldoRow = { akun: Akun; debit: number; kredit: number }
+export type NeracaSaldoData = { sampai: string; rows: NeracaSaldoRow[]; total_debit: number; total_kredit: number }
+
+export type BukuBesarRow = {
+  jurnal_id: number
+  kode: string
+  tanggal: string
+  referensi: string
+  source_type: string
+  keterangan: string
+  debit: number
+  kredit: number
+  saldo: number
+}
+
+export type BukuBesarAkun = {
+  akun: Akun
+  saldo_awal: number
+  rows: BukuBesarRow[]
+  total_debit: number
+  total_kredit: number
+  saldo_akhir: number
+}
+
+export type BukuBesarSemuaData = {
+  dari: string
+  sampai: string
+  akuns: BukuBesarAkun[]
+  total_debit: number
+  total_kredit: number
+  jumlah_transaksi: number
+  akun_bermutasi: number
+}

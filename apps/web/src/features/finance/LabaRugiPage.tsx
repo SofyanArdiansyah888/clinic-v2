@@ -1,18 +1,11 @@
 import { KpiCard } from '@/shared/components/KpiCard'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
 import { KpiGrid, ReportShell } from '@/features/laporan/ReportShell'
+import { LabaRugiMagazine } from '@/features/finance/print/magazines'
 import { Rp, StatementCard, StatementSection } from '@/features/finance/components/Statement'
-import { saldoCsv, type AkunSaldo } from '@/features/finance/types'
+import { saldoCsv, type LabaRugiData } from '@/features/finance/types'
 
-type LabaRugi = {
-  dari: string
-  sampai: string
-  pendapatan: AkunSaldo[]
-  beban: AkunSaldo[]
-  total_pendapatan: number
-  total_beban: number
-  laba_bersih: number
-}
+type LabaRugi = LabaRugiData
 
 export function LabaRugiPage() {
   return (
@@ -20,6 +13,7 @@ export function LabaRugiPage() {
       title="Laba Rugi"
       description="Pendapatan bersih dikurangi HPP dan beban"
       endpoint="/finance/laporan/laba-rugi"
+      magazine={(d, periode) => <LabaRugiMagazine d={d} periode={periode} />}
     >
       {(d) => (
         <>

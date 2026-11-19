@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, FileDown, Info, Save } from 'lucide-react'
+import { FileDown, Save } from 'lucide-react'
 import { useSearch } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { apiGet, apiPut } from '@/shared/api/client'
@@ -27,11 +27,11 @@ import {
   type NurseData,
   type Periode,
 } from './data'
-import { apotekInsights, dokterInsights, financeInsights, foInsights, terapisInsights, type Insight, type Tone } from './insights'
+import { apotekInsights, dokterInsights, financeInsights, foInsights, terapisInsights, type Insight } from './insights'
+import { ChapterBand, InsightList, KpiTile, SHEET, SheetFooter, useKlinikNama, type Kpi } from './sheet'
 
 // ── Model per chapter ──
 
-type Kpi = { label: string; value: number; prev?: number; money?: boolean; lowerIsBetter?: boolean; note?: string }
 type Chapter = { kpis: Kpi[]; insights: Insight[]; chartTitle: string; chart: ReactNode }
 
 const bulan = (b: string) => {
@@ -200,75 +200,6 @@ function NoteBox({ divisi, periode, note, role }: { divisi: NoteKey; periode: Pe
   )
 }
 
-// ── Sheet building blocks ──
-
-const SHEET =
-  'sheet relative mx-auto flex h-[186mm] w-[273mm] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm'
-
-function SheetFooter({ page, periode, klinik }: { page: number; periode: string; klinik: string }) {
-  return (
-    <div className="mt-auto flex items-center justify-between border-t border-slate-200 px-8 py-2 text-[9px] tracking-wide text-slate-400 uppercase">
-      <span>
-        {klinik} · Laporan Kinerja · {periode}
-      </span>
-      <span className="tabular-nums">{page}</span>
-    </div>
-  )
-}
-
-const fmtVal = (k: Kpi, v: number) => (k.money ? formatCurrency(v) : formatNumber(v))
-
-function KpiTile({ k, prevLabel }: { k: Kpi; prevLabel: string }) {
-  const c = k.prev === undefined || k.prev === 0 ? null : ((k.value - k.prev) / Math.abs(k.prev)) * 100
-  const good = c === null ? null : (c >= 0) !== !!k.lowerIsBetter
-  return (
-    <div className="rounded-xl border border-slate-200 p-3">
-      <p className="text-[10px] font-bold tracking-[0.1em] text-slate-500 uppercase">{k.label}</p>
-      <p className={cn('mt-1 text-[22px] leading-tight font-extrabold tracking-tight tabular-nums', k.value < 0 ? 'text-rose-600' : 'text-slate-900')}>
-        {fmtVal(k, k.value)}
-      </p>
-      <p className="mt-1 flex flex-wrap items-center gap-x-1 text-[10px] text-slate-500">
-        {c !== null ? (
-          <span className={cn('inline-flex items-center font-bold', good ? 'text-emerald-700' : 'text-rose-600')}>
-            {c >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-            {formatNumber(Math.abs(c))}%
-          </span>
-        ) : null}
-        <span>
-          {k.prev !== undefined ? `${prevLabel}: ${fmtVal(k, k.prev)}` : null}
-          {k.note ? `${k.prev !== undefined ? ' · ' : ''}${k.note}` : null}
-        </span>
-      </p>
-    </div>
-  )
-}
-
-const TONE: Record<Tone, { icon: ReactNode; cls: string; label: string }> = {
-  naik: { icon: <ArrowUpRight className="h-3.5 w-3.5" />, cls: 'bg-emerald-50 text-emerald-700', label: 'Naik' },
-  turun: { icon: <ArrowDownRight className="h-3.5 w-3.5" />, cls: 'bg-rose-50 text-rose-600', label: 'Turun' },
-  perhatian: { icon: <AlertTriangle className="h-3.5 w-3.5" />, cls: 'bg-amber-50 text-amber-700', label: 'Perhatian' },
-  info: { icon: <Info className="h-3.5 w-3.5" />, cls: 'bg-slate-100 text-slate-500', label: 'Info' },
-}
-
-function InsightList({ items, prefix }: { items: { insight: Insight; divisi?: string }[]; prefix?: boolean }) {
-  if (!items.length) return <p className="text-xs text-slate-400">Belum ada data yang cukup untuk dianalisa.</p>
-  return (
-    <ul className="space-y-2">
-      {items.map(({ insight, divisi }, i) => (
-        <li key={i} className="flex gap-2 text-[11.5px] leading-snug text-slate-700">
-          <span className={cn('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full', TONE[insight.tone].cls)} title={TONE[insight.tone].label}>
-            {TONE[insight.tone].icon}
-          </span>
-          <span>
-            {prefix && divisi ? <b className="text-slate-900">{divisi}: </b> : null}
-            {insight.text}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 // ── Page ──
 
 const inputClass = 'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none'
@@ -294,11 +225,7 @@ export function MajalahPage() {
   const withSummary = role === 'admin' && chapters.length > 1
   const valid = !!periode.dari && !!periode.sampai && periode.dari <= periode.sampai
 
-  const klinik = useQuery({
-    queryKey: ['pengaturan', 'klinik'],
-    queryFn: () => apiGet<{ nama?: string }>('/pengaturan/klinik'),
-    staleTime: 10 * 60_000,
-  }).data?.data?.nama || 'Klinik'
+  const klinik = useKlinikNama()
 
   const results = useQueries({
     queries: available.flatMap((d) => [
@@ -487,7 +414,7 @@ export function MajalahPage() {
                 </div>
               </div>
             </div>
-            <SheetFooter page={2} periode={label} klinik={klinik} />
+            <SheetFooter page={2} left={`${klinik} · Laporan Kinerja · ${label}`} />
           </section>
         ) : null}
 
@@ -496,18 +423,18 @@ export function MajalahPage() {
           const m = models[d.key]
           return (
             <section key={d.key} className={SHEET} aria-label={`Bab ${d.nama}`}>
-              <div className="flex items-end justify-between bg-slate-900 px-8 py-5 text-white">
-                <div>
-                  <p className="text-[10px] font-bold tracking-[0.3em] text-rose-300 uppercase">Bab {i + 1}</p>
-                  <h2 className="text-3xl leading-tight font-extrabold tracking-tight">{d.nama}</h2>
-                  <p className="text-xs text-white/60">{d.tagline}</p>
-                </div>
-                <p className="text-right text-xs text-white/70">
-                  {label}
-                  <br />
-                  <span className="text-white/45">vs {prevLabel}</span>
-                </p>
-              </div>
+              <ChapterBand
+                kicker={`Bab ${i + 1}`}
+                title={d.nama}
+                tagline={d.tagline}
+                right={
+                  <>
+                    {label}
+                    <br />
+                    <span className="text-white/45">vs {prevLabel}</span>
+                  </>
+                }
+              />
               {m ? (
                 <div className="grid min-h-0 flex-1 grid-cols-[1.35fr_1fr] gap-6 px-8 py-5">
                   <div className="flex min-h-0 flex-col gap-4">
@@ -532,7 +459,7 @@ export function MajalahPage() {
               ) : (
                 <p className="flex-1 p-8 text-sm text-slate-400">Memuat data {d.nama}...</p>
               )}
-              <SheetFooter page={firstChapterPage + i} periode={label} klinik={klinik} />
+              <SheetFooter page={firstChapterPage + i} left={`${klinik} · Laporan Kinerja · ${label}`} />
             </section>
           )
         })}

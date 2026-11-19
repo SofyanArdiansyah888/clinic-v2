@@ -237,3 +237,59 @@ func TestJurnalManualDanPengaturanAkun(t *testing.T) {
 	e.expectSaldo(map[string]float64{"4-1902": 150000, "1-1101": -150000})
 	e.expectBalanced()
 }
+
+func TestBukuBesarSemuaAkun(t *testing.T) {
+	e := newEnv(t)
+	e.fixtures(0)
+
+	var akuns []finance.Akun
+	e.must("GET", "/finance/akun", nil, &akuns)
+	byKode := map[string]finance.Akun{}
+	postable := 0
+	for _, a := range akuns {
+		byKode[a.Kode] = a
+		if !a.IsHeader {
+			postable++
+		}
+	}
+	kas, gaji := byKode["1-1101"], byKode["6-1101"]
+	jurnal := func(tgl string, nilai float64) {
+		e.t.Helper()
+		e.must("POST", "/finance/jurnal", map[string]any{
+			"tanggal": tgl, "keterangan": "Gaji " + tgl,
+			"details": []map[string]any{{"akun_id": gaji.ID, "debit": nilai}, {"akun_id": kas.ID, "kredit": nilai}},
+		}, nil)
+	}
+	jurnal("2026-10-20", 200000) // before the period: only in saldo awal
+	jurnal("2026-11-03", 1000000)
+	jurnal("2026-11-05", 500000)
+
+	var bb finance.BukuBesarSemua
+	e.must("GET", "/finance/laporan/buku-besar/semua?dari=2026-11-01&sampai=2026-11-30", nil, &bb)
+	if len(bb.Akuns) != postable {
+		t.Fatalf("akuns = %d, want every postable account (%d)", len(bb.Akuns), postable)
+	}
+	if bb.AkunBermutasi != 2 || bb.JumlahTransaksi != 4 || bb.TotalDebit != 1500000 || bb.TotalKredit != 1500000 {
+		t.Fatalf("totals = bermutasi %d, transaksi %d, D %v, K %v", bb.AkunBermutasi, bb.JumlahTransaksi, bb.TotalDebit, bb.TotalKredit)
+	}
+	for _, a := range bb.Akuns {
+		switch a.Akun.Kode {
+		case "6-1101":
+			if a.SaldoAwal != 200000 || len(a.Rows) != 2 || a.Rows[0].Saldo != 1200000 || a.SaldoAkhir != 1700000 {
+				t.Errorf("gaji ledger = awal %v, rows %d, akhir %v", a.SaldoAwal, len(a.Rows), a.SaldoAkhir)
+			}
+		case "1-1101":
+			// Kas has a debit normal balance, so paying out makes it negative.
+			if a.SaldoAwal != -200000 || a.TotalKredit != 1500000 || a.SaldoAkhir != -1700000 {
+				t.Errorf("kas ledger = awal %v, kredit %v, akhir %v", a.SaldoAwal, a.TotalKredit, a.SaldoAkhir)
+			}
+		default:
+			if len(a.Rows) != 0 {
+				t.Errorf("akun %s has %d rows, want none", a.Akun.Kode, len(a.Rows))
+			}
+		}
+	}
+	if r := e.call("staff", "GET", "/finance/laporan/buku-besar/semua", nil); r.Code != http.StatusForbidden {
+		t.Errorf("staff reads buku besar semua: %d, want 403", r.Code)
+	}
+}
