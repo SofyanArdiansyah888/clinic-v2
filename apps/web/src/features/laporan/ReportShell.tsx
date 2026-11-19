@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { addDays, format, startOfMonth } from 'date-fns'
 import { Download, FileDown } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react'
 import { apiGet } from '@/shared/api/client'
 import { DataTable, type Column } from '@/shared/components/DataTable'
@@ -36,7 +37,9 @@ type ReportShellProps<T> = {
   idleMessage?: string
   actions?: ReactNode
   // "PDF" prints the page on A4 with the clinic letterhead; false hides the button.
-  pdf?: false | { orientation?: 'portrait' | 'landscape' }
+  // With `majalah`, it instead opens that division's chapter of Majalah Kinerja for the
+  // same period and prints it there (A4 landscape magazine).
+  pdf?: false | { orientation?: 'portrait' | 'landscape'; majalah?: 'fo' | 'dokter' | 'terapis' | 'apotek' }
 }
 
 const inputClass =
@@ -58,6 +61,7 @@ export function ReportShell<T>({
   pdf = {},
 }: ReportShellProps<T>) {
   const [periode, setPeriode] = useState<Periode>(() => PRESETS[2].range())
+  const navigate = useNavigate()
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['laporan', endpoint, mode, periode.dari, periode.sampai, params],
@@ -89,7 +93,14 @@ export function ReportShell<T>({
                   variant="outline"
                   size="sm"
                   disabled={!data?.data}
-                  onClick={() => printReport(fileName, pdf.orientation)}
+                  onClick={() =>
+                    pdf.majalah
+                      ? navigate({
+                          to: '/laporan/majalah',
+                          search: { bab: pdf.majalah, dari: periode.dari, sampai: periode.sampai, cetak: 1 },
+                        })
+                      : printReport(fileName, pdf.orientation)
+                  }
                 >
                   <FileDown />
                   PDF

@@ -41,6 +41,7 @@ export function DmPage() {
       title="Laporan DM"
       description="Perawatan, komisi, dan diagnosa dokter"
       endpoint="/laporan/dm"
+      pdf={{ majalah: 'dokter' }}
     >
       {(d, periode) => (
         <>

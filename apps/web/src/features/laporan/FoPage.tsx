@@ -62,6 +62,7 @@ export function FoPage() {
       title="Laporan FO"
       description="Kunjungan, pasien baru, dan pendapatan"
       endpoint="/laporan/fo"
+      pdf={{ majalah: 'fo' }}
     >
       {(d, periode) => (
         <>

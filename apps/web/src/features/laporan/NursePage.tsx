@@ -41,6 +41,7 @@ export function NursePage() {
       title="Laporan Nurse"
       description="Tindakan dan komisi terapis"
       endpoint="/laporan/nurse"
+      pdf={{ majalah: 'terapis' }}
     >
       {(d, periode) => (
         <>

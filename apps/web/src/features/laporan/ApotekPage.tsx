@@ -44,6 +44,7 @@ export function ApotekPage() {
       title="Laporan Apotek"
       description="Penjualan, resep, dan stok menipis"
       endpoint="/laporan/apotek"
+      pdf={{ majalah: 'apotek' }}
     >
       {(d, periode) => (
         <>

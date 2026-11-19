@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, FileDown, Info, Save } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useSearch } from '@tanstack/react-router'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { apiGet, apiPut } from '@/shared/api/client'
 import { BarChart } from '@/shared/components/charts/BarChart'
 import { BarList } from '@/shared/components/charts/BarList'
@@ -272,14 +273,25 @@ function InsightList({ items, prefix }: { items: { insight: Insight; divisi?: st
 
 const inputClass = 'rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none'
 
+// Opened from a report's PDF button: ?bab=fo&dari=…&sampai=…&cetak=1 prints that one chapter.
+type MajalahSearch = { bab?: string; dari?: string; sampai?: string; cetak?: string | number | boolean }
+const isIsoDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+
 export function MajalahPage() {
   const role = useAuthStore((s) => s.user?.role) ?? ''
-  const [periode, setPeriode] = useState<Periode>({ dari: startOfMonthIso(), sampai: todayIso() })
+  const search = useSearch({ strict: false }) as MajalahSearch
+  const [periode, setPeriode] = useState<Periode>(() =>
+    isIsoDate(search.dari) && isIsoDate(search.sampai) && search.dari <= search.sampai
+      ? { dari: search.dari, sampai: search.sampai }
+      : { dari: startOfMonthIso(), sampai: todayIso() },
+  )
   const prevPeriode = useMemo(() => previousPeriode(periode), [periode])
   const available = DIVISI.filter((d) => d.roles.includes(role))
-  const [chosen, setChosen] = useState<DivisiKey[]>(() => available.map((d) => d.key))
+  const bab = available.find((d) => d.key === search.bab)?.key
+  const [chosen, setChosen] = useState<DivisiKey[]>(() => (bab ? [bab] : available.map((d) => d.key)))
   const chapters = available.filter((d) => chosen.includes(d.key))
-  const withSummary = role === 'admin'
+  // A single-division print is cover + its chapter; the cross-division summary only when printing several.
+  const withSummary = role === 'admin' && chapters.length > 1
   const valid = !!periode.dari && !!periode.sampai && periode.dari <= periode.sampai
 
   const klinik = useQuery({
@@ -314,6 +326,20 @@ export function MajalahPage() {
 
   const loading = results.some((r) => r.isLoading) || notes.isLoading
   const failed = results.some((r) => r.isError)
+
+  const fileName =
+    chapters.length === 1
+      ? `Laporan ${chapters[0].nama} ${klinik} ${periode.dari} sd ${periode.sampai}`
+      : `Laporan Kinerja ${klinik} ${periode.dari} sd ${periode.sampai}`
+  const canPrint = !loading && !failed && chapters.length > 0 && chapters.every((d) => models[d.key])
+  // cetak=1 opens the print dialog once, after the chapter's data (and fonts) are in.
+  const autoPrinted = useRef(false)
+  useEffect(() => {
+    if (!search.cetak || autoPrinted.current || !canPrint) return
+    autoPrinted.current = true
+    const t = window.setTimeout(() => printReport(fileName, 'landscape'), 300)
+    return () => window.clearTimeout(t)
+  }, [search.cetak, canPrint, fileName])
   const noteOf = (k: NoteKey) => notes.data?.data?.find((n) => n.divisi === k)
   const label = periodeLabel(periode)
   const prevLabel = periodeLabel(prevPeriode)
@@ -338,7 +364,7 @@ export function MajalahPage() {
           title="Majalah Kinerja"
           description="Laporan bergaya majalah per divisi: angka, temuan otomatis, dan catatan kepala divisi, siap dipresentasikan"
           actions={
-            <Button type="button" size="sm" disabled={loading || failed || !chapters.length} onClick={() => printReport(`Laporan Kinerja ${klinik} ${periode.dari} sd ${periode.sampai}`, 'landscape')}>
+            <Button type="button" size="sm" disabled={!canPrint} onClick={() => printReport(fileName, 'landscape')}>
               <FileDown />
               Cetak / PDF
             </Button>
