@@ -212,3 +212,29 @@ func TestRingkasanGudangDanMembership(t *testing.T) {
 		t.Errorf("membership by pasien name = %d, want 1", n)
 	}
 }
+
+func TestRingkasanDanFilterDeposit(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(0)
+	e.must("POST", "/pembayaran/deposit", map[string]any{"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "jenis": "pembayaran_deposit", "jumlah": 50000, "jenis_pembayaran": "tunai"}, nil)
+	e.must("POST", "/pembayaran/deposit", map[string]any{"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": "2026-11-05", "jenis": "pendaftaran_member", "jumlah": 30000, "jenis_pembayaran": "tunai"}, nil)
+
+	var s struct {
+		Jumlah          int     `json:"jumlah"`
+		TotalMasuk      float64 `json:"total_masuk"`
+		TransaksiMember int     `json:"transaksi_member"`
+	}
+	e.get(fmt.Sprintf("/pembayaran/deposit/summary?pasien_id=%d", f.pasien), &s)
+	if s.Jumlah != 2 || s.TotalMasuk != 80000 || s.TransaksiMember != 1 {
+		t.Fatalf("deposit summary = %+v", s)
+	}
+	if n := e.listLen("/pembayaran/deposit?dari=2026-11-02&sampai=2026-11-30&search=Pasien%20Uji"); n != 1 {
+		t.Errorf("deposit by period and pasien name = %d, want 1", n)
+	}
+	if n := e.listLen("/pembayaran/deposit?jenis_pembayaran=transfer&search=Pasien%20Uji"); n != 0 {
+		t.Errorf("deposit by transfer = %d, want 0", n)
+	}
+	if r := e.call("admin", "GET", "/pembayaran/deposit?dari=2026-11-30&sampai=2026-11-01", nil); r.Code != http.StatusBadRequest {
+		t.Errorf("reversed period = %d, want 400", r.Code)
+	}
+}

@@ -44,7 +44,7 @@ export function StaffSelect({
 
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'select'],
-    queryFn: () => apiGet<StaffLite[]>('/staff', { per_page: 200, page: 1 }),
+    queryFn: () => apiGet<StaffLite[]>('/staff', { per_page: 200, page: 1, cabang: 'aktif' }),
   })
   // Fresh from the server, so a link made by admin applies without logging in again.
   const me = useQuery({

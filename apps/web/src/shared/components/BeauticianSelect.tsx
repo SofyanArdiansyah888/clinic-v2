@@ -38,7 +38,7 @@ export function BeauticianSelect({
 }: BeauticianSelectProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'beautician-select'],
-    queryFn: () => apiGet<StaffLite[]>('/staff', { per_page: 200, page: 1 }),
+    queryFn: () => apiGet<StaffLite[]>('/staff', { per_page: 200, page: 1, cabang: 'aktif' }),
   })
 
   const staffMap = useMemo(() => {

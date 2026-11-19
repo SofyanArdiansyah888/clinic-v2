@@ -40,7 +40,7 @@ var Keys = map[string]string{
 
 type MonthlySequence struct {
 	ID        uint   `gorm:"primaryKey"`
-	Key       string `gorm:"size:10;uniqueIndex:idx_monthly_key_ym"`
+	Key       string `gorm:"size:16;uniqueIndex:idx_monthly_key_ym"`
 	YearMonth string `gorm:"size:4;uniqueIndex:idx_monthly_key_ym"`
 	Counter   int    `gorm:"not null;default:0"`
 }
@@ -64,6 +64,36 @@ func (s *Service) Generate(key string) (string, error) {
 	if _, ok := Keys[key]; !ok {
 		return "", fmt.Errorf("invalid model key: %s", key)
 	}
+	n, ym, err := s.next(key)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s%05d", key, ym, n), nil
+}
+
+// GenerateCabang numbers a branch document as KEY-SINGKATAN-YYMM#####, counting per branch.
+// Without a branch prefix it falls back to the plain KEY-YYMM##### sequence.
+func (s *Service) GenerateCabang(key string, cabangID uint) (string, error) {
+	if _, ok := Keys[key]; !ok {
+		return "", fmt.Errorf("invalid model key: %s", key)
+	}
+	var singkatan string
+	if cabangID != 0 {
+		s.db.Table("cabangs").Where("id = ?", cabangID).Select("singkatan").Scan(&singkatan)
+	}
+	if singkatan == "" {
+		return s.Generate(key)
+	}
+	seqKey := key + "-" + singkatan
+	n, ym, err := s.next(seqKey)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s%05d", seqKey, ym, n), nil
+}
+
+// next bumps the monthly counter for a sequence key.
+func (s *Service) next(key string) (int, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -81,7 +111,7 @@ func (s *Service) Generate(key string) (string, error) {
 		return tx.Model(&seq).Update("counter", seq.Counter).Error
 	})
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	return fmt.Sprintf("%s-%s%05d", key, ym, seq.Counter), nil
+	return seq.Counter, ym, nil
 }

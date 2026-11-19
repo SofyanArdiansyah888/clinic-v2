@@ -12,6 +12,7 @@ import (
 type DepositTransaksi struct {
 	ID              uint                 `gorm:"primaryKey" json:"id"`
 	Kode            string               `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID        uint                 `gorm:"not null;default:0;index" json:"cabang_id"`
 	PasienID        uint                 `gorm:"not null;index" json:"pasien_id"`
 	MembershipID    *uint                `gorm:"index" json:"membership_id"`
 	TreatmentID     *uint                `gorm:"index" json:"treatment_id"`
@@ -37,6 +38,7 @@ func (DepositTransaksi) TableName() string { return "deposit_transaksis" }
 type PaketPerawatan struct {
 	ID              uint                 `gorm:"primaryKey" json:"id"`
 	Kode            string               `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID        uint                 `gorm:"not null;default:0;index" json:"cabang_id"`
 	PasienID        uint                 `gorm:"not null;index" json:"pasien_id"`
 	TreatmentID     uint                 `gorm:"not null;index" json:"treatment_id"`
 	StaffID         uint                 `gorm:"not null;index" json:"staff_id"`

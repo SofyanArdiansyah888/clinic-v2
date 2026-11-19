@@ -12,6 +12,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -27,6 +28,21 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
+}
+
+// In binds the service to a branch for callers outside a request handler (the kasir).
+func (s *Service) In(b branch.Ctx) *Service {
+	cp := *s
+	cp.cab = b
+	return &cp
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -135,7 +151,7 @@ func applySearch(q *gorm.DB, search string) *gorm.DB {
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Penjualan, pagination.Meta, error) {
-	q := s.repo.db.Model(&Penjualan{}).Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").Preload("Details.Barang")
+	q := s.cab.Scope(s.repo.db.Model(&Penjualan{}), "penjualans.cabang_id").Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Details.Treatment").Preload("Details.Barang")
 	q = applySearch(applyListFilters(q, f), p.Search)
 	var items []Penjualan
 	meta, err := pagination.Paginate(q, p, &items)
@@ -155,7 +171,7 @@ type Summary struct {
 
 func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
 	var out Summary
-	err := applySearch(applyListFilters(s.repo.db.Model(&Penjualan{}), f), search).Select(`
+	err := applySearch(applyListFilters(s.cab.Scope(s.repo.db.Model(&Penjualan{}), "penjualans.cabang_id"), f), search).Select(`
 		COUNT(*) FILTER (WHERE status <> 'cancelled') AS jumlah,
 		COALESCE(SUM(total_harga) FILTER (WHERE status = 'paid'), 0) AS nilai_lunas,
 		COUNT(*) FILTER (WHERE status = 'paid') AS jumlah_lunas,
@@ -167,7 +183,7 @@ func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
 
 func (s *Service) Get(id uint) (*Penjualan, error) {
 	var item Penjualan
-	if err := s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Pasien").Preload("Staff").Preload("Bank").
 		Preload("Details.Treatment").Preload("Details.Barang").First(&item, id).Error; err != nil {
 		return nil, err
 	}
@@ -193,7 +209,11 @@ func (s *Service) Create(req UpsertRequest) (*Penjualan, error) {
 // CreateTx creates a penjualan with its details inside the caller's transaction,
 // taking barang stock out and writing kartu stok rows.
 func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
-	kode, err := s.gen.Generate("PJL")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("PJL", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +232,7 @@ func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 
 	var total float64
 	item := &Penjualan{
-		Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
+		Kode: kode, CabangID: cabangID, PasienID: req.PasienID, StaffID: req.StaffID,
 		PerawatanID: req.PerawatanID, AntrianID: req.AntrianID,
 		Tanggal: tanggal, NoInvoice: noInvoice, Status: status,
 		Keterangan: req.Keterangan, JenisPembayaran: req.JenisPembayaran,
@@ -384,7 +404,7 @@ func (s *Service) returnStock(tx *gorm.DB, penjualanID uint, kode, ket string) e
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item Penjualan
-		if err := tx.First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").First(&item, id).Error; err != nil {
 			return err
 		}
 		if err := finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Hapus penjualan "+item.Kode); err != nil {
@@ -408,7 +428,7 @@ func (h *Handler) Index(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	items, meta, err := h.svc.List(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -422,7 +442,7 @@ func (h *Handler) Summary(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	out, err := h.svc.Summary(f, c.Query("search"))
+	out, err := h.svc.For(c).Summary(f, c.Query("search"))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -432,7 +452,7 @@ func (h *Handler) Summary(c *gin.Context) {
 
 func (h *Handler) Show(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.Get(uint(id))
+	item, err := h.svc.For(c).Get(uint(id))
 	if err != nil {
 		response.NotFound(c, "penjualan not found")
 		return
@@ -451,10 +471,10 @@ func (h *Handler) Store(c *gin.Context) {
 		response.BadRequest(c, "status penjualan baru harus draft atau confirmed", nil)
 		return
 	}
-	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
+	if !actor.OwnStaff(c, h.svc.For(c).repo.db, &req.StaffID) {
 		return
 	}
-	item, err := h.svc.Create(req)
+	item, err := h.svc.For(c).Create(req)
 	if err != nil {
 		response.BadRequest(c, "failed to create penjualan", err.Error())
 		return
@@ -464,7 +484,7 @@ func (h *Handler) Store(c *gin.Context) {
 
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.Delete(uint(id)); err != nil {
+	if err := h.svc.For(c).Delete(uint(id)); err != nil {
 		fail(c, err)
 		return
 	}
@@ -478,7 +498,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStatus(uint(id), req)
+	item, err := h.svc.For(c).UpdateStatus(uint(id), req)
 	if err != nil {
 		fail(c, err)
 		return

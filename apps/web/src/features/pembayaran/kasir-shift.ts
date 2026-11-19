@@ -7,6 +7,8 @@ export type KasirShift = {
   user_id: number
   staff_id: number | null
   kasir_nama: string
+  cabang_id: number
+  cabang_nama: string
   saldo_awal: number
   opened_at: string
   catatan_buka: string

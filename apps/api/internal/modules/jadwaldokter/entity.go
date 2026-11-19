@@ -4,6 +4,7 @@ import "time"
 
 type JadwalDokter struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`
+	CabangID   uint      `gorm:"not null;default:0;index" json:"cabang_id"`
 	DokterNama string    `gorm:"size:150;not null" json:"dokter_nama"`
 	Hari       string    `gorm:"size:10;not null;index" json:"hari"`
 	JamMulai   string    `gorm:"size:5;not null" json:"jam_mulai"`

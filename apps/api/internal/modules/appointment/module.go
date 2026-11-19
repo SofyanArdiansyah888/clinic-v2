@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -20,6 +21,14 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -52,7 +61,7 @@ func parseDate(s string) (time.Time, error) {
 }
 
 func (s *Service) List(p pagination.Params) ([]Appointment, pagination.Meta, error) {
-	q := s.repo.db.Model(&Appointment{}).Preload("Pasien").Preload("Staff")
+	q := s.cab.Scope(s.repo.db.Model(&Appointment{}), "appointments.cabang_id").Preload("Pasien").Preload("Staff")
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("kode ILIKE ? OR status ILIKE ?", like, like)
@@ -64,7 +73,7 @@ func (s *Service) List(p pagination.Params) ([]Appointment, pagination.Meta, err
 
 func (s *Service) Get(id uint) (*Appointment, error) {
 	var item Appointment
-	if err := s.repo.db.Preload("Pasien").Preload("Staff").First(&item, id).Error; err != nil {
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Pasien").Preload("Staff").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -94,7 +103,11 @@ func (s *Service) Create(req UpsertRequest) (*Appointment, error) {
 	if err := s.checkRefs(req.PasienID, req.StaffID); err != nil {
 		return nil, errBadRequest{err}
 	}
-	kode, err := s.gen.Generate("APT")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, errBadRequest{err}
+	}
+	kode, err := s.gen.GenerateCabang("APT", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +120,7 @@ func (s *Service) Create(req UpsertRequest) (*Appointment, error) {
 		status = "scheduled"
 	}
 	item := &Appointment{
-		Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
+		Kode: kode, CabangID: cabangID, PasienID: req.PasienID, StaffID: req.StaffID,
 		Tanggal: tanggal, Jam: req.Jam, Status: status, Keterangan: req.Keterangan, IsActive: true,
 	}
 	if req.IsActive != nil {
@@ -158,11 +171,11 @@ func (s *Service) UpdateStatus(id uint, status string) (*Appointment, error) {
 }
 
 func (s *Service) Delete(id uint) error {
-	return s.repo.db.Delete(&Appointment{}, id).Error
+	return s.cab.Scope(s.repo.db, "cabang_id").Delete(&Appointment{}, id).Error
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -172,7 +185,7 @@ func (h *Handler) Index(c *gin.Context) {
 
 func (h *Handler) Show(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.Get(uint(id))
+	item, err := h.svc.For(c).Get(uint(id))
 	if err != nil {
 		response.NotFound(c, "appointment not found")
 		return
@@ -188,7 +201,7 @@ func (h *Handler) Store(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Create(req)
+	item, err := h.svc.For(c).Create(req)
 	var bad errBadRequest
 	if errors.As(err, &bad) {
 		response.BadRequest(c, bad.Error(), nil)
@@ -208,7 +221,7 @@ func (h *Handler) Update(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Update(uint(id), req)
+	item, err := h.svc.For(c).Update(uint(id), req)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -218,7 +231,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.Delete(uint(id)); err != nil {
+	if err := h.svc.For(c).Delete(uint(id)); err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
@@ -232,7 +245,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStatus(uint(id), req.Status)
+	item, err := h.svc.For(c).UpdateStatus(uint(id), req.Status)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

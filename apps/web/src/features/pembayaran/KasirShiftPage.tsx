@@ -155,7 +155,8 @@ function ShiftAktif({ d, onTutup }: { d: KasirShiftDetail; onTutup: () => void }
               Kasir terbuka · <span className="font-mono" data-testid="shift-kode">{s.kode}</span>
             </p>
             <p>
-              {s.kasir_nama || '-'} · dibuka {formatDateTime(s.opened_at)} · modal awal {formatCurrency(s.saldo_awal)}
+              {s.kasir_nama || '-'}
+              {s.cabang_nama ? ` · ${s.cabang_nama}` : ''} · dibuka {formatDateTime(s.opened_at)} · modal awal {formatCurrency(s.saldo_awal)}
             </p>
             {s.catatan_buka ? <p className="italic">{s.catatan_buka}</p> : null}
           </div>

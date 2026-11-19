@@ -12,6 +12,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/warehouse"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -27,6 +28,14 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -106,7 +115,7 @@ func applyFilters(q *gorm.DB, f ListFilters, search string) *gorm.DB {
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Pembelian, pagination.Meta, error) {
-	q := applyFilters(s.repo.db.Model(&Pembelian{}).Preload("Supplier").Preload("Staff").Preload("Details.Barang"), f, p.Search)
+	q := applyFilters(s.cab.Scope(s.repo.db.Model(&Pembelian{}), "pembelians.cabang_id").Preload("Supplier").Preload("Staff").Preload("Details.Barang"), f, p.Search)
 	var items []Pembelian
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
@@ -123,7 +132,7 @@ type Summary struct {
 
 func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
 	var out Summary
-	err := applyFilters(s.repo.db.Model(&Pembelian{}), f, search).Select(`
+	err := applyFilters(s.cab.Scope(s.repo.db.Model(&Pembelian{}), "pembelians.cabang_id"), f, search).Select(`
 		COUNT(*) AS jumlah,
 		COALESCE(SUM(total_harga), 0) AS nilai,
 		COALESCE(SUM(jumlah_dibayar), 0) AS dibayar,
@@ -134,7 +143,7 @@ func (s *Service) Summary(f ListFilters, search string) (Summary, error) {
 
 func (s *Service) Get(id uint) (*Pembelian, error) {
 	var item Pembelian
-	if err := s.repo.db.Preload("Supplier").Preload("Staff").Preload("Details.Barang").
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Supplier").Preload("Staff").Preload("Details.Barang").
 		Preload("Pembayarans", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).
 		First(&item, id).Error; err != nil {
 		return nil, err
@@ -143,7 +152,11 @@ func (s *Service) Get(id uint) (*Pembelian, error) {
 }
 
 func (s *Service) Create(req UpsertRequest) (*Pembelian, error) {
-	kode, err := s.gen.Generate("PBL")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("PBL", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +173,7 @@ func (s *Service) Create(req UpsertRequest) (*Pembelian, error) {
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var total float64
 		item := &Pembelian{
-			Kode: kode, SupplierID: req.SupplierID, StaffID: req.StaffID, Tanggal: tanggal,
+			Kode: kode, CabangID: cabangID, SupplierID: req.SupplierID, StaffID: req.StaffID, Tanggal: tanggal,
 			NoInvoice: req.NoInvoice, Status: status, Keterangan: req.Keterangan, IsActive: true,
 		}
 		if req.IsActive != nil {
@@ -242,7 +255,7 @@ func (s *Service) Bayar(id uint, req BayarRequest) (*Pembelian, error) {
 	}
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item Pembelian
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
 			return err
 		}
 		sisa := finance.Round(item.TotalHarga - item.JumlahDibayar)
@@ -253,7 +266,7 @@ func (s *Service) Bayar(id uint, req BayarRequest) (*Pembelian, error) {
 		if jumlah > sisa+0.005 {
 			return fmt.Errorf("jumlah melebihi sisa utang Rp %.0f", sisa)
 		}
-		kode, err := s.gen.Generate("PLB")
+		kode, err := s.gen.GenerateCabang("PLB", item.CabangID)
 		if err != nil {
 			return err
 		}
@@ -304,7 +317,7 @@ func (s *Service) UpdateStatus(id uint, status string) (*Pembelian, error) {
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item Pembelian
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
 			return err
 		}
 		if item.JumlahDibayar > 0 {
@@ -334,7 +347,7 @@ func (h *Handler) Index(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	items, meta, err := h.svc.List(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -348,7 +361,7 @@ func (h *Handler) Summary(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	out, err := h.svc.Summary(f, c.Query("search"))
+	out, err := h.svc.For(c).Summary(f, c.Query("search"))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -358,7 +371,7 @@ func (h *Handler) Summary(c *gin.Context) {
 
 func (h *Handler) Show(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.Get(uint(id))
+	item, err := h.svc.For(c).Get(uint(id))
 	if err != nil {
 		response.NotFound(c, "pembelian not found")
 		return
@@ -375,7 +388,7 @@ func (h *Handler) Store(c *gin.Context) {
 	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
 		return
 	}
-	item, err := h.svc.Create(req)
+	item, err := h.svc.For(c).Create(req)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -385,7 +398,7 @@ func (h *Handler) Store(c *gin.Context) {
 
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.Delete(uint(id)); err != nil {
+	if err := h.svc.For(c).Delete(uint(id)); err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -399,7 +412,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStatus(uint(id), req.Status)
+	item, err := h.svc.For(c).UpdateStatus(uint(id), req.Status)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -414,7 +427,7 @@ func (h *Handler) Bayar(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Bayar(uint(id), req)
+	item, err := h.svc.For(c).Bayar(uint(id), req)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			response.NotFound(c, "pembelian not found")

@@ -101,7 +101,7 @@ func dibayarAt(db *gorm.DB, id uint) (*time.Time, error) {
 func (s *Service) Kwitansi(id uint) (*Kwitansi, error) {
 	db := s.repo.db
 	var pj Penjualan
-	if err := db.Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Perawatan").
+	if err := s.cab.Scope(db, "cabang_id").Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Perawatan").
 		Preload("Details", func(q *gorm.DB) *gorm.DB { return q.Order("id") }).
 		Preload("Details.Treatment").Preload("Details.Barang").First(&pj, id).Error; err != nil {
 		return nil, err
@@ -201,7 +201,7 @@ func (s *Service) paketRingkasan(pj *Penjualan) ([]KwitansiPaket, error) {
 
 func (h *Handler) Kwitansi(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	k, err := h.svc.Kwitansi(uint(id))
+	k, err := h.svc.For(c).Kwitansi(uint(id))
 	if errors.Is(err, ErrBelumLunas) {
 		response.Fail(c, http.StatusConflict, err.Error(), nil)
 		return

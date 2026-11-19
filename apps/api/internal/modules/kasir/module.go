@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/middleware"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -27,17 +28,29 @@ var (
 type Service struct {
 	db  *gorm.DB
 	gen *generator.Service
+	cab branch.Ctx
 }
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
+}
+
+// inCabang reports whether a shift belongs to the active branch.
+func (s *Service) inCabang(sh Shift) bool { return s.cab.All || sh.CabangID == s.cab.ID }
 
 func NewService(db *gorm.DB, gen *generator.Service) *Service { return &Service{db: db, gen: gen} }
 
 // shiftQuery selects shifts with the cashier's name (staff name when linked, else the account name).
 func (s *Service) shiftQuery(tx *gorm.DB) *gorm.DB {
 	return tx.Model(&Shift{}).
-		Select(`kasir_shifts.*, COALESCE(NULLIF(st.nama, ''), u.name, '') AS kasir_nama, COALESCE(cu.name, '') AS closed_by_nama`).
+		Select(`kasir_shifts.*, COALESCE(NULLIF(st.nama, ''), u.name, '') AS kasir_nama, COALESCE(cu.name, '') AS closed_by_nama, COALESCE(cb.nama, '') AS cabang_nama`).
 		Joins("LEFT JOIN users u ON u.id = kasir_shifts.user_id").
 		Joins("LEFT JOIN staffs st ON st.id = kasir_shifts.staff_id").
-		Joins("LEFT JOIN users cu ON cu.id = kasir_shifts.closed_by_user_id")
+		Joins("LEFT JOIN users cu ON cu.id = kasir_shifts.closed_by_user_id").
+		Joins("LEFT JOIN cabangs cb ON cb.id = kasir_shifts.cabang_id")
 }
 
 func (s *Service) detail(tx *gorm.DB, id uint) (*Detail, error) {
@@ -91,17 +104,21 @@ func (s *Service) Buka(userID uint, req BukaRequest) (*Detail, error) {
 	if n > 0 {
 		return nil, ErrSudahBuka
 	}
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
 	var u struct{ StaffID *uint }
 	s.db.Table("users").Select("staff_id").Where("id = ?", userID).Scan(&u)
 	if u.StaffID != nil && *u.StaffID == 0 {
 		u.StaffID = nil
 	}
-	kode, err := s.gen.Generate("SHF")
+	kode, err := s.gen.GenerateCabang("SHF", cabangID)
 	if err != nil {
 		return nil, err
 	}
 	sh := Shift{
-		Kode: kode, UserID: userID, StaffID: u.StaffID, SaldoAwal: roundRp(req.SaldoAwal),
+		Kode: kode, CabangID: cabangID, UserID: userID, StaffID: u.StaffID, SaldoAwal: roundRp(req.SaldoAwal),
 		OpenedAt: time.Now(), CatatanBuka: strings.TrimSpace(req.Catatan), Status: StatusOpen,
 	}
 	if err := s.db.Create(&sh).Error; err != nil {
@@ -132,6 +149,9 @@ func (s *Service) Tutup(id, userID uint, isAdmin bool, req TutupRequest) (*Detai
 				return ErrTidakAda
 			}
 			return err
+		}
+		if !s.inCabang(sh) {
+			return ErrTidakAda
 		}
 		if sh.UserID != userID && !isAdmin {
 			return ErrBukanPemilik
@@ -168,7 +188,7 @@ type ListFilter struct {
 }
 
 func (s *Service) List(p pagination.Params, f ListFilter) ([]Shift, pagination.Meta, error) {
-	q := s.shiftQuery(s.db)
+	q := s.cab.Scope(s.shiftQuery(s.db), "kasir_shifts.cabang_id")
 	if f.UserID > 0 {
 		q = q.Where("kasir_shifts.user_id = ?", f.UserID)
 	}
@@ -213,7 +233,7 @@ func failShift(c *gin.Context, err error) {
 }
 
 func (h *Handler) Aktif(c *gin.Context) {
-	d, err := h.svc.Aktif(c.GetUint(middleware.ContextUserID))
+	d, err := h.svc.For(c).Aktif(c.GetUint(middleware.ContextUserID))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -231,7 +251,7 @@ func (h *Handler) Buka(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	d, err := h.svc.Buka(c.GetUint(middleware.ContextUserID), req)
+	d, err := h.svc.For(c).Buka(c.GetUint(middleware.ContextUserID), req)
 	if err != nil {
 		failShift(c, err)
 		return
@@ -247,7 +267,7 @@ func (h *Handler) Tutup(c *gin.Context) {
 		return
 	}
 	isAdmin := c.GetString(middleware.ContextRole) == middleware.RoleAdmin
-	d, err := h.svc.Tutup(uint(id), c.GetUint(middleware.ContextUserID), isAdmin, req)
+	d, err := h.svc.For(c).Tutup(uint(id), c.GetUint(middleware.ContextUserID), isAdmin, req)
 	if err != nil {
 		failShift(c, err)
 		return
@@ -270,7 +290,7 @@ func (h *Handler) List(c *gin.Context) {
 	if ownOnly(c) {
 		f.UserID = c.GetUint(middleware.ContextUserID)
 	}
-	items, meta, err := h.svc.List(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -280,7 +300,11 @@ func (h *Handler) List(c *gin.Context) {
 
 func (h *Handler) Get(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	d, err := h.svc.detail(h.svc.db, uint(id))
+	svc := h.svc.For(c)
+	d, err := svc.detail(svc.db, uint(id))
+	if err == nil && !svc.inCabang(d.Shift) {
+		err = ErrTidakAda
+	}
 	if err != nil {
 		failShift(c, err)
 		return

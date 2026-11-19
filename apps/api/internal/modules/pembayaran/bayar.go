@@ -15,6 +15,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/promo"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/voucher"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -111,7 +112,26 @@ func activeMembership(db *gorm.DB, pasienID uint) (*membership.Membership, error
 
 // HitungTagihan computes the bill without changing anything.
 func (s *Service) HitungTagihan(req TagihanRequest) (*Tagihan, error) {
+	if err := s.checkSource(s.repo.db, req); err != nil {
+		return nil, err
+	}
 	return s.hitungTagihan(s.repo.db, req, false)
+}
+
+// checkSource makes sure the bill being paid belongs to the active branch.
+func (s *Service) checkSource(db *gorm.DB, req TagihanRequest) error {
+	table := map[string]string{"penjualan": "penjualans", "perawatan": "perawatans"}[strings.ToLower(req.SourceType)]
+	if table == "" || s.cab.All {
+		return nil
+	}
+	var n int64
+	if err := db.Table(table).Where("id = ? AND cabang_id = ?", req.SourceID, s.cab.ID).Count(&n).Error; err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%s tidak ditemukan di cabang aktif", strings.ToLower(req.SourceType))
+	}
+	return nil
 }
 
 // hitungTagihan builds the bill for a source. With lock it takes row locks on the
@@ -313,6 +333,9 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 
 	var penjualanID uint
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.checkSource(tx, req.TagihanRequest); err != nil {
+			return err
+		}
 		t, err := s.hitungTagihan(tx, req.TagihanRequest, true)
 		if err != nil {
 			return err
@@ -341,7 +364,7 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 			if err := tx.Preload("Tindakans").First(&pw, pid).Error; err != nil {
 				return err
 			}
-			created, err := penjualan.NewService(penjualan.NewRepository(tx), s.gen).CreateTx(tx, penjualan.UpsertRequest{
+			created, err := penjualan.NewService(penjualan.NewRepository(tx), s.gen).In(branch.Ctx{ID: pw.CabangID}).CreateTx(tx, penjualan.UpsertRequest{
 				PasienID: pw.PasienID, StaffID: req.StaffID, PerawatanID: &pid, AntrianID: pw.AntrianID,
 				Tanggal: tanggal, Status: "paid", Keterangan: "Pembayaran perawatan " + pw.Kode,
 				Details: t.details,
@@ -380,7 +403,7 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 		penjualanID = pj.ID
 
 		// The money actually kept at the counter is the remaining bill; change goes back to the pasien.
-		if err := kasir.Catat(tx, req.UserID, kasir.Mutasi{
+		if err := kasir.Catat(tx, req.UserID, pj.CabangID, kasir.Mutasi{
 			SourceType: kasir.SourcePenjualan, SourceID: pj.ID, Referensi: pj.NoInvoice,
 			JenisPembayaran: jenis, BankID: req.BankID, Masuk: t.SisaBayar,
 			Keterangan: "Pembayaran " + pj.Kode,
@@ -395,12 +418,12 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 			}
 		}
 		if t.DepositDipakai > 0 {
-			kode, err := s.gen.Generate("DPS")
+			kode, err := s.gen.GenerateCabang("DPS", pj.CabangID)
 			if err != nil {
 				return err
 			}
 			if err := tx.Create(&DepositTransaksi{
-				Kode: kode, PasienID: t.PasienID, StaffID: req.StaffID, Tanggal: tgl, Kwitansi: pj.NoInvoice,
+				Kode: kode, CabangID: pj.CabangID, PasienID: t.PasienID, StaffID: req.StaffID, Tanggal: tgl, Kwitansi: pj.NoInvoice,
 				Jenis: jenisPemakaianDeposit, Jumlah: t.DepositDipakai, JenisPembayaran: "deposit",
 				Keterangan: "Pemakaian deposit untuk " + pj.Kode, IsActive: true,
 			}).Error; err != nil {
@@ -437,7 +460,7 @@ func (s *Service) createPaketRecords(tx *gorm.DB, pw *perawatan.Perawatan, staff
 		if sesi <= 0 {
 			sesi = 1
 		}
-		kode, err := s.gen.Generate("PKT")
+		kode, err := s.gen.GenerateCabang("PKT", pw.CabangID)
 		if err != nil {
 			return err
 		}
@@ -446,7 +469,7 @@ func (s *Service) createPaketRecords(tx *gorm.DB, pw *perawatan.Perawatan, staff
 			harga = tr.Harga
 		}
 		paket := PaketPerawatan{
-			Kode: kode, PasienID: pw.PasienID, TreatmentID: tr.ID, StaffID: staffID,
+			Kode: kode, CabangID: pw.CabangID, PasienID: pw.PasienID, TreatmentID: tr.ID, StaffID: staffID,
 			TanggalBeli: tgl, TotalSesi: sesi, SisaSesi: sesi, HargaTotal: harga,
 			Status: "aktif", IsActive: true,
 		}

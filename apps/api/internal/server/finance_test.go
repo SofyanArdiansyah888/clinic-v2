@@ -11,6 +11,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 )
 
 // saldo returns debit minus kredit posted to the account with the given kode.
@@ -225,7 +226,7 @@ func TestJurnalManualDanPengaturanAkun(t *testing.T) {
 	e.expectSaldo(map[string]float64{"1-1202": 25000, "1-1201": 0, "2-1201": -25000})
 
 	// Refund on a cancelled package goes out of the chosen cash account.
-	paket := pembayaran.PaketPerawatan{Kode: "PKT-T1", PasienID: f.pasien, TreatmentID: f.treatment, StaffID: f.staff,
+	paket := pembayaran.PaketPerawatan{Kode: "PKT-T1", CabangID: branch.UtamaID(e.db), PasienID: f.pasien, TreatmentID: f.treatment, StaffID: f.staff,
 		TanggalBeli: time.Now(), TotalSesi: 4, SisaSesi: 2, HargaTotal: 400000, Status: "aktif", IsActive: true}
 	if err := e.db.Create(&paket).Error; err != nil {
 		t.Fatal(err)

@@ -38,7 +38,7 @@ export function DokterSelect({
 }: DokterSelectProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'dokter-select'],
-    queryFn: () => apiGet<StaffLite[]>('/staff', { per_page: 200, page: 1 }),
+    queryFn: () => apiGet<StaffLite[]>('/staff', { per_page: 200, page: 1, cabang: 'aktif' }),
   })
 
   const options = useMemo(

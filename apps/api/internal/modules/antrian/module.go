@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
@@ -21,6 +22,14 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -106,7 +115,7 @@ func applyListFilters(q *gorm.DB, f ListFilters) *gorm.DB {
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Antrian, pagination.Meta, error) {
-	q := s.repo.db.Model(&Antrian{}).Preload("Pasien").Preload("Staff")
+	q := s.cab.Scope(s.repo.db.Model(&Antrian{}), "antrians.cabang_id").Preload("Pasien").Preload("Staff")
 	q = applyListFilters(q, f)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
@@ -119,7 +128,7 @@ func (s *Service) List(p pagination.Params, f ListFilters) ([]Antrian, paginatio
 
 func (s *Service) Get(id uint) (*Antrian, error) {
 	var item Antrian
-	if err := s.repo.db.Preload("Pasien").Preload("Staff").First(&item, id).Error; err != nil {
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Pasien").Preload("Staff").First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -129,7 +138,11 @@ func (s *Service) Create(req UpsertRequest) (*Antrian, error) {
 	if err := checkStatus(req.Status); err != nil {
 		return nil, err
 	}
-	kode, err := s.gen.Generate("ANT")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("ANT", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +159,7 @@ func (s *Service) Create(req UpsertRequest) (*Antrian, error) {
 		status = "menunggu"
 	}
 	item := &Antrian{
-		Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
+		Kode: kode, CabangID: cabangID, PasienID: req.PasienID, StaffID: req.StaffID,
 		Tanggal: tanggal, Jam: jam, Status: status, Keterangan: req.Keterangan, IsActive: true,
 	}
 	if req.IsActive != nil {
@@ -209,12 +222,16 @@ func (s *Service) UpdateStatus(id uint, status string) (*Antrian, error) {
 }
 
 func (s *Service) Delete(id uint) error {
-	return s.repo.db.Delete(&Antrian{}, id).Error
+	return s.cab.Scope(s.repo.db, "cabang_id").Delete(&Antrian{}, id).Error
 }
 
 func (s *Service) CreatePasienAntrian(req CreatePasienAntrianRequest) (map[string]interface{}, error) {
 	var result map[string]interface{}
-	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var pasienID uint
 		var p *pasien.Pasien
 
@@ -249,7 +266,7 @@ func (s *Service) CreatePasienAntrian(req CreatePasienAntrianRequest) (map[strin
 			p = np
 		}
 
-		kode, err := s.gen.Generate("ANT")
+		kode, err := s.gen.GenerateCabang("ANT", cabangID)
 		if err != nil {
 			return err
 		}
@@ -262,7 +279,7 @@ func (s *Service) CreatePasienAntrian(req CreatePasienAntrianRequest) (map[strin
 			jam = time.Now().Format("15:04:05")
 		}
 		a := &Antrian{
-			Kode: kode, PasienID: pasienID, StaffID: req.StaffID,
+			Kode: kode, CabangID: cabangID, PasienID: pasienID, StaffID: req.StaffID,
 			Tanggal: tanggal, Jam: jam, Status: "menunggu", Keterangan: req.Keterangan, IsActive: true,
 		}
 		if err := tx.Create(a).Error; err != nil {
@@ -278,7 +295,7 @@ func (s *Service) CreatePasienAntrian(req CreatePasienAntrianRequest) (map[strin
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -288,7 +305,7 @@ func (h *Handler) Index(c *gin.Context) {
 
 func (h *Handler) Show(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.Get(uint(id))
+	item, err := h.svc.For(c).Get(uint(id))
 	if err != nil {
 		response.NotFound(c, "antrian not found")
 		return
@@ -302,7 +319,7 @@ func (h *Handler) Store(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Create(req)
+	item, err := h.svc.For(c).Create(req)
 	if err != nil {
 		fail(c, err)
 		return
@@ -317,7 +334,7 @@ func (h *Handler) Update(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Update(uint(id), req)
+	item, err := h.svc.For(c).Update(uint(id), req)
 	if err != nil {
 		fail(c, err)
 		return
@@ -332,7 +349,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStatus(uint(id), req.Status)
+	item, err := h.svc.For(c).UpdateStatus(uint(id), req.Status)
 	if err != nil {
 		fail(c, err)
 		return
@@ -342,7 +359,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.Delete(uint(id)); err != nil {
+	if err := h.svc.For(c).Delete(uint(id)); err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
@@ -355,7 +372,7 @@ func (h *Handler) CreatePasienAntrian(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	data, err := h.svc.CreatePasienAntrian(req)
+	data, err := h.svc.For(c).CreatePasienAntrian(req)
 	if err != nil {
 		response.BadRequest(c, "failed to create pasien+antrian", err.Error())
 		return

@@ -142,7 +142,11 @@ func (e *env) bukaShift(role string, saldoAwal float64) kasir.Shift {
 	if err := e.db.Where("username = ?", "t_"+role).First(&u).Error; err != nil {
 		e.t.Fatal(err)
 	}
-	sh := kasir.Shift{Kode: "SHF-T-" + role, UserID: u.ID, StaffID: u.StaffID, SaldoAwal: saldoAwal, OpenedAt: time.Now(), Status: kasir.StatusOpen}
+	var utama cabang.Cabang
+	if err := e.db.Where("is_utama = ?", true).First(&utama).Error; err != nil {
+		e.t.Fatal(err)
+	}
+	sh := kasir.Shift{Kode: "SHF-T-" + role, CabangID: utama.ID, UserID: u.ID, StaffID: u.StaffID, SaldoAwal: saldoAwal, OpenedAt: time.Now(), Status: kasir.StatusOpen}
 	if err := e.db.Create(&sh).Error; err != nil {
 		e.t.Fatal(err)
 	}

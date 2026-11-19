@@ -111,6 +111,28 @@ func EnsureDefaults(db *gorm.DB) error {
 		SELECT u.id, ? FROM users u WHERE NOT EXISTS (SELECT 1 FROM user_cabangs uc WHERE uc.user_id = u.id)`, utama.ID).Error; err != nil {
 		return err
 	}
-	return db.Exec(`INSERT INTO staff_cabangs (staff_id, cabang_id)
-		SELECT s.id, ? FROM staffs s WHERE NOT EXISTS (SELECT 1 FROM staff_cabangs sc WHERE sc.staff_id = s.id)`, utama.ID).Error
+	if err := db.Exec(`INSERT INTO staff_cabangs (staff_id, cabang_id)
+		SELECT s.id, ? FROM staffs s WHERE NOT EXISTS (SELECT 1 FROM staff_cabangs sc WHERE sc.staff_id = s.id)`, utama.ID).Error; err != nil {
+		return err
+	}
+	return backfillTransaksi(db, utama.ID)
+}
+
+// TransaksiTables hold one branch's records in cabang_id; rows from before multi-branch
+// (cabang_id 0) belong to the main branch.
+var TransaksiTables = []string{
+	"antrians", "appointments", "jadwal_dokters", "perawatans", "penjualans",
+	"deposit_transaksis", "paket_perawatans", "pembelians", "kasir_shifts",
+}
+
+func backfillTransaksi(db *gorm.DB, utamaID uint) error {
+	for _, t := range TransaksiTables {
+		if !db.Migrator().HasColumn(t, "cabang_id") {
+			continue
+		}
+		if err := db.Exec("UPDATE "+t+" SET cabang_id = ? WHERE cabang_id = 0 OR cabang_id IS NULL", utamaID).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

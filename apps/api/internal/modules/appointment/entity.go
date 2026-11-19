@@ -10,6 +10,7 @@ import (
 type Appointment struct {
 	ID         uint           `gorm:"primaryKey" json:"id"`
 	Kode       string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID   uint           `gorm:"not null;default:0;index" json:"cabang_id"`
 	PasienID   uint           `gorm:"not null;index" json:"pasien_id"`
 	StaffID    uint           `gorm:"not null;index" json:"staff_id"`
 	Tanggal    time.Time      `gorm:"type:date;not null" json:"tanggal"`

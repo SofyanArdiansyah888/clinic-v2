@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -22,6 +23,22 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
+}
+
+// resepScope limits reseps to perawatans of the active branch.
+func (s *Service) resepScope(q *gorm.DB) *gorm.DB {
+	if s.cab.All {
+		return q
+	}
+	return q.Where("perawatan_id IN (SELECT id FROM perawatans WHERE cabang_id = ?)", s.cab.ID)
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -131,7 +148,7 @@ func (s *Service) preload(q *gorm.DB) *gorm.DB {
 }
 
 func (s *Service) List(p pagination.Params, f ListFilters) ([]Perawatan, pagination.Meta, error) {
-	q := s.preload(s.repo.db.Model(&Perawatan{}))
+	q := s.preload(s.cab.Scope(s.repo.db.Model(&Perawatan{}), "perawatans.cabang_id"))
 	q = applyListFilters(q, f)
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
@@ -144,7 +161,7 @@ func (s *Service) List(p pagination.Params, f ListFilters) ([]Perawatan, paginat
 
 func (s *Service) Get(id uint) (*Perawatan, error) {
 	var item Perawatan
-	if err := s.preload(s.repo.db).First(&item, id).Error; err != nil {
+	if err := s.preload(s.cab.Scope(s.repo.db, "cabang_id")).First(&item, id).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
@@ -186,7 +203,7 @@ func (s *Service) applyFields(item *Perawatan, req UpsertRequest) error {
 	return nil
 }
 
-func (s *Service) syncNested(tx *gorm.DB, perawatanID uint, req UpsertRequest) error {
+func (s *Service) syncNested(tx *gorm.DB, perawatanID, cabangID uint, req UpsertRequest) error {
 	if req.Tindakans != nil {
 		tx.Where("perawatan_id = ?", perawatanID).Delete(&PerawatanTindakan{})
 		for _, t := range req.Tindakans {
@@ -222,7 +239,7 @@ func (s *Service) syncNested(tx *gorm.DB, perawatanID uint, req UpsertRequest) e
 			if status == "" {
 				status = "draft"
 			}
-			kode, err := s.gen.Generate("RES")
+			kode, err := s.gen.GenerateCabang("RES", cabangID)
 			if err != nil {
 				return err
 			}
@@ -284,11 +301,15 @@ func (s *Service) syncLinkedAntrian(tx *gorm.DB, antrianID *uint, perawatanStatu
 }
 
 func (s *Service) Create(req UpsertRequest) (*Perawatan, error) {
-	kode, err := s.gen.Generate("PRW")
+	cabangID, err := s.cab.WriteID()
 	if err != nil {
 		return nil, err
 	}
-	item := &Perawatan{Kode: kode, Status: "draft", IsActive: true}
+	kode, err := s.gen.GenerateCabang("PRW", cabangID)
+	if err != nil {
+		return nil, err
+	}
+	item := &Perawatan{Kode: kode, CabangID: cabangID, Status: "draft", IsActive: true}
 	if err := s.applyFields(item, req); err != nil {
 		return nil, err
 	}
@@ -296,7 +317,7 @@ func (s *Service) Create(req UpsertRequest) (*Perawatan, error) {
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
-		if err := s.syncNested(tx, item.ID, req); err != nil {
+		if err := s.syncNested(tx, item.ID, item.CabangID, req); err != nil {
 			return err
 		}
 		return s.syncLinkedAntrian(tx, item.AntrianID, item.Status)
@@ -325,7 +346,7 @@ func (s *Service) Update(id uint, req UpsertRequest) (*Perawatan, error) {
 		if err := tx.Save(item).Error; err != nil {
 			return err
 		}
-		if err := s.syncNested(tx, item.ID, req); err != nil {
+		if err := s.syncNested(tx, item.ID, item.CabangID, req); err != nil {
 			return err
 		}
 		return s.syncLinkedAntrian(tx, item.AntrianID, item.Status)
@@ -349,6 +370,9 @@ func (s *Service) UpdateStatus(id uint, status string) (*Perawatan, error) {
 }
 
 func (s *Service) Delete(id uint) error {
+	if _, err := s.Get(id); err != nil {
+		return err
+	}
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var reseps []PerawatanResep
 		tx.Where("perawatan_id = ?", id).Find(&reseps)
@@ -362,7 +386,7 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c), filtersFromContext(c))
+	items, meta, err := h.svc.For(c).List(pagination.FromContext(c), filtersFromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -372,7 +396,7 @@ func (h *Handler) Index(c *gin.Context) {
 
 func (h *Handler) Show(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.Get(uint(id))
+	item, err := h.svc.For(c).Get(uint(id))
 	if err != nil {
 		response.NotFound(c, "perawatan not found")
 		return
@@ -386,7 +410,7 @@ func (h *Handler) Store(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Create(req)
+	item, err := h.svc.For(c).Create(req)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -401,7 +425,7 @@ func (h *Handler) Update(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.Update(uint(id), req)
+	item, err := h.svc.For(c).Update(uint(id), req)
 	if err != nil {
 		if errors.Is(err, ErrPerawatanTerkunci) {
 			response.BadRequest(c, err.Error(), nil)
@@ -415,7 +439,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 func (h *Handler) Destroy(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err := h.svc.Delete(uint(id)); err != nil {
+	if err := h.svc.For(c).Delete(uint(id)); err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
@@ -429,7 +453,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.UpdateStatus(uint(id), req.Status)
+	item, err := h.svc.For(c).UpdateStatus(uint(id), req.Status)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -439,9 +463,9 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 // ResepFilter narrows the resep list; Status is a comma-separated list of resep statuses.
 type ResepFilter struct {
-	Status  string
-	Periode filter.DateRange
-	StaffID uint // dokter
+	Status   string
+	Periode  filter.DateRange
+	StaffID  uint // dokter
 	PasienID uint
 }
 
@@ -455,7 +479,7 @@ func resepFilter(c *gin.Context) (ResepFilter, error) {
 
 // resepQuery applies every filter except status, which the summary breaks down instead.
 func (s *Service) resepQuery(f ResepFilter, search string) *gorm.DB {
-	q := f.Periode.Apply(s.repo.db.Model(&PerawatanResep{}), "tanggal")
+	q := f.Periode.Apply(s.resepScope(s.repo.db.Model(&PerawatanResep{})), "tanggal")
 	if f.StaffID > 0 {
 		q = q.Where("staff_id = ?", f.StaffID)
 	}
@@ -524,7 +548,7 @@ func (s *Service) ResepSummary(f ResepFilter, search string) (ResepSummary, erro
 }
 
 func (s *Service) SerahkanResep(id uint) (*PerawatanResep, error) {
-	res := s.repo.db.Model(&PerawatanResep{}).
+	res := s.resepScope(s.repo.db.Model(&PerawatanResep{})).
 		Where("id = ? AND status = ?", id, ResepStatusDibayar).
 		Update("status", ResepStatusDiserahkan)
 	if res.Error != nil {
@@ -546,7 +570,7 @@ func (h *Handler) IndexResep(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	items, meta, err := h.svc.ListResep(pagination.FromContext(c), f)
+	items, meta, err := h.svc.For(c).ListResep(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -560,7 +584,7 @@ func (h *Handler) SummaryResep(c *gin.Context) {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
-	out, err := h.svc.ResepSummary(f, c.Query("search"))
+	out, err := h.svc.For(c).ResepSummary(f, c.Query("search"))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -570,7 +594,7 @@ func (h *Handler) SummaryResep(c *gin.Context) {
 
 func (h *Handler) SerahkanResep(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	item, err := h.svc.SerahkanResep(uint(id))
+	item, err := h.svc.For(c).SerahkanResep(uint(id))
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return

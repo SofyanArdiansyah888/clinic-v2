@@ -227,5 +227,49 @@ func Validate(db *gorm.DB, cabangIDs []uint) error {
 
 // IsRequestError reports link errors that are the client's fault (respond 400).
 func IsRequestError(err error) bool {
-	return errors.Is(err, ErrCabangTidakAda) || errors.Is(err, ErrMinimalSatu)
+	return errors.Is(err, ErrCabangTidakAda) || errors.Is(err, ErrMinimalSatu) || errors.Is(err, ErrPilih)
+}
+
+// ── per-request branch value for services ──
+
+// Ctx is the active branch handed from a handler to its service: ID is the branch, All is
+// admin's "all branches". The zero value (no branch, not all) matches nothing on reads and
+// refuses writes, so a forgotten context fails closed. System is for internal callers.
+type Ctx struct {
+	ID  uint
+	All bool
+}
+
+// System reads every branch; use only for internal work that is not tied to a request.
+var System = Ctx{All: true}
+
+// ErrPilih is returned by writes when no single branch is active.
+var ErrPilih = errors.New(MsgPilih)
+
+// From reads the branch the middleware resolved for this request.
+func From(c *gin.Context) Ctx { return Ctx{ID: ID(c), All: All(c)} }
+
+// Scope limits q to this branch; "all branches" leaves it unfiltered.
+func (b Ctx) Scope(q *gorm.DB, column string) *gorm.DB {
+	if b.All {
+		return q
+	}
+	return q.Where(column+" = ?", b.ID)
+}
+
+// WriteID is the branch a new record is stored in; ErrPilih when none is active.
+func (b Ctx) WriteID() (uint, error) {
+	if b.ID == 0 {
+		return 0, ErrPilih
+	}
+	return b.ID, nil
+}
+
+// Singkatan is a branch's document-number prefix ("" when unknown).
+func Singkatan(db *gorm.DB, cabangID uint) string {
+	var s string
+	if cabangID != 0 {
+		db.Table("cabangs").Where("id = ?", cabangID).Select("singkatan").Scan(&s)
+	}
+	return s
 }

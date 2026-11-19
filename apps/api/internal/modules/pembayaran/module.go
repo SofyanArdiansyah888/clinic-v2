@@ -15,6 +15,8 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
+	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/middleware"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
@@ -30,6 +32,14 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type Service struct {
 	repo *Repository
 	gen  *generator.Service
+	cab  branch.Ctx
+}
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
 }
 
 func NewService(repo *Repository, gen *generator.Service) *Service {
@@ -89,7 +99,7 @@ func parseDate(s string) (time.Time, error) {
 }
 
 func (s *Service) ListPerawatanReguler(p pagination.Params) ([]PerawatanQueueItem, pagination.Meta, error) {
-	q := s.repo.db.Model(&perawatan.Perawatan{}).
+	q := s.cab.Scope(s.repo.db.Model(&perawatan.Perawatan{}), "cabang_id").
 		Where("status = ?", "bayar").
 		Where(`NOT (
 			diagnosa ILIKE '%paket%' OR id IN (
@@ -135,7 +145,7 @@ func toQueueItem(r perawatan.Perawatan) PerawatanQueueItem {
 }
 
 func (s *Service) ListPerawatanPaket(p pagination.Params) ([]PerawatanQueueItem, pagination.Meta, error) {
-	q := s.repo.db.Model(&perawatan.Perawatan{}).
+	q := s.cab.Scope(s.repo.db.Model(&perawatan.Perawatan{}), "cabang_id").
 		Where("status = ?", "bayar").
 		Where(`(
 			diagnosa ILIKE '%paket%' OR id IN (
@@ -162,7 +172,7 @@ func (s *Service) ListPerawatanPaket(p pagination.Params) ([]PerawatanQueueItem,
 }
 
 func (s *Service) ListProdukLangsung(p pagination.Params) ([]penjualan.Penjualan, pagination.Meta, error) {
-	q := s.repo.db.Model(&penjualan.Penjualan{}).
+	q := s.cab.Scope(s.repo.db.Model(&penjualan.Penjualan{}), "cabang_id").
 		Where("status NOT IN ?", []string{"paid", "cancelled"}).
 		Where("keterangan ILIKE ?", "%langsung%").
 		Preload("Pasien").Preload("Staff").Preload("Details.Treatment")
@@ -176,7 +186,7 @@ func (s *Service) ListProdukLangsung(p pagination.Params) ([]penjualan.Penjualan
 }
 
 func (s *Service) ListProdukOnline(p pagination.Params) ([]penjualan.Penjualan, pagination.Meta, error) {
-	q := s.repo.db.Model(&penjualan.Penjualan{}).
+	q := s.cab.Scope(s.repo.db.Model(&penjualan.Penjualan{}), "cabang_id").
 		Where("status NOT IN ?", []string{"paid", "cancelled"}).
 		Where("keterangan ILIKE ?", "%online%").
 		Preload("Pasien").Preload("Staff").Preload("Details.Treatment")
@@ -190,7 +200,11 @@ func (s *Service) ListProdukOnline(p pagination.Params) ([]penjualan.Penjualan, 
 }
 
 func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
-	kode, err := s.gen.Generate("DPS")
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
+	kode, err := s.gen.GenerateCabang("DPS", cabangID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +220,7 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 	var createdID uint
 	err = s.repo.db.Transaction(func(tx *gorm.DB) error {
 		item := &DepositTransaksi{
-			Kode: kode, PasienID: req.PasienID, StaffID: req.StaffID,
+			Kode: kode, CabangID: cabangID, PasienID: req.PasienID, StaffID: req.StaffID,
 			TreatmentID: req.TreatmentID, Tanggal: tanggal, Kwitansi: kwitansi,
 			Jenis: req.Jenis, Jumlah: req.Jumlah, JenisPembayaran: req.JenisPembayaran,
 			BankID: req.BankID, Keterangan: req.Keterangan, IsActive: true,
@@ -220,7 +234,7 @@ func (s *Service) CreateDeposit(req DepositRequest) (*DepositTransaksi, error) {
 		}
 		// Deposit usage is not money at the counter; top-ups and member fees are.
 		if item.Jenis != jenisPemakaianDeposit {
-			if err := kasir.Catat(tx, req.UserID, kasir.Mutasi{
+			if err := kasir.Catat(tx, req.UserID, cabangID, kasir.Mutasi{
 				SourceType: kasir.SourceDeposit, SourceID: item.ID, Referensi: item.Kwitansi,
 				JenisPembayaran: item.JenisPembayaran, BankID: item.BankID, Masuk: item.Jumlah,
 				Keterangan: "Deposit " + item.Jenis + " " + item.Kode,
@@ -299,30 +313,75 @@ func (s *Service) jurnalDeposit(tx *gorm.DB, item *DepositTransaksi) error {
 	return err
 }
 
-func (s *Service) ListDeposit(p pagination.Params, jenis, tanggal string, pasienID uint) ([]DepositTransaksi, pagination.Meta, error) {
-	q := s.repo.db.Model(&DepositTransaksi{}).
-		Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Treatment")
-	if jenis != "" {
-		q = q.Where("jenis = ?", jenis)
+// DepositFilter narrows the deposit & member log. Tanggal (a single day) is kept for
+// older callers; Periode is the dari/sampai range the list page uses.
+type DepositFilter struct {
+	Jenis           string
+	JenisPembayaran string
+	Tanggal         string
+	Periode         filter.DateRange
+	PasienID        uint
+}
+
+func depositFilter(c *gin.Context) (DepositFilter, error) {
+	r, err := filter.DateRangeFromContext(c)
+	return DepositFilter{
+		Jenis: c.Query("jenis"), JenisPembayaran: c.Query("jenis_pembayaran"), Tanggal: c.Query("tanggal"),
+		Periode: r, PasienID: filter.UintQuery(c, "pasien_id"),
+	}, err
+}
+
+func (s *Service) depositQuery(f DepositFilter, search string) *gorm.DB {
+	q := s.cab.Scope(s.repo.db.Model(&DepositTransaksi{}), "cabang_id")
+	if f.Jenis != "" {
+		q = q.Where("jenis = ?", f.Jenis)
 	}
-	if tanggal != "" {
-		q = q.Where("tanggal = ?", tanggal)
+	if f.JenisPembayaran != "" {
+		q = q.Where("jenis_pembayaran = ?", f.JenisPembayaran)
 	}
-	if pasienID > 0 {
-		q = q.Where("pasien_id = ?", pasienID)
+	if f.Tanggal != "" {
+		q = q.Where("tanggal = ?", f.Tanggal)
 	}
-	if p.Search != "" {
-		like := "%" + p.Search + "%"
-		q = q.Where("kode ILIKE ? OR kwitansi ILIKE ?", like, like)
+	q = f.Periode.Apply(q, "tanggal")
+	if f.PasienID > 0 {
+		q = q.Where("pasien_id = ?", f.PasienID)
 	}
+	if search != "" {
+		like := "%" + search + "%"
+		q = q.Where("kode ILIKE ? OR kwitansi ILIKE ? OR pasien_id IN (SELECT id FROM pasiens WHERE nama ILIKE ? OR kode ILIKE ?)", like, like, like, like)
+	}
+	return q
+}
+
+func (s *Service) ListDeposit(p pagination.Params, f DepositFilter) ([]DepositTransaksi, pagination.Meta, error) {
+	q := s.depositQuery(f, p.Search).Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Treatment")
 	var items []DepositTransaksi
 	meta, err := pagination.Paginate(q, p, &items)
 	return items, meta, err
 }
 
+// DepositSummary totals the log for the overview cards: money received (every jenis
+// except pemakaian_deposit), deposit used at the kasir, and member registrations/renewals.
+type DepositSummary struct {
+	Jumlah          int64   `json:"jumlah"`
+	TotalMasuk      float64 `json:"total_masuk"`
+	TotalPemakaian  float64 `json:"total_pemakaian"`
+	TransaksiMember int64   `json:"transaksi_member"`
+}
+
+func (s *Service) DepositSummary(f DepositFilter, search string) (DepositSummary, error) {
+	var out DepositSummary
+	err := s.depositQuery(f, search).Select(`COUNT(*) AS jumlah,
+		COALESCE(SUM(jumlah) FILTER (WHERE jenis <> 'pemakaian_deposit'), 0) AS total_masuk,
+		COALESCE(SUM(jumlah) FILTER (WHERE jenis = 'pemakaian_deposit'), 0) AS total_pemakaian,
+		COUNT(*) FILTER (WHERE jenis IN ('pendaftaran_member', 'perpanjangan_member')) AS transaksi_member`).
+		Scan(&out).Error
+	return out, err
+}
+
 func (s *Service) GetDeposit(id uint) (*DepositTransaksi, error) {
 	var item DepositTransaksi
-	if err := s.repo.db.Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Treatment").
+	if err := s.cab.Scope(s.repo.db, "cabang_id").Preload("Pasien").Preload("Staff").Preload("Bank").Preload("Treatment").
 		First(&item, id).Error; err != nil {
 		return nil, err
 	}
@@ -330,7 +389,7 @@ func (s *Service) GetDeposit(id uint) (*DepositTransaksi, error) {
 }
 
 func (s *Service) ListPaketSisa(p pagination.Params) ([]PaketPerawatan, pagination.Meta, error) {
-	q := s.repo.db.Model(&PaketPerawatan{}).
+	q := s.cab.Scope(s.repo.db.Model(&PaketPerawatan{}), "cabang_id").
 		Where("status = ? AND sisa_sesi > 0", "aktif").
 		Preload("Pasien").Preload("Staff").Preload("Treatment")
 	if p.Search != "" {
@@ -356,7 +415,7 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 	}
 	var item PaketPerawatan
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
 			return err
 		}
 		if item.Status == "dibatalkan" {
@@ -379,7 +438,7 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 		if req.Refund == 0 {
 			return nil
 		}
-		if err := kasir.Catat(tx, req.UserID, kasir.Mutasi{
+		if err := kasir.Catat(tx, req.UserID, item.CabangID, kasir.Mutasi{
 			SourceType: kasir.SourcePaketRefund, SourceID: item.ID, Referensi: item.Kode,
 			JenisPembayaran: req.JenisPembayaran, BankID: req.BankID, Keluar: req.Refund,
 			Keterangan: "Refund batal paket " + item.Kode,
@@ -404,7 +463,7 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 }
 
 func (h *Handler) PerawatanReguler(c *gin.Context) {
-	items, meta, err := h.svc.ListPerawatanReguler(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).ListPerawatanReguler(pagination.FromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -413,7 +472,7 @@ func (h *Handler) PerawatanReguler(c *gin.Context) {
 }
 
 func (h *Handler) PerawatanPaket(c *gin.Context) {
-	items, meta, err := h.svc.ListPerawatanPaket(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).ListPerawatanPaket(pagination.FromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -422,7 +481,7 @@ func (h *Handler) PerawatanPaket(c *gin.Context) {
 }
 
 func (h *Handler) ProdukLangsung(c *gin.Context) {
-	items, meta, err := h.svc.ListProdukLangsung(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).ListProdukLangsung(pagination.FromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -431,7 +490,7 @@ func (h *Handler) ProdukLangsung(c *gin.Context) {
 }
 
 func (h *Handler) ProdukOnline(c *gin.Context) {
-	items, meta, err := h.svc.ListProdukOnline(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).ListProdukOnline(pagination.FromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -449,7 +508,7 @@ func (h *Handler) Bayar(c *gin.Context) {
 		return
 	}
 	req.UserID = c.GetUint(middleware.ContextUserID)
-	item, err := h.svc.Bayar(req)
+	item, err := h.svc.For(c).Bayar(req)
 	if errors.Is(err, ErrSudahDibayar) {
 		response.Fail(c, http.StatusConflict, err.Error(), nil)
 		return
@@ -467,7 +526,7 @@ func (h *Handler) Tagihan(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.HitungTagihan(req)
+	item, err := h.svc.For(c).HitungTagihan(req)
 	if errors.Is(err, ErrSudahDibayar) {
 		response.Fail(c, http.StatusConflict, err.Error(), nil)
 		return
@@ -503,18 +562,31 @@ func (h *Handler) SaldoPasien(c *gin.Context) {
 }
 
 func (h *Handler) ListDeposit(c *gin.Context) {
-	var pasienID uint
-	if v := c.Query("pasien_id"); v != "" {
-		if id, err := strconv.ParseUint(v, 10, 64); err == nil {
-			pasienID = uint(id)
-		}
+	f, err := depositFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
 	}
-	items, meta, err := h.svc.ListDeposit(pagination.FromContext(c), c.Query("jenis"), c.Query("tanggal"), pasienID)
+	items, meta, err := h.svc.For(c).ListDeposit(pagination.FromContext(c), f)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
 	response.OKWithMeta(c, items, meta, "ok")
+}
+
+func (h *Handler) DepositSummary(c *gin.Context) {
+	f, err := depositFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+	out, err := h.svc.For(c).DepositSummary(f, c.Query("search"))
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, out, "ok")
 }
 
 func (h *Handler) Deposit(c *gin.Context) {
@@ -527,7 +599,7 @@ func (h *Handler) Deposit(c *gin.Context) {
 		return
 	}
 	req.UserID = c.GetUint(middleware.ContextUserID)
-	item, err := h.svc.CreateDeposit(req)
+	item, err := h.svc.For(c).CreateDeposit(req)
 	if errors.Is(err, kasir.ErrBelumBuka) {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -540,7 +612,7 @@ func (h *Handler) Deposit(c *gin.Context) {
 }
 
 func (h *Handler) PaketSisa(c *gin.Context) {
-	items, meta, err := h.svc.ListPaketSisa(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).ListPaketSisa(pagination.FromContext(c))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
@@ -553,7 +625,7 @@ func (h *Handler) BatalPaket(c *gin.Context) {
 	var req BatalPaketRequest
 	_ = c.ShouldBindJSON(&req)
 	req.UserID = c.GetUint(middleware.ContextUserID)
-	item, err := h.svc.BatalPaket(uint(id), req)
+	item, err := h.svc.For(c).BatalPaket(uint(id), req)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -573,6 +645,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.POST("/bayar", h.Bayar)
 		g.GET("/deposit/saldo", h.SaldoPasien)
 		g.GET("/deposit", h.ListDeposit)
+		g.GET("/deposit/summary", h.DepositSummary)
 		g.POST("/deposit", h.Deposit)
 		g.GET("/paket/sisa", h.PaketSisa)
 		g.POST("/paket/:id/batal", h.BatalPaket)

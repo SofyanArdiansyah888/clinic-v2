@@ -46,8 +46,12 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-func (s *Service) List(p pagination.Params) ([]Staff, pagination.Meta, error) {
+// List returns staff; cabangID > 0 keeps only those who serve that branch (pickers).
+func (s *Service) List(p pagination.Params, cabangID uint) ([]Staff, pagination.Meta, error) {
 	q := s.repo.db.Model(&Staff{})
+	if cabangID > 0 {
+		q = q.Where("id IN (SELECT staff_id FROM staff_cabangs WHERE cabang_id = ?)", cabangID)
+	}
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
 		q = q.Where("nama ILIKE ? OR kode ILIKE ? OR jabatan ILIKE ? OR email ILIKE ?", like, like, like, like)
@@ -135,7 +139,12 @@ func (s *Service) Delete(id uint) error {
 }
 
 func (h *Handler) Index(c *gin.Context) {
-	items, meta, err := h.svc.List(pagination.FromContext(c))
+	// ?cabang=aktif narrows a picker to staff serving the active branch.
+	var cabangID uint
+	if c.Query("cabang") == "aktif" && !branch.All(c) {
+		cabangID = branch.ID(c)
+	}
+	items, meta, err := h.svc.List(pagination.FromContext(c), cabangID)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

@@ -9,25 +9,26 @@ import (
 )
 
 type Pembelian struct {
-	ID         uint               `gorm:"primaryKey" json:"id"`
-	Kode       string             `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	SupplierID uint               `gorm:"not null;index" json:"supplier_id"`
-	StaffID    uint               `gorm:"not null;index" json:"staff_id"`
-	Tanggal    time.Time          `gorm:"type:date;not null" json:"tanggal"`
-	NoInvoice  string             `gorm:"size:50" json:"no_invoice"`
-	TotalHarga float64            `gorm:"type:decimal(12,2);default:0" json:"total_harga"`
-	Status     string             `gorm:"size:50;default:draft" json:"status"`
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	Kode       string    `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID   uint      `gorm:"not null;default:0;index" json:"cabang_id"`
+	SupplierID uint      `gorm:"not null;index" json:"supplier_id"`
+	StaffID    uint      `gorm:"not null;index" json:"staff_id"`
+	Tanggal    time.Time `gorm:"type:date;not null" json:"tanggal"`
+	NoInvoice  string    `gorm:"size:50" json:"no_invoice"`
+	TotalHarga float64   `gorm:"type:decimal(12,2);default:0" json:"total_harga"`
+	Status     string    `gorm:"size:50;default:draft" json:"status"`
 	// JumlahDibayar and StatusBayar track settlement of the supplier debt.
-	JumlahDibayar float64          `gorm:"type:decimal(12,2);default:0" json:"jumlah_dibayar"`
-	StatusBayar   string           `gorm:"size:20;default:belum" json:"status_bayar"`
-	Keterangan string             `gorm:"type:text" json:"keterangan"`
-	IsActive   bool               `gorm:"default:true" json:"is_active"`
-	CreatedAt  time.Time          `json:"created_at"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	Supplier   *supplier.Supplier `gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
-	Staff      *staff.Staff       `gorm:"foreignKey:StaffID" json:"staff,omitempty"`
-	Details    []PembelianDetail  `gorm:"foreignKey:PembelianID" json:"details,omitempty"`
-	Pembayarans []PembelianPembayaran `gorm:"foreignKey:PembelianID" json:"pembayarans,omitempty"`
+	JumlahDibayar float64               `gorm:"type:decimal(12,2);default:0" json:"jumlah_dibayar"`
+	StatusBayar   string                `gorm:"size:20;default:belum" json:"status_bayar"`
+	Keterangan    string                `gorm:"type:text" json:"keterangan"`
+	IsActive      bool                  `gorm:"default:true" json:"is_active"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Supplier      *supplier.Supplier    `gorm:"foreignKey:SupplierID" json:"supplier,omitempty"`
+	Staff         *staff.Staff          `gorm:"foreignKey:StaffID" json:"staff,omitempty"`
+	Details       []PembelianDetail     `gorm:"foreignKey:PembelianID" json:"details,omitempty"`
+	Pembayarans   []PembelianPembayaran `gorm:"foreignKey:PembelianID" json:"pembayarans,omitempty"`
 }
 
 func (Pembelian) TableName() string { return "pembelians" }

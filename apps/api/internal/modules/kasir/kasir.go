@@ -5,6 +5,7 @@ package kasir
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ var ErrBelumBuka = errors.New("Kasir belum dibuka. Buka kasir dulu di Kasir › 
 type Shift struct {
 	ID              uint       `gorm:"primaryKey" json:"id"`
 	Kode            string     `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID        uint       `gorm:"not null;default:0;index" json:"cabang_id"`
 	UserID          uint       `gorm:"not null;index" json:"user_id"`
 	StaffID         *uint      `gorm:"index" json:"staff_id"`
 	SaldoAwal       float64    `gorm:"type:decimal(14,2);not null;default:0" json:"saldo_awal"`
@@ -50,6 +52,7 @@ type Shift struct {
 	// Read-only names filled by the list/detail queries.
 	KasirNama    string `gorm:"->;-:migration" json:"kasir_nama"`
 	ClosedByNama string `gorm:"->;-:migration" json:"closed_by_nama"`
+	CabangNama   string `gorm:"->;-:migration" json:"cabang_nama"`
 }
 
 func (Shift) TableName() string { return "kasir_shifts" }
@@ -88,9 +91,10 @@ func normalizeMetode(jenis string) string {
 func roundRp(v float64) float64 { return math.Round(v*100) / 100 }
 
 // Catat records m on the signed-in account's open shift inside the caller's transaction.
+// cabangID is the branch the money belongs to; the shift must be open in that branch.
 // The shift row is locked so a close cannot slip between the check and the insert.
 // It returns ErrBelumBuka when the account has no open shift; a zero movement is skipped.
-func Catat(tx *gorm.DB, userID uint, m Mutasi) error {
+func Catat(tx *gorm.DB, userID, cabangID uint, m Mutasi) error {
 	if roundRp(m.Masuk) == 0 && roundRp(m.Keluar) == 0 {
 		return nil
 	}
@@ -105,6 +109,11 @@ func Catat(tx *gorm.DB, userID uint, m Mutasi) error {
 	}
 	if err != nil {
 		return err
+	}
+	if cabangID != 0 && sh.CabangID != cabangID {
+		var nama string
+		tx.Table("cabangs").Where("id = ?", sh.CabangID).Select("nama").Scan(&nama)
+		return fmt.Errorf("Kasir Anda terbuka di cabang %s. Tutup kasir itu dulu atau pindah ke cabang tersebut", nama)
 	}
 	m.ID = 0
 	m.ShiftID = sh.ID
