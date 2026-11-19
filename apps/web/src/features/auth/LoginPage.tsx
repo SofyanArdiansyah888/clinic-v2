@@ -36,9 +36,14 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4 text-slate-900 antialiased">
-      <div className="grid w-full max-w-4xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl md:grid-cols-2">
-        <div className="relative flex flex-col justify-between overflow-hidden bg-slate-900 p-8 text-white">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-900 p-4 text-slate-900 antialiased">
+      {/* Background: a professional aesthetic clinic treatment room, darkened so the card stays readable. */}
+      <div aria-hidden className="absolute inset-0 bg-[url('/login-bg.jpg')] bg-cover bg-center" />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-slate-950/85 via-slate-900/55 to-rose-950/60" />
+      <p className="absolute right-3 bottom-2 text-[10px] text-white/40">Foto: cottonbro studio / Pexels</p>
+
+      <div className="relative grid w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl shadow-black/40 md:grid-cols-2">
+        <div className="relative flex flex-col justify-between overflow-hidden bg-slate-900/90 p-8 text-white backdrop-blur-sm">
           <div className="absolute -right-10 -bottom-10 h-48 w-48 rounded-full bg-rose-600/20 blur-2xl" />
           <div className="relative z-10">
             <div className="mb-6 flex items-center space-x-3">

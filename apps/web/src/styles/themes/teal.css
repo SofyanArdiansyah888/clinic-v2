@@ -1,0 +1,49 @@
+/* Klinis Teal: same shapes as the default theme, calm teal brand.
+   The rose and pink ramps are remapped to teal/cyan so hard-coded bg-rose-*,
+   text-rose-*, from-rose-* … utilities follow. Screen only: print stays default. */
+@media screen {
+  [data-theme='teal'] {
+    --background: 160 30% 97%;
+    --foreground: 190 45% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 190 45% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 190 45% 12%;
+    --primary: 175 84% 32%;
+    --primary-foreground: 0 0% 100%;
+    --primary-strong: 176 80% 26%;
+    --accent: 166 76% 96%;
+    --accent-foreground: 176 80% 26%;
+    --ring: 175 84% 32%;
+    --border: 170 18% 89%;
+    --input: 170 18% 89%;
+    --muted: 160 30% 97%;
+    --muted-foreground: 190 12% 42%;
+
+    --sidebar: 192 55% 10%;
+    --sidebar-foreground: 180 15% 70%;
+    --sidebar-muted: 192 45% 14%;
+    --sidebar-accent: 175 84% 32%;
+    --sidebar-border: 190 35% 18%;
+    --sidebar-header: 192 55% 10%;
+
+    --color-rose-50: oklch(98.4% 0.014 180.72);
+    --color-rose-100: oklch(95.3% 0.051 180.8);
+    --color-rose-200: oklch(91% 0.096 180.43);
+    --color-rose-300: oklch(85.5% 0.138 181.07);
+    --color-rose-400: oklch(77.7% 0.152 181.91);
+    --color-rose-500: oklch(65% 0.13 183);
+    --color-rose-600: oklch(56% 0.11 185);
+    --color-rose-700: oklch(49% 0.094 186.4);
+    --color-rose-800: oklch(43.7% 0.078 188.2);
+    --color-rose-900: oklch(38.6% 0.063 188.4);
+    --color-rose-950: oklch(27.7% 0.046 192.5);
+
+    --color-pink-400: oklch(78.9% 0.154 211.53);
+    --color-pink-500: oklch(71.5% 0.143 215.22);
+    --color-pink-600: oklch(60.9% 0.126 221.72);
+
+    --color-slate-900: oklch(22% 0.035 200);
+    --color-slate-950: oklch(15% 0.03 205);
+  }
+}

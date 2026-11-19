@@ -4,6 +4,7 @@ import { Outlet, useRouterState } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { AppSidebar } from '@/shared/components/AppSidebar'
 import { Toaster } from '@/shared/components/Toaster'
+import { ThemeSwitcher } from '@/shared/components/ThemeSwitcher'
 
 const BREADCRUMB: Record<string, string> = {
   '/': 'Dashboard',
@@ -128,7 +129,7 @@ export function AppLayout() {
       ) : null}
 
       <div className="print-flow flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="print-hide sticky top-0 z-20 flex h-16 flex-shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-4 shadow-sm md:px-6">
+        <header className="ui-header print-hide sticky top-0 z-20 flex h-16 flex-shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-4 shadow-sm md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="ghost"
@@ -150,9 +151,12 @@ export function AppLayout() {
             </div>
           </div>
 
-          <span className="hidden flex-shrink-0 text-xs whitespace-nowrap text-slate-500 tabular-nums lg:inline">
-            {formatLiveDate(now)}
-          </span>
+          <div className="flex flex-shrink-0 items-center gap-3">
+            <span className="hidden text-xs whitespace-nowrap text-slate-500 tabular-nums lg:inline">
+              {formatLiveDate(now)}
+            </span>
+            <ThemeSwitcher />
+          </div>
         </header>
 
         <main className="print-flow relative flex-1 overflow-y-auto bg-slate-50">

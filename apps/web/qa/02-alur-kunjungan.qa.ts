@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { api, apiData, loginAs, watchProblems } from '../e2e/support'
+import { api, apiData, expectOwnStaff, loginAs, watchProblems } from '../e2e/support'
 import { PHOTO, chooseById, chooseByPlaceholder, createFixtures, expectToast, rupiah, stokBarang, tab } from './helpers'
 
 // Satu kunjungan pasien baru dari awal sampai akhir, semuanya lewat UI dengan role yang benar:
@@ -90,7 +90,7 @@ test('TC-FLOW-01 kunjungan pasien baru sampai obat diserahkan', async ({ page })
     kodePerawatan = (await row.locator('td').first().innerText()).trim()
     await row.getByRole('button', { name: 'Bayar', exact: true }).click()
     await expect(page.getByText('Sisa Bayar').locator('..')).toContainText(rupiah(total))
-    await chooseById(page, 'paymentmodal-f5', f.kasir.nama)
+    await expectOwnStaff(page, 'paymentmodal-f5', 'staff')
     await chooseById(page, 'paymentmodal-f6', 'Tunai')
     await page.locator('#paymentmodal-f8').fill(String(total + 35000))
     await expect(page.getByText(new RegExp(`Kembalian\\s*Rp\\s*${rupiah(35000).replace('.', '\\.')}`))).toBeVisible()

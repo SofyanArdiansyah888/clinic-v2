@@ -45,7 +45,7 @@ const formFields: FormField[] = [
     ],
   },
   { name: 'nilai_diskon', label: 'Nilai Diskon', type: 'number', required: true },
-  { name: 'min_pembelian', label: 'Min. Transaksi (Rp)', type: 'number', placeholder: '0' },
+  { name: 'min_pembelian', label: 'Min. Transaksi (Rp)', type: 'currency', placeholder: '0' },
   { name: 'tanggal_mulai', label: 'Berlaku Mulai', type: 'date' },
   { name: 'tanggal_selesai', label: 'Tanggal Kadaluarsa', type: 'date' },
 ]

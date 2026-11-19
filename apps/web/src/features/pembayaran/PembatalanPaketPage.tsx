@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { Field, FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type PaketRow = {
   id: number
@@ -171,11 +172,9 @@ export function PembatalanPaketPage() {
               <strong className="text-slate-900">{cancelTarget?.total_sesi}</strong> sesi akan dibatalkan.
             </p>
             <Field label="Refund (Rp)" htmlFor="pembatalanpaketpage-f1">
-              <input id="pembatalanpaketpage-f1"
-                type="number"
-                min={0}
+              <RupiahInput id="pembatalanpaketpage-f1"
                 value={refund}
-                onChange={(e) => setRefund(e.target.value)}
+                onValueChange={(v) => setRefund(v)}
                 placeholder="0 jika tanpa refund"
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-rose-500 focus:outline-none"
               />

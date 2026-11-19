@@ -1,0 +1,205 @@
+/* Neo Brutalism: flat bright colours, black outlines, hard offset shadows, square corners.
+   Colours come from remapped ramps (like the other themes). Border width, shadows, radius
+   and gradients are not driven by variables in Tailwind, so they are overridden here —
+   generically for ad-hoc cards on pages, and more strongly for the shared primitives,
+   which carry ui-* marker classes (ui-card, ui-btn, ui-input, ui-table, ui-toast, ui-header).
+   Screen only: printing always uses the default theme. */
+@media screen {
+  [data-theme='brutal'] {
+    --ink: #000;
+    --hard-shadow: 4px 4px 0 0 var(--ink);
+    --hard-shadow-sm: 2px 2px 0 0 var(--ink);
+
+    --background: 43 100% 95%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 331 100% 69%;
+    --primary-foreground: 0 0% 0%;
+    --primary-strong: 331 72% 43%;
+    --accent: 50 100% 70%;
+    --accent-foreground: 0 0% 0%;
+    --muted: 43 70% 92%;
+    --muted-foreground: 0 0% 25%;
+    --border: 0 0% 0%;
+    --input: 0 0% 0%;
+    --ring: 0 0% 0%;
+
+    --sidebar: 0 0% 0%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-muted: 0 0% 8%;
+    --sidebar-accent: 331 100% 69%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-header: 0 0% 0%;
+
+    --radius: 0px;
+    --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+
+    /* brand: hot pink; 700+ dark enough for text on white */
+    --color-rose-50: #fff0f7;
+    --color-rose-100: #ffd9ea;
+    --color-rose-200: #ffb8d8;
+    --color-rose-300: #ff94c4;
+    --color-rose-400: #ff7ab5;
+    --color-rose-500: #ff6aab;
+    --color-rose-600: #ff5fa2;
+    --color-rose-700: #c2185b;
+    --color-rose-800: #8e1046;
+    --color-rose-900: #5c0a2e;
+    --color-rose-950: #33061a;
+    --color-pink-400: #ffd23f;
+    --color-pink-500: #ffd23f;
+    --color-pink-600: #ffc300;
+
+    /* neutrals: warm paper → ink */
+    --color-slate-50: #fff8e8;
+    --color-slate-100: #f6ecd6;
+    --color-slate-200: #e6d9bd;
+    --color-slate-300: #cbbd9f;
+    --color-slate-400: #6b6458;
+    --color-slate-500: #4d473d;
+    --color-slate-600: #353028;
+    --color-slate-700: #1f1b15;
+    --color-slate-800: #0d0b08;
+    --color-slate-900: #000;
+    --color-slate-950: #000;
+
+    /* flat, punchy status colours */
+    --color-emerald-50: #dcffe9;
+    --color-emerald-100: #b8ffd2;
+    --color-emerald-200: #7dffb0;
+    --color-emerald-500: #1fd17a;
+    --color-emerald-600: #00b35c;
+    --color-amber-50: #fff6cc;
+    --color-amber-100: #ffeb85;
+    --color-amber-200: #ffdd3d;
+    --color-indigo-50: #e5e8ff;
+    --color-indigo-100: #c9cfff;
+    --color-indigo-200: #a3adff;
+  }
+
+  [data-theme='brutal'] body {
+    letter-spacing: -0.01em;
+  }
+  [data-theme='brutal'] :is(h1, h2, h3, h4) {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  /* ── Generic layer: ad-hoc cards, pills and boxes on pages ── */
+  [data-theme='brutal'] [class*='rounded']:not(.rounded-full) {
+    border-radius: 0;
+  }
+  [data-theme='brutal'] .border:not(.border-transparent) {
+    border-width: 2px;
+    border-color: var(--ink);
+  }
+  [data-theme='brutal'] :is(.border-b, .border-t, .border-l, .border-r, .border-y, .border-x),
+  [data-theme='brutal'] :is(.divide-y, .divide-x) > :not(:last-child) {
+    border-color: var(--ink);
+  }
+  [data-theme='brutal'] :is(.shadow-xs, .shadow-sm, .shadow, .shadow-md) {
+    --tw-shadow: var(--hard-shadow-sm);
+  }
+  [data-theme='brutal'] :is(.shadow-lg, .shadow-xl, .shadow-2xl) {
+    --tw-shadow: var(--hard-shadow);
+  }
+  [data-theme='brutal'] [class*='bg-gradient'] {
+    background-image: none;
+    background-color: var(--tw-gradient-from);
+  }
+  /* Bright brand fills read best with black text. */
+  [data-theme='brutal'] :is(.bg-rose-400, .bg-rose-500, .bg-rose-600, .bg-pink-500, .bg-emerald-500, .bg-emerald-600, .bg-red-600, [class*='bg-gradient']),
+  [data-theme='brutal'] :is(.bg-rose-400, .bg-rose-500, .bg-rose-600, .bg-pink-500, .bg-emerald-500, .bg-emerald-600, .bg-red-600, [class*='bg-gradient']) .text-white {
+    color: var(--ink);
+  }
+  [data-theme='brutal'] .overlay-backdrop {
+    background-color: rgb(0 0 0 / 0.55);
+    backdrop-filter: none;
+  }
+  [data-theme='brutal'] *:focus-visible {
+    outline: 3px solid var(--ink) !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Sidebar stays black; keep its greys distinct so hover/active states remain visible. */
+  [data-theme='brutal'] .ui-sidebar {
+    --color-slate-300: #e5e5e5;
+    --color-slate-400: #b3b3b3;
+    --color-slate-500: #8c8c8c;
+    --color-slate-600: #737373;
+    --color-slate-800: #333;
+    --color-slate-900: #1f1f1f;
+    --color-slate-950: #000;
+    border-right: 2px solid var(--ink);
+  }
+  [data-theme='brutal'] .ui-sidebar .border {
+    border-color: var(--color-rose-500);
+  }
+
+  /* ── Shared primitives ── */
+  [data-theme='brutal'] .ui-card {
+    border: 2px solid var(--ink);
+    box-shadow: var(--hard-shadow);
+  }
+  [data-theme='brutal'] .ui-header {
+    border-bottom: 2px solid var(--ink);
+    box-shadow: none;
+  }
+  [data-theme='brutal'] .ui-btn {
+    border: 2px solid var(--ink);
+    box-shadow: var(--hard-shadow-sm);
+    font-weight: 700;
+    transition:
+      transform 80ms ease,
+      box-shadow 80ms ease;
+  }
+  [data-theme='brutal'] .ui-btn:not(:disabled):hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 0 var(--ink);
+  }
+  [data-theme='brutal'] .ui-btn:not(:disabled):active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+  [data-theme='brutal'] .ui-btn-ghost {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  [data-theme='brutal'] .ui-input {
+    border: 2px solid var(--ink);
+    box-shadow: none;
+  }
+  [data-theme='brutal'] .ui-input:focus-within,
+  [data-theme='brutal'] .ui-input:focus {
+    box-shadow: var(--hard-shadow-sm);
+  }
+  [data-theme='brutal'] .ui-table thead tr {
+    background-color: var(--color-amber-100);
+    color: var(--ink);
+    border-bottom: 2px solid var(--ink);
+  }
+  [data-theme='brutal'] .ui-toast {
+    border: 2px solid var(--ink);
+    box-shadow: var(--hard-shadow);
+    color: var(--ink);
+  }
+  [data-theme='brutal'] .ui-toast[data-tone='success'] {
+    background-color: var(--color-emerald-200);
+  }
+  [data-theme='brutal'] .ui-toast[data-tone='error'] {
+    background-color: var(--color-rose-300);
+  }
+  [data-theme='brutal'] .ui-toast[data-tone='info'] {
+    background-color: var(--color-amber-100);
+  }
+  [data-theme='brutal'] .ui-toast * {
+    color: var(--ink);
+  }
+  [data-theme='brutal'] .status-badge {
+    border: 2px solid var(--ink);
+    color: var(--ink);
+  }
+}

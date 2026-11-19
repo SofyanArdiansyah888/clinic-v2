@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiGet } from '@/shared/api/client'
 import { KeyRound } from 'lucide-react'
 import { ResourceListPage, type FormField } from '@/shared/components/ResourceListPage'
 import { StatusBadge } from '@/shared/components/StatusBadge'
@@ -16,6 +18,16 @@ type User = {
   email: string
   role: string
   is_active: boolean
+  staff_id?: number | null
+}
+
+function StaffName({ id }: { id?: number | null }) {
+  const { data } = useQuery({
+    queryKey: ['staff', 'select'],
+    queryFn: () => apiGet<{ id: number; nama?: string }[]>('/staff', { per_page: 200, page: 1 }),
+  })
+  if (!id) return <span className="text-[11px] text-slate-400">—</span>
+  return <span className="text-xs">{data?.data?.find((s) => s.id === id)?.nama ?? `Staff #${id}`}</span>
 }
 
 const columns: Column<User>[] = [
@@ -23,6 +35,16 @@ const columns: Column<User>[] = [
   { key: 'username', header: 'Username', cell: (r) => <span className="font-mono text-rose-700">{r.username}</span> },
   { key: 'email', header: 'Email', cell: (r) => r.email },
   { key: 'role', header: 'Role', cell: (r) => <span className="rounded bg-slate-100 px-2 py-1 font-semibold text-slate-700 uppercase text-[11px]">{r.role}</span> },
+  {
+    key: 'staff',
+    header: 'Staff',
+    cell: (r) =>
+      r.staff_id || r.role === 'admin' ? (
+        <StaffName id={r.staff_id} />
+      ) : (
+        <span className="text-[11px] font-semibold text-amber-700">Belum terhubung</span>
+      ),
+  },
   { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.is_active} /> },
 ]
 
@@ -44,6 +66,12 @@ const createFields: FormField[] = [
       { label: 'Finance / Akuntansi', value: 'finance' },
     ],
   },
+  {
+    name: 'staff_id',
+    label: 'Terhubung ke Staff',
+    type: 'staff',
+    placeholder: 'Transaksi kasir, depo, dan deposit dicatat atas nama staff ini',
+  },
 ]
 
 const editFields: FormField[] = [
@@ -62,6 +90,12 @@ const editFields: FormField[] = [
       { label: 'Nurse / Terapis', value: 'nurse' },
       { label: 'Finance / Akuntansi', value: 'finance' },
     ],
+  },
+  {
+    name: 'staff_id',
+    label: 'Terhubung ke Staff',
+    type: 'staff',
+    placeholder: 'Transaksi kasir, depo, dan deposit dicatat atas nama staff ini',
   },
 ]
 

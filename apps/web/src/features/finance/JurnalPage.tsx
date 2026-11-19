@@ -19,6 +19,7 @@ import { cn } from '@/shared/lib/cn'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { AkunSelect } from '@/features/finance/components/AkunSelect'
 import { apiErrorMessage, SOURCE_LABEL, type Jurnal } from '@/features/finance/types'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 const fieldLabel = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500'
 const inputClass = 'rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-800 focus:border-rose-500 focus:outline-none'
@@ -356,30 +357,24 @@ function JurnalManualDialog({ open, onClose, onSaved }: { open: boolean; onClose
                 />
                 <Input id={`jm-ket-${i}`} aria-label={`Keterangan baris ${i + 1}`} value={l.keterangan} onChange={(e) => update(i, { keterangan: e.target.value })} placeholder="Opsional" />
                 <LineAmount label="Debit">
-                <Input
+                <RupiahInput
                   id={`jm-debit-${i}`}
                   aria-label={`Debit baris ${i + 1}`}
-                  type="number"
                   required={!!l.akun_id && !l.kredit}
-                  min={0}
-                  step="0.01"
-                  className="text-right"
+                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-xs placeholder:text-slate-400 focus-visible:border-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 text-right"
                   value={l.debit}
-                  onChange={(e) => update(i, { debit: e.target.value, kredit: e.target.value ? '' : l.kredit })}
+                  onValueChange={(v) => update(i, { debit: v, kredit: v ? '' : l.kredit })}
                   placeholder="0"
                 />
                 </LineAmount>
                 <LineAmount label="Kredit">
-                <Input
+                <RupiahInput
                   id={`jm-kredit-${i}`}
                   aria-label={`Kredit baris ${i + 1}`}
-                  type="number"
                   required={!!l.akun_id && !l.debit}
-                  min={0}
-                  step="0.01"
-                  className="text-right"
+                  className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-xs placeholder:text-slate-400 focus-visible:border-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 text-right"
                   value={l.kredit}
-                  onChange={(e) => update(i, { kredit: e.target.value, debit: e.target.value ? '' : l.debit })}
+                  onValueChange={(v) => update(i, { kredit: v, debit: v ? '' : l.debit })}
                   placeholder="0"
                 />
                 </LineAmount>

@@ -3,6 +3,7 @@ package pembayaran
 import (
 	"errors"
 	"fmt"
+	"github.com/scaleup/clinic-v2/api/internal/platform/actor"
 	"net/http"
 	"strconv"
 	"strings"
@@ -417,6 +418,9 @@ func (h *Handler) Bayar(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
+	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
+		return
+	}
 	item, err := h.svc.Bayar(req)
 	if errors.Is(err, ErrSudahDibayar) {
 		response.Fail(c, http.StatusConflict, err.Error(), nil)
@@ -489,6 +493,9 @@ func (h *Handler) Deposit(c *gin.Context) {
 	var req DepositRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "validation failed", err.Error())
+		return
+	}
+	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
 		return
 	}
 	item, err := h.svc.CreateDeposit(req)

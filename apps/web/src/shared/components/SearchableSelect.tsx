@@ -189,7 +189,7 @@ export function SearchableSelect({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-xs font-medium transition-colors',
+          'ui-input flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-xs font-medium transition-colors',
           'hover:border-slate-300 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 focus:outline-none',
           'disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-60',
           !selected && 'text-slate-400',
@@ -229,7 +229,7 @@ export function SearchableSelect({
                 width: `${coords.width}px`,
                 zIndex: 99999,
               }}
-              className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-100"
+              className="ui-card overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-100"
             >
               <div className="relative border-b border-slate-100 p-2 bg-white">
                 <Search className="absolute top-1/2 left-4 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />

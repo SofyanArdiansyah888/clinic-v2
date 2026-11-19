@@ -114,3 +114,22 @@ export function watchProblems(page: Page) {
 
 export const today = () => new Date().toISOString().slice(0, 10)
 export const uniq = () => Date.now().toString(36) + Math.floor(Math.random() * 1e4)
+
+/** Staff record each e2e account is linked to; non-admin transactions are recorded under it. */
+export const ownStaffName = (role: Exclude<Role, 'admin'>) => `Petugas E2E ${role}`
+
+/** The staff id linked to a role's account (from /auth/me). */
+export async function ownStaffId(role: Exclude<Role, 'admin'>): Promise<number> {
+  const ctx = await api(role)
+  const me = await apiData<{ staff_id: number | null }>(ctx, 'get', '/auth/me')
+  await ctx.dispose()
+  if (!me.staff_id) throw new Error(`e2e_${role} is not linked to a staff record`)
+  return me.staff_id
+}
+
+/** Non-admin staff pickers are locked to the account's own staff. */
+export async function expectOwnStaff(page: Page, id: string, role: Exclude<Role, 'admin'>) {
+  const picker = page.locator(`#${id}`)
+  await expect(picker, 'staff dikunci ke akun sendiri').toBeDisabled()
+  await expect(picker).toContainText(ownStaffName(role))
+}

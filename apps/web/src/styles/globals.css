@@ -1,5 +1,8 @@
 @import 'tailwindcss';
-@import './themes/clinical-teal.css';
+@import './themes/rose.css';
+@import './themes/teal.css';
+@import './themes/dark.css';
+@import './themes/brutal.css';
 
 @theme inline {
   --font-sans: var(--font-sans);
@@ -60,12 +63,12 @@ body {
 }
 
 ::selection {
-  background: #ffe4e6;
-  color: #881337;
+  background: var(--color-rose-100);
+  color: var(--color-rose-900);
 }
 
 *:focus-visible {
-  outline: 2px solid #e11d48 !important;
+  outline: 2px solid var(--color-rose-600) !important;
   outline-offset: 2px !important;
 }
 
@@ -90,34 +93,34 @@ table,
 }
 
 .status-badge-menunggu {
-  background-color: #fef3c7;
-  color: #92400e;
-  border-color: #fde68a;
+  background-color: var(--color-amber-100);
+  color: var(--color-amber-800);
+  border-color: var(--color-amber-200);
 }
 
 .status-badge-diproses,
 .status-badge-dipanggil {
-  background-color: #ffe4e6;
-  color: #9f1239;
-  border-color: #fecdd3;
+  background-color: var(--color-rose-100);
+  color: var(--color-rose-800);
+  border-color: var(--color-rose-200);
 }
 
 .status-badge-bayar {
-  background-color: #e0e7ff;
-  color: #3730a3;
-  border-color: #c7d2fe;
+  background-color: var(--color-indigo-100);
+  color: var(--color-indigo-800);
+  border-color: var(--color-indigo-200);
 }
 
 .status-badge-selesai {
-  background-color: #d1fae5;
-  color: #065f46;
-  border-color: #a7f3d0;
+  background-color: var(--color-emerald-100);
+  color: var(--color-emerald-800);
+  border-color: var(--color-emerald-200);
 }
 
 .status-badge-batal {
-  background-color: #f1f5f9;
-  color: #475569;
-  border-color: #e2e8f0;
+  background-color: var(--color-slate-100);
+  color: var(--color-slate-600);
+  border-color: var(--color-slate-200);
 }
 
 ::-webkit-scrollbar {
@@ -126,16 +129,16 @@ table,
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: color-mix(in oklab, var(--color-slate-500) 8%, transparent);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(225, 29, 72, 0.2);
+  background: color-mix(in oklab, var(--color-rose-600) 25%, transparent);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(225, 29, 72, 0.4);
+  background: color-mix(in oklab, var(--color-rose-600) 45%, transparent);
 }
 
 .overlay-backdrop {
@@ -187,11 +190,11 @@ table,
     position: sticky;
     right: 0;
     z-index: 1;
-    background-color: #fff;
+    background-color: var(--color-card);
     box-shadow: -8px 0 8px -8px rgb(15 23 42 / 0.15);
   }
   .table-sticky-actions > thead > tr > :last-child {
-    background-color: rgb(248 250 252);
+    background-color: var(--color-slate-50);
   }
 }
 

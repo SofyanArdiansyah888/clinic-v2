@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { api, apiData, loginAs, today, uniq, watchProblems } from './support'
+import { api, apiData, loginAs, today, uniq, watchProblems, expectOwnStaff, ownStaffId } from './support'
 
 async function pick(page: Page, id: string, label: string | RegExp) {
   await page.locator(`#${id}`).click()
@@ -42,7 +42,7 @@ test('kunjungan sampai pembayaran perawatan lewat UI kasir', async ({ page }) =>
   await row.getByRole('button', { name: 'Bayar', exact: true }).click()
   await expect(page.getByText('Sisa Bayar').locator('..')).toContainText('265.000')
 
-  await pick(page, 'paymentmodal-f5', staff.nama)
+  await expectOwnStaff(page, 'paymentmodal-f5', 'staff')
   await pick(page, 'paymentmodal-f6', 'Tunai')
   await page.locator('#paymentmodal-f8').fill('300000')
   await expect(page.getByText(/Kembalian\s*Rp\s*35\.000/)).toBeVisible()
@@ -76,7 +76,7 @@ test('deposit pasien lewat UI tercatat di data transaksi', async ({ page }) => {
   const pasien = await apiData<{ id: number }>(fo, 'post', '/pasien', { nama: `Deposit E2E ${id}`, no_telp: '0813' + id.slice(-6) })
   const admin = await api('admin')
   const staff = (await apiData<{ id: number }[]>(admin, 'get', '/staff?per_page=1'))[0]
-  await apiData(fo, 'post', '/pembayaran/deposit', { pasien_id: pasien.id, staff_id: staff.id, tanggal: today(), jenis: 'pembayaran_deposit', jumlah: 75000, jenis_pembayaran: 'tunai' })
+  await apiData(fo, 'post', '/pembayaran/deposit', { pasien_id: pasien.id, staff_id: await ownStaffId('staff'), tanggal: today(), jenis: 'pembayaran_deposit', jumlah: 75000, jenis_pembayaran: 'tunai' })
 
   const saldo = await apiData<{ saldo_deposit: number }>(fo, 'get', `/pembayaran/deposit/saldo?pasien_id=${pasien.id}`)
   expect(saldo.saldo_deposit).toBe(75000)

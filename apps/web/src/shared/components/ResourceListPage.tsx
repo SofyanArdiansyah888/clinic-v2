@@ -13,7 +13,7 @@ import { Input } from '@/shared/ui/input'
 import { FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { ResourceFormFields } from '@/shared/components/resource-form'
-import { apiErrorMessage, buildFormBody, initialFormValues, type FormField } from '@/shared/lib/form'
+import { apiErrorMessage, buildFormBody, dialogWidth, initialFormValues, type FormField } from '@/shared/lib/form'
 
 export type { FormField }
 
@@ -332,6 +332,7 @@ export function ResourceListPage<T extends { id: number | string }>({
         open={open}
         onClose={() => setOpen(false)}
         title={createLabel}
+        className={dialogWidth(createFields)}
         description={
           createFields?.length
             ? `Tambah ${title.toLowerCase()} baru`
@@ -372,6 +373,7 @@ export function ResourceListPage<T extends { id: number | string }>({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title={editLabel}
+        className={dialogWidth(activeEditFields)}
         description={`Ubah detail data ${title.toLowerCase()}`}
       >
         {activeEditFields?.length ? (

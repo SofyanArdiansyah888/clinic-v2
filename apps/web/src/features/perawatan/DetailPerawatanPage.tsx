@@ -28,6 +28,7 @@ import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
 import { ResepModal, type ResepItem } from './ResepModal'
 import { ConsentDocumentModal } from './ConsentDocumentModal'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type PerawatanTindakanItem = {
   treatment_id: number
@@ -746,12 +747,10 @@ export function DetailPerawatanPage() {
                           />
                         </td>
                         <td className="p-2">
-                          <input
+                          <RupiahInput
                             id={`tindakan-harga-${idx}`}
-                            type="number"
-                            min={0}
                             value={item.harga}
-                            onChange={(e) => handleTindakanFieldChange(idx, 'harga', Number(e.target.value))}
+                            onValueChange={(v) => handleTindakanFieldChange(idx, 'harga', Number(v))}
                             className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
                           />
                         </td>

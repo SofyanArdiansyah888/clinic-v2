@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/button'
 import { FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 export type ResepItem = {
   barang_id: number
@@ -177,13 +178,11 @@ export function ResepModal({ isOpen, onClose, onSave }: ResepModalProps) {
                       </td>
                       <td className="p-2 font-mono text-[11px] text-slate-500 uppercase">{item.unit}</td>
                       <td className="p-2">
-                        <input
+                        <RupiahInput
                           id={`resep-harga-${idx}`}
                           aria-label="Harga"
-                          type="number"
-                          min={0}
                           value={item.harga}
-                          onChange={(e) => handleHargaChange(idx, Number(e.target.value))}
+                          onValueChange={(v) => handleHargaChange(idx, Number(v))}
                           className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono"
                         />
                       </td>

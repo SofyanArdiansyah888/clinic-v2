@@ -54,8 +54,9 @@ export function Toaster() {
           <div
             key={t.id}
             role={t.tone === 'error' ? 'alert' : 'status'}
+            data-tone={t.tone}
             className={cn(
-              'animate-fade-in-up pointer-events-auto flex w-full items-center gap-3 rounded-2xl border p-3.5 text-xs font-semibold text-white shadow-xl',
+              'ui-dark-island ui-toast animate-fade-in-up pointer-events-auto flex w-full items-center gap-3 rounded-2xl border p-3.5 text-xs font-semibold text-white shadow-xl',
               tone.box,
             )}
           >

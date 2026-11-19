@@ -26,6 +26,8 @@ export type AuthUser = {
   username: string
   role: string
   is_active: boolean
+  /** Staff record this account acts as; transactions are recorded under it. */
+  staff_id?: number | null
 }
 
 export type LoginResult = {

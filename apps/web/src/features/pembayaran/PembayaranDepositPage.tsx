@@ -14,6 +14,7 @@ import { Button, buttonVariants } from '@/shared/ui/button'
 import { Field } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 const JENIS_OPTIONS = [
   { value: 'pembayaran_deposit', label: 'Pembayaran Deposit' },
@@ -193,12 +194,10 @@ export function PembayaranDepositPage() {
             </div>
 
             <Field label="Total (Rp)" htmlFor="pembayarandepositpage-f9" required>
-              <input id="pembayarandepositpage-f9"
-                type="number"
+              <RupiahInput id="pembayarandepositpage-f9"
                 required
-                min={1}
                 value={form.jumlah}
-                onChange={(e) => setForm((f) => ({ ...f, jumlah: e.target.value }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, jumlah: v }))}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-900 focus:border-rose-500 focus:outline-none"
               />
             </Field>

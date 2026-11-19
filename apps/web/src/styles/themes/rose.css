@@ -1,7 +1,8 @@
 :root,
-[data-theme="clinical-teal"],
-[data-theme="clinic-rose"] {
-  /* Clinic OS — Rose brand shell (adapted from frontdesk template) */
+[data-theme='rose'] {
+  /* Clinic OS default theme. Tailwind's own rose/slate palette is used as-is.
+     Other themes (teal.css, dark.css, brutal.css) override these tokens and remap
+     the --color-rose-* / --color-slate-* ramps, so hard-coded utility classes follow. */
   --background: 210 40% 98%; /* slate-50 */
   --foreground: 222 47% 11%;
 

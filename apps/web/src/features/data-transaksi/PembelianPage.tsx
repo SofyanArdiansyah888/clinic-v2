@@ -18,6 +18,7 @@ import { useAuthStore } from '@/features/auth/store'
 import { apiErrorMessage } from '@/features/finance/types'
 import { StokDokumenDialog } from '@/features/warehouse/components/StokDokumenDialog'
 import { itemsColumn, type StokDokumenDetail } from '@/features/warehouse/components/stokDokumenColumns'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type Row = {
   id: number
@@ -173,15 +174,12 @@ function BayarSupplierDialog({ target, onClose }: { target: Row | null; onClose:
             </Field>
             <Field label="Jumlah" htmlFor="bs-jumlah" required>
               <div className="flex gap-1.5">
-                <Input
+                <RupiahInput
+ className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-xs placeholder:text-slate-400 focus-visible:border-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                   id="bs-jumlah"
-                  type="number"
-                  min={1}
-                  max={sisaUtang}
-                  step="0.01"
                   required
                   value={jumlah}
-                  onChange={(e) => setJumlah(e.target.value)}
+                  onValueChange={(v) => setJumlah(v)}
                 />
                 <Button variant="outline" onClick={() => setJumlah(String(sisaUtang))}>
                   Lunasi

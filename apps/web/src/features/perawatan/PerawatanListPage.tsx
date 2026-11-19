@@ -31,6 +31,7 @@ import { Tabs } from '@/shared/ui/tabs'
 import { Field, FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type AntrianRow = {
   id: number
@@ -789,12 +790,10 @@ export function PerawatanListPage() {
                               />
                             </td>
                             <td className="p-2">
-                              <input
+                              <RupiahInput
                                 id={`reguler-harga-${idx}`}
-                                type="number"
-                                min={0}
                                 value={row.harga}
-                                onChange={(e) => handleRegulerRowChange(idx, 'harga', Number(e.target.value))}
+                                onValueChange={(v) => handleRegulerRowChange(idx, 'harga', Number(v))}
                                 className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
                               />
                             </td>
@@ -964,12 +963,10 @@ export function PerawatanListPage() {
                               />
                             </td>
                             <td className="p-2">
-                              <input
+                              <RupiahInput
                                 id={`paket-harga-${idx}`}
-                                type="number"
-                                min={0}
                                 value={row.harga}
-                                onChange={(e) => handlePaketRowChange(idx, 'harga', Number(e.target.value))}
+                                onValueChange={(v) => handlePaketRowChange(idx, 'harga', Number(v))}
                                 className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
                               />
                             </td>

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,8 @@ type UpsertRequest struct {
 	Role     string         `json:"role" binding:"omitempty,oneof=admin doctor staff apoteker nurse finance"`
 	HakAkses datatypes.JSON `json:"hak_akses"`
 	IsActive *bool          `json:"is_active"`
+	// StaffID: omitted keeps the current link, 0 removes it, any other id links that staff.
+	StaffID *uint `json:"staff_id"`
 }
 
 type PasswordRequest struct {
@@ -96,6 +99,9 @@ func (s *Service) Create(req UpsertRequest) (*User, error) {
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
 	}
+	if err := s.applyStaff(item, req.StaffID); err != nil {
+		return nil, err
+	}
 	if err := s.repo.db.Create(item).Error; err != nil {
 		return nil, err
 	}
@@ -125,6 +131,9 @@ func (s *Service) Update(id uint, req UpsertRequest) (*User, error) {
 	}
 	if req.IsActive != nil {
 		item.IsActive = *req.IsActive
+	}
+	if err := s.applyStaff(item, req.StaffID); err != nil {
+		return nil, err
 	}
 	if err := s.repo.db.Save(item).Error; err != nil {
 		return nil, err
@@ -226,4 +235,23 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, _ *generator.Service) {
 		g.DELETE("/:id", h.Destroy)
 		g.PATCH("/:id/password", h.UpdatePassword)
 	}
+}
+
+// applyStaff sets the staff link from a request: nil keeps it, 0 clears it.
+func (s *Service) applyStaff(item *User, staffID *uint) error {
+	if staffID == nil {
+		return nil
+	}
+	if *staffID == 0 {
+		item.StaffID = nil
+		return nil
+	}
+	var n int64
+	s.repo.db.Table("staffs").Where("id = ?", *staffID).Count(&n)
+	if n == 0 {
+		return errors.New("staff tidak ditemukan")
+	}
+	id := *staffID
+	item.StaffID = &id
+	return nil
 }

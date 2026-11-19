@@ -3,6 +3,7 @@ package penjualan
 import (
 	"errors"
 	"fmt"
+	"github.com/scaleup/clinic-v2/api/internal/platform/actor"
 	"strconv"
 	"time"
 
@@ -396,6 +397,9 @@ func (h *Handler) Store(c *gin.Context) {
 	// A new sale waits at the cashier; paid sales are created by /pembayaran/bayar.
 	if req.Status != "" && req.Status != "draft" && req.Status != "confirmed" {
 		response.BadRequest(c, "status penjualan baru harus draft atau confirmed", nil)
+		return
+	}
+	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
 		return
 	}
 	item, err := h.svc.Create(req)

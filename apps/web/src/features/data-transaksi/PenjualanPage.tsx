@@ -37,7 +37,7 @@ export function PenjualanPage() {
         { name: 'tanggal', label: 'Tanggal', type: 'date', required: true },
         { name: 'barang_id', label: 'ID Barang', type: 'number', required: true, placeholder: '1' },
         { name: 'qty', label: 'Qty', type: 'number', required: true, placeholder: '1' },
-        { name: 'harga_jual', label: 'Harga Jual', type: 'number', required: true, placeholder: '120000' },
+        { name: 'harga_jual', label: 'Harga Jual', type: 'currency', required: true, placeholder: '120000' },
         {
           name: 'status',
           label: 'Status',

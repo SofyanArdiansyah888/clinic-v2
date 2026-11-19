@@ -3,6 +3,7 @@ package pembelian
 import (
 	"errors"
 	"fmt"
+	"github.com/scaleup/clinic-v2/api/internal/platform/actor"
 	"math"
 	"strconv"
 	"time"
@@ -293,6 +294,9 @@ func (h *Handler) Store(c *gin.Context) {
 	var req UpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "validation failed", err.Error())
+		return
+	}
+	if !actor.OwnStaff(c, h.svc.repo.db, &req.StaffID) {
 		return
 	}
 	item, err := h.svc.Create(req)

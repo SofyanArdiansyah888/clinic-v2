@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Field, FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 export type PaymentLineItem = {
   nama: string
@@ -184,10 +185,12 @@ export function PaymentModal({
       onClose={onClose}
       title="Proses Pembayaran"
       description={target ? `${target.label} — ${target.pasienNama || 'Pasien'}` : undefined}
-      className="max-w-md"
+      className="max-w-4xl"
     >
       <FieldErrorsContext.Provider value={validation.errors}>
-        <form {...validation.formProps} onSubmit={onSubmit} className="max-h-[75vh] space-y-4 overflow-y-auto p-5">
+        {/* Left: what is billed and what reduces it. Right: what is paid, by whom, and the action. */}
+        <form {...validation.formProps} onSubmit={onSubmit} className="grid gap-5 md:grid-cols-[1.1fr_1fr]">
+          <div className="min-w-0 space-y-4">
           {lineItems.length > 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Rincian Tagihan</p>
@@ -260,17 +263,18 @@ export function PaymentModal({
               error={depositKelebihan ? `Melebihi saldo deposit (${formatCurrency(tagihan?.saldo_deposit ?? 0)})` : undefined}
               hint={`Saldo ${formatCurrency(tagihan?.saldo_deposit ?? 0)}`}
             >
-              <input id="paymentmodal-f4"
-                type="number"
-                min={0}
+              <RupiahInput id="paymentmodal-f4"
                 value={deposit}
-                onChange={(e) => setDeposit(e.target.value)}
+                onValueChange={(v) => setDeposit(v)}
                 placeholder="0"
                 className={inputClass}
               />
             </Field>
           </div>
 
+          </div>
+
+          <div className="min-w-0 space-y-4 md:border-l md:border-slate-100 md:pl-5">
           <div className="space-y-1 rounded-2xl border border-rose-100 bg-rose-50/60 p-4 text-xs">
             <SummaryRow label="Subtotal" value={tagihan?.subtotal ?? target?.total ?? 0} />
             {tagihan?.diskon_promo ? <SummaryRow label="Diskon promo" value={-tagihan.diskon_promo} /> : null}
@@ -305,12 +309,10 @@ export function PaymentModal({
               ) : null}
 
               <Field label="Jumlah Bayar (Rp)" htmlFor="paymentmodal-f8" required>
-                <input id="paymentmodal-f8"
-                  type="number"
+                <RupiahInput id="paymentmodal-f8"
                   required
-                  min={0}
                   value={jumlahBayar}
-                  onChange={(e) => setJumlahBayar(e.target.value)}
+                  onValueChange={(v) => setJumlahBayar(v)}
                   className={inputClass}
                 />
                 {kembalian > 0 ? (
@@ -332,6 +334,7 @@ export function PaymentModal({
               {payMutation.isPending ? <Loader2 className="animate-spin" /> : <CreditCard />}
               Bayar & Selesai
             </Button>
+          </div>
           </div>
         </form>
       </FieldErrorsContext.Provider>

@@ -1,14 +1,26 @@
 <!doctype html>
-<html lang="id" data-theme="clinic-rose">
+<html lang="id" data-theme="rose">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Apply the saved theme before the app renders so a reload never flashes the default.
+      ;(function () {
+        try {
+          var t = localStorage.getItem('clinic_theme')
+          if (t === 'rose' || t === 'teal' || t === 'dark' || t === 'brutal') {
+            document.documentElement.dataset.theme = t
+            if (t === 'dark') document.documentElement.style.colorScheme = 'dark'
+          }
+        } catch (e) {}
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clinic OS — Sistem Informasi & Operasional Klinik</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>

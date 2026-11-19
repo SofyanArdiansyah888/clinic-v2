@@ -1,0 +1,162 @@
+/* Mode Gelap. Most screens use hard-coded slate/rose/emerald… utilities, so instead of
+   rewriting them this theme remaps the Tailwind ramps:
+   - slate is inverted: light shades (backgrounds, borders) become dark, dark shades (text) light;
+   - colour tints 50–200 (badge/alert backgrounds) become deep tints, 700–900 (their text) light;
+   - 300–600 stay as they are, so brand buttons (bg-rose-600 + text-white) keep their contrast.
+   A few places that use dark shades *as backgrounds* are pinned back to dark below.
+   Screen only: printing always uses the default light theme. */
+@media screen {
+  [data-theme='dark'] {
+    --background: 224 47% 8%;
+    --foreground: 214 32% 91%;
+    --card: 222 40% 12%;
+    --card-foreground: 214 32% 91%;
+    --popover: 222 40% 13%;
+    --popover-foreground: 214 32% 91%;
+    --primary: 350 89% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-strong: 350 89% 66%;
+    --secondary: 222 35% 18%;
+    --secondary-foreground: 214 32% 91%;
+    --muted: 222 35% 16%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 345 45% 18%;
+    --accent-foreground: 351 95% 82%;
+    --border: 220 28% 22%;
+    --input: 220 28% 24%;
+    --ring: 350 89% 60%;
+    --success: 158 64% 52%;
+    --warning: 38 92% 60%;
+    --danger: 350 89% 60%;
+
+    --sidebar: 226 50% 5%;
+    --sidebar-foreground: 215 20% 65%;
+    --sidebar-muted: 224 42% 9%;
+    --sidebar-accent: 350 89% 60%;
+    --sidebar-border: 222 32% 14%;
+    --sidebar-header: 226 50% 5%;
+
+    /* slate, inverted */
+    --color-slate-50: oklch(19% 0.035 264);
+    --color-slate-100: oklch(24% 0.035 262);
+    --color-slate-200: oklch(29% 0.035 260);
+    --color-slate-300: oklch(37% 0.035 258);
+    --color-slate-400: oklch(58% 0.03 257);
+    --color-slate-500: oklch(68% 0.028 257);
+    --color-slate-600: oklch(76% 0.024 256);
+    --color-slate-700: oklch(84% 0.018 255);
+    --color-slate-800: oklch(90% 0.012 252);
+    --color-slate-900: oklch(95% 0.008 250);
+    --color-slate-950: oklch(98% 0.004 248);
+
+    /* brand */
+    --color-rose-50: oklch(24% 0.06 12);
+    --color-rose-100: oklch(28% 0.08 12);
+    --color-rose-200: oklch(34% 0.1 12);
+    --color-rose-300: oklch(45% 0.14 14);
+    --color-rose-400: oklch(70% 0.18 14);
+    --color-rose-500: oklch(66% 0.21 16);
+    --color-rose-600: oklch(60% 0.22 17);
+    --color-rose-700: oklch(80% 0.11 12);
+    --color-rose-800: oklch(86% 0.08 10);
+    --color-rose-900: oklch(91% 0.05 10);
+    --color-rose-950: oklch(95% 0.03 10);
+
+    /* status colours: deep tints + light text tones */
+    --color-emerald-50: oklch(24% 0.04 163);
+    --color-emerald-100: oklch(28% 0.05 163);
+    --color-emerald-200: oklch(34% 0.07 163);
+    --color-emerald-700: oklch(80% 0.13 163);
+    --color-emerald-800: oklch(86% 0.1 163);
+    --color-emerald-900: oklch(91% 0.06 163);
+    --color-amber-50: oklch(25% 0.04 70);
+    --color-amber-100: oklch(29% 0.05 70);
+    --color-amber-200: oklch(35% 0.07 70);
+    --color-amber-700: oklch(83% 0.13 80);
+    --color-amber-800: oklch(88% 0.1 85);
+    --color-amber-900: oklch(92% 0.07 90);
+    --color-indigo-50: oklch(24% 0.05 277);
+    --color-indigo-100: oklch(28% 0.07 277);
+    --color-indigo-200: oklch(34% 0.09 277);
+    --color-indigo-700: oklch(80% 0.1 277);
+    --color-indigo-800: oklch(86% 0.07 277);
+    --color-indigo-900: oklch(91% 0.05 277);
+    --color-red-50: oklch(24% 0.06 25);
+    --color-red-100: oklch(28% 0.08 25);
+    --color-red-200: oklch(34% 0.1 25);
+    --color-red-700: oklch(80% 0.12 25);
+    --color-red-800: oklch(86% 0.08 25);
+    --color-red-900: oklch(91% 0.05 25);
+    --color-sky-50: oklch(24% 0.04 237);
+    --color-sky-100: oklch(28% 0.05 237);
+    --color-sky-700: oklch(82% 0.1 237);
+    --color-blue-50: oklch(24% 0.05 260);
+    --color-blue-100: oklch(28% 0.06 260);
+    --color-blue-200: oklch(34% 0.08 260);
+    --color-blue-700: oklch(82% 0.1 260);
+    --color-blue-800: oklch(87% 0.07 260);
+    --color-blue-900: oklch(91% 0.05 260);
+  }
+
+  /* White surfaces become cards. (text-white is untouched: it sits on brand colours.) */
+  [data-theme='dark'] .bg-white {
+    background-color: var(--color-card);
+  }
+  [data-theme='dark'] :is(.bg-white\/95, .bg-white\/90, .bg-white\/80) {
+    background-color: color-mix(in oklab, var(--color-card) 92%, transparent);
+  }
+  [data-theme='dark'] .hover\:bg-white:hover {
+    background-color: var(--color-slate-100);
+  }
+
+  /* Dark shades used as *backgrounds* (total bars, chips with white text) stay dark. */
+  [data-theme='dark'] .bg-slate-800 {
+    background-color: oklch(30% 0.03 262);
+  }
+  [data-theme='dark'] .bg-slate-900,
+  [data-theme='dark'] .hover\:bg-slate-900:hover {
+    background-color: oklch(26% 0.035 264);
+  }
+  [data-theme='dark'] .bg-slate-950 {
+    background-color: oklch(15% 0.04 265);
+  }
+  [data-theme='dark'] .bg-slate-950\/70 {
+    background-color: oklch(10% 0.04 265 / 0.7);
+  }
+
+  /* Always-dark UI (sidebar, toasts): restore Tailwind's default ramps inside it. */
+  [data-theme='dark'] .ui-dark-island {
+    --color-slate-50: oklch(98.4% 0.003 247.858);
+    --color-slate-100: oklch(96.8% 0.007 247.896);
+    --color-slate-200: oklch(92.9% 0.013 255.508);
+    --color-slate-300: oklch(86.9% 0.022 252.894);
+    --color-slate-400: oklch(70.4% 0.04 256.788);
+    --color-slate-500: oklch(55.4% 0.046 257.417);
+    --color-slate-600: oklch(44.6% 0.043 257.281);
+    --color-slate-700: oklch(37.2% 0.044 257.287);
+    --color-slate-800: oklch(27.9% 0.041 260.031);
+    --color-slate-900: oklch(20.8% 0.042 265.755);
+    --color-slate-950: oklch(12.9% 0.042 264.695);
+    --color-rose-300: oklch(81% 0.117 11.638);
+    --color-rose-400: oklch(71.2% 0.194 13.428);
+    --color-rose-800: oklch(45.5% 0.188 13.697);
+    --color-rose-950: oklch(27.1% 0.105 12.094);
+    --color-emerald-700: oklch(50.8% 0.118 165.612);
+  }
+  [data-theme='dark'] .ui-dark-island .bg-slate-900,
+  [data-theme='dark'] .ui-dark-island .hover\:bg-slate-900:hover {
+    background-color: oklch(20.8% 0.042 265.755);
+  }
+  [data-theme='dark'] .ui-dark-island .bg-slate-950 {
+    background-color: oklch(12.9% 0.042 264.695);
+  }
+
+  [data-theme='dark'] .overlay-backdrop {
+    background-color: rgb(0 0 0 / 0.65);
+  }
+
+  /* Native date/time pickers and selects follow the dark scheme. */
+  [data-theme='dark'] :is(input, select, textarea) {
+    color-scheme: dark;
+  }
+}

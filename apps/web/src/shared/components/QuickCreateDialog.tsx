@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { apiPost } from '@/shared/api/client'
 import { Dialog } from '@/shared/components/Dialog'
 import { ResourceFormFields } from '@/shared/components/resource-form'
-import { apiErrorMessage, buildFormBody, initialFormValues, type FormValues } from '@/shared/lib/form'
+import { apiErrorMessage, buildFormBody, initialFormValues, type FormValues, dialogWidth } from '@/shared/lib/form'
 import { MASTERS, type MasterKey } from '@/shared/lib/masters'
 import { Button } from '@/shared/ui/button'
 import { FormAlert } from '@/shared/ui/field'
@@ -62,7 +62,7 @@ export function QuickCreateDialog<T extends { id: number | string }>({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title={`Tambah ${def.noun}`}>
+    <Dialog open={open} onClose={onClose} title={`Tambah ${def.noun}`} className={dialogWidth(def.fields)}>
       <FieldErrorsContext.Provider value={validation.errors}>
         <form {...validation.formProps} onSubmit={onSubmit} className="space-y-4">
           <ResourceFormFields fields={def.fields} values={values} onChange={setValues} idPrefix={`quick-${master}`} />

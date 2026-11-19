@@ -200,7 +200,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        'relative z-30 flex h-full flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950 text-slate-300 transition-[width] duration-300',
+        // ui-dark-island keeps the sidebar's dark palette under every theme (see styles/themes).
+        'ui-dark-island ui-sidebar relative z-30 flex h-full flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950 text-slate-300 transition-[width] duration-300',
         collapsed ? 'w-20' : 'w-64',
       )}
     >

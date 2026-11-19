@@ -17,6 +17,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/staff"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
+	"github.com/scaleup/clinic-v2/api/internal/modules/user"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/jwt"
 	"github.com/scaleup/clinic-v2/api/internal/server"
@@ -40,8 +41,13 @@ func newEnv(t *testing.T) *env {
 	db, cfg := testutil.DB(t)
 	jm := jwt.NewManager("test-secret", time.Hour, time.Hour)
 	e := &env{t: t, db: db, jm: jm, h: server.New(cfg, db, jm, generator.New(db)), tok: map[string]string{}}
-	for i, role := range []string{"admin", "doctor", "staff", "apoteker", "nurse", "finance"} {
-		tok, err := jm.GenerateAccess(uint(i+1), role, role)
+	// Real accounts, so rules that look the user up (e.g. own-staff transactions) work.
+	for _, role := range []string{"admin", "doctor", "staff", "apoteker", "nurse", "finance"} {
+		u := user.User{Name: role, Email: "t_" + role + "@test.local", Username: "t_" + role, Password: "x", Role: role, IsActive: true}
+		if err := db.Create(&u).Error; err != nil {
+			t.Fatal(err)
+		}
+		tok, err := jm.GenerateAccess(u.ID, role, role)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,6 +120,8 @@ func (e *env) fixtures(stok int) fixtures {
 			e.t.Fatal(err)
 		}
 	}
+	// Non-admin accounts act as this staff, so their transactions pass the own-staff rule.
+	e.db.Model(&user.User{}).Where("role <> ?", "admin").Update("staff_id", s.ID)
 	return fixtures{p.ID, s.ID, tr.ID, b.ID}
 }
 

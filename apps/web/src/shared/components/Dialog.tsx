@@ -48,7 +48,7 @@ export function Dialog({ open, onClose, title, description, children, className 
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl animate-fade-in-up',
+          'ui-card relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl animate-fade-in-up',
           className,
         )}
       >

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { api, apiData, loginAs, today } from '../e2e/support'
+import { api, apiData, expectOwnStaff, loginAs, today } from '../e2e/support'
 import { chooseById, createFixtures, expectToast, rupiah } from './helpers'
 
 // Kasus negatif: input yang salah harus ditolak dengan jelas dan tidak menyimpan data.
@@ -75,7 +75,7 @@ test.describe('QA · Validasi & kasus negatif', () => {
     await page.goto('/pembayaran/perawatan')
     const row = page.locator('tr', { hasText: nama })
     await row.getByRole('button', { name: 'Bayar', exact: true }).click()
-    await chooseById(page, 'paymentmodal-f5', f.kasir.nama)
+    await expectOwnStaff(page, 'paymentmodal-f5', 'staff')
     await chooseById(page, 'paymentmodal-f6', 'Tunai')
     await page.locator('#paymentmodal-f8').fill('100000')
     await page.getByRole('button', { name: /Bayar & Selesai/ }).click()

@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui/button'
 import { Field } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, formatDate, todayISO } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type PenjualanRow = {
   id: number
@@ -142,11 +143,9 @@ export function PenjualanLangsungPage() {
                   />
                 </Field>
                 <Field label="Harga" htmlFor="penjualanlangsungpage-f6">
-                  <input id="penjualanlangsungpage-f6"
-                    type="number"
-                    min={0}
+                  <RupiahInput id="penjualanlangsungpage-f6"
                     value={form.harga_jual}
-                    onChange={(e) => setForm((f) => ({ ...f, harga_jual: e.target.value }))}
+                    onValueChange={(v) => setForm((f) => ({ ...f, harga_jual: v }))}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-rose-500 focus:outline-none"
                   />
                 </Field>

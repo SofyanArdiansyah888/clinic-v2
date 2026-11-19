@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button'
 import { Field, FormAlert } from '@/shared/ui/field'
 import { FieldErrorsContext, useFormValidation } from '@/shared/lib/validation'
 import { formatCurrency, todayISO } from '@/shared/lib/formatters'
+import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 // mutasi: konversi & produksi (barang keluar/masuk), opname: physical count, pembelian: stock in from a supplier.
 export type StokDokumenVariant = 'mutasi' | 'opname' | 'pembelian'
@@ -210,12 +211,10 @@ export function StokDokumenDialog({
               </div>
               {variant === 'pembelian' ? (
                 <div className="col-span-6 md:col-span-3">
-                  <input
+                  <RupiahInput
                     id={`stok-harga-${l.key}`}
-                    type="number"
-                    min={0}
                     value={l.harga}
-                    onChange={(e) => updateLine(l.key, { harga: e.target.value })}
+                    onValueChange={(v) => updateLine(l.key, { harga: v })}
                     placeholder="Harga beli"
                     aria-label="Harga beli"
                     className={inputClass}

@@ -3,7 +3,8 @@ import { todayISO } from '@/shared/lib/formatters'
 export type FormField = {
   name: string
   label: string
-  type?: 'text' | 'email' | 'number' | 'tel' | 'date' | 'password' | 'select' | 'textarea'
+  /** currency: rupiah with thousand separators; staff: pick a staff record (sent as id, 0 = none). */
+  type?: 'text' | 'email' | 'number' | 'currency' | 'staff' | 'tel' | 'date' | 'password' | 'select' | 'textarea'
   placeholder?: string
   required?: boolean
   options?: { label: string; value: string }[]
@@ -37,7 +38,7 @@ export function buildFormBody(fields: FormField[], values: FormValues) {
   return Object.fromEntries(
     fields.map((field) => {
       const raw = values[field.name] ?? ''
-      if (field.type === 'number') return [field.name, raw === '' ? 0 : Number(raw)]
+      if (field.type === 'number' || field.type === 'currency' || field.type === 'staff') return [field.name, raw === '' ? 0 : Number(raw)]
       if (field.type === 'date') return [field.name, toApiDate(raw)]
       return [field.name, raw]
     }),
@@ -46,4 +47,11 @@ export function buildFormBody(fields: FormField[], values: FormValues) {
 
 export function apiErrorMessage(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback
+}
+
+/** Forms with more fields than this render in two columns inside a wider dialog. */
+export const WIDE_FORM = 5
+
+export function dialogWidth(fields?: FormField[]) {
+  return (fields?.length ?? 0) > WIDE_FORM ? 'max-w-2xl' : undefined
 }

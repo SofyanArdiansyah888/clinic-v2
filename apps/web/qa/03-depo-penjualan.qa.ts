@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { apiData, loginAs, watchProblems } from '../e2e/support'
+import { apiData, expectOwnStaff, loginAs, watchProblems } from '../e2e/support'
 import { chooseById, createFixtures, expectToast, rupiah, stokBarang } from './helpers'
 
 // Pembelian obat tanpa perawatan: apoteker input di depo -> kasir bayar -> stok berkurang.
@@ -15,9 +15,9 @@ test('TC-DEPO-01 penjualan langsung di depo dibayar di kasir', async ({ page }) 
     await loginAs(page, 'apoteker')
     await page.goto('/depo/penjualan-langsung')
     await chooseById(page, 'penjualanlangsungpage-f2', pasien.nama)
-    await chooseById(page, 'penjualanlangsungpage-f3', f.kasir.nama)
+    await expectOwnStaff(page, 'penjualanlangsungpage-f3', 'apoteker')
     await chooseById(page, 'penjualanlangsungpage-f4', f.barang.nama)
-    await expect(page.locator('#penjualanlangsungpage-f6'), 'harga terisi otomatis dari master barang').toHaveValue(String(f.hargaBarang))
+    await expect(page.locator('#penjualanlangsungpage-f6'), 'harga terisi otomatis dari master barang').toHaveValue(rupiah(f.hargaBarang))
     await page.locator('#penjualanlangsungpage-f5').fill(String(qty))
     await page.getByRole('button', { name: /Kirim ke Kasir|Proses Ke Kasir/ }).click()
     await expectToast(page, 'Penjualan berhasil diproses')
@@ -30,9 +30,9 @@ test('TC-DEPO-01 penjualan langsung di depo dibayar di kasir', async ({ page }) 
     await expect(row).toHaveCount(1)
     await expect(row).toContainText(rupiah(total))
     await row.getByRole('button', { name: 'Bayar', exact: true }).click()
-    await chooseById(page, 'paymentmodal-f5', f.kasir.nama)
+    await expectOwnStaff(page, 'paymentmodal-f5', 'staff')
     await chooseById(page, 'paymentmodal-f6', 'Tunai')
-    await expect(page.locator('#paymentmodal-f8'), 'jumlah bayar default = sisa tagihan').toHaveValue(String(total))
+    await expect(page.locator('#paymentmodal-f8'), 'jumlah bayar default = sisa tagihan').toHaveValue(rupiah(total))
     await page.getByRole('button', { name: /Bayar & Selesai/ }).click()
     await expectToast(page, 'Pembayaran produk berhasil')
   })

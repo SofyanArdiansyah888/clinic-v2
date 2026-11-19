@@ -112,7 +112,7 @@ export function ReportShell<T>({
       />
       <PrintHeader title={title} periode={periodeLabel} />
 
-      <div className="print-hide flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+      <div className="ui-card print-hide flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
         {filters}
         <div className={mode === 'per' ? 'hidden' : 'space-y-1.5'}>
           <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500" htmlFor="lap-dari">
