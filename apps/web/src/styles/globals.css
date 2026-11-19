@@ -231,6 +231,31 @@ table,
   .print-keep {
     break-inside: avoid;
   }
+
+  /* Tables on paper: no pinned action column (it detached the last column from its row),
+     no horizontal scroll box, tighter cells, header repeated and rows kept whole across pages. */
+  .table-sticky-actions > thead > tr > :last-child,
+  .table-sticky-actions > tbody > tr > :last-child {
+    position: static !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+  }
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  table {
+    min-width: 0 !important;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  .table-sticky-actions th,
+  .table-sticky-actions td {
+    padding: 6px 10px !important;
+  }
 }
 
 /* Inline form validation (see shared/lib/validation.ts): any control the form

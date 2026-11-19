@@ -194,5 +194,16 @@ export function ReportTable<T>({ title, description, columns, rows, rowKey, file
 }
 
 export function KpiGrid({ children, cols = 4 }: { children: ReactNode; cols?: 3 | 4 }) {
-  return <div className={cols === 3 ? 'grid grid-cols-2 gap-3 lg:grid-cols-3' : 'grid grid-cols-2 gap-3 lg:grid-cols-4'}>{children}</div>
+  // A4 is narrower than the lg breakpoint, so paper gets the wide layout explicitly.
+  return (
+    <div
+      className={
+        cols === 3
+          ? 'grid grid-cols-2 gap-3 lg:grid-cols-3 print:grid-cols-3 print:gap-2'
+          : 'grid grid-cols-2 gap-3 lg:grid-cols-4 print:grid-cols-4 print:gap-2'
+      }
+    >
+      {children}
+    </div>
+  )
 }

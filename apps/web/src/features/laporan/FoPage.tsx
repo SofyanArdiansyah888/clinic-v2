@@ -87,7 +87,7 @@ export function FoPage() {
             Bersih = bruto − diskon. Dibayar pakai {formatNumber(d.ringkasan.poin_dipakai)} poin dan{' '}
             {formatCurrency(d.ringkasan.deposit_dipakai)} deposit.
           </p>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 print:grid-cols-2 print:gap-3">
             <ReportTable
               title="Per Jenis Pembayaran"
               columns={jenisColumns}
