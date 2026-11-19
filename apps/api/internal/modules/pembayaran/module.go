@@ -13,6 +13,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
+	"github.com/scaleup/clinic-v2/api/internal/modules/paket"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
 	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
@@ -388,19 +389,31 @@ func (s *Service) GetDeposit(id uint) (*DepositTransaksi, error) {
 	return &item, nil
 }
 
-func (s *Service) ListPaketSisa(p pagination.Params) ([]PaketPerawatan, pagination.Meta, error) {
+// ListPaketSisa lists the active branch's packages that still have sessions, with
+// their items and remaining value (the most that can be refunded).
+func (s *Service) ListPaketSisa(p pagination.Params, pasienID uint) ([]PaketPerawatan, pagination.Meta, error) {
 	q := s.cab.Scope(s.repo.db.Model(&PaketPerawatan{}), "cabang_id").
-		Where("status = ? AND sisa_sesi > 0", "aktif").
+		Where("status = ? AND sisa_sesi > 0", paket.StatusAktif).
 		Preload("Pasien").Preload("Staff").Preload("Treatment")
+	if pasienID > 0 {
+		q = q.Where("pasien_id = ?", pasienID)
+	}
 	if p.Search != "" {
 		like := "%" + p.Search + "%"
-		q = q.Where("kode ILIKE ?", like)
+		q = q.Where("kode ILIKE ? OR pasien_id IN (SELECT id FROM pasiens WHERE nama ILIKE ? OR kode ILIKE ?)", like, like, like)
 	}
-	var items []PaketPerawatan
+	items := []PaketPerawatan{}
 	meta, err := pagination.Paginate(q, p, &items)
-	return items, meta, err
+	if err != nil {
+		return nil, meta, err
+	}
+	return items, meta, paket.Fill(s.repo.db, items)
 }
 
+// BatalPaket cancels a package and refunds at most the value of its unused sessions.
+// For a package whose revenue is deferred the whole remaining value leaves
+// paket.titipan: the refund goes out of kas and the part not refunded is revenue
+// (pendapatan.paket_hangus). Packages sold before that keep the old refund journal.
 func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, error) {
 	if req.Refund < 0 {
 		return nil, errors.New("refund tidak boleh negatif")
@@ -415,51 +428,66 @@ func (s *Service) BatalPaket(id uint, req BatalPaketRequest) (*PaketPerawatan, e
 	}
 	var item PaketPerawatan
 	err := s.repo.db.Transaction(func(tx *gorm.DB) error {
+		// Package first, then its items (both in id order), like the kasir does.
 		if err := s.cab.Scope(tx, "cabang_id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
 			return err
 		}
-		if item.Status == "dibatalkan" {
+		if item.Status == paket.StatusDibatalkan {
 			return errors.New("paket sudah dibatalkan")
 		}
+		if err := paket.EnsureItems(tx, item.ID); err != nil {
+			return err
+		}
+		var items []paket.Item
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("paket_perawatan_id = ?", item.ID).
+			Order("id").Find(&items).Error; err != nil {
+			return err
+		}
+		var nilaiSisa float64
+		for _, it := range items {
+			nilaiSisa += it.Sisa()
+		}
+		nilaiSisa = roundRp(nilaiSisa)
 		// Only the unused sessions can be refunded.
-		maxRefund := item.HargaTotal
-		if item.TotalSesi > 0 {
-			maxRefund = roundRp(item.HargaTotal * float64(item.SisaSesi) / float64(item.TotalSesi))
+		if req.Refund > nilaiSisa+0.005 {
+			return fmt.Errorf("refund melebihi nilai sisa paket Rp %.0f (%d dari %d sesi)", nilaiSisa, item.SisaSesi, item.TotalSesi)
 		}
-		if req.Refund > maxRefund+0.005 {
-			return fmt.Errorf("refund melebihi nilai sisa paket Rp %.0f (%d dari %d sesi)", maxRefund, item.SisaSesi, item.TotalSesi)
-		}
-		item.Status = "dibatalkan"
+		item.Status = paket.StatusDibatalkan
 		item.KeteranganBatal = req.Keterangan
 		item.Refund = req.Refund
 		if err := tx.Omit(clause.Associations).Save(&item).Error; err != nil {
 			return err
 		}
-		if req.Refund == 0 {
-			return nil
+		if req.Refund > 0 {
+			if err := kasir.Catat(tx, req.UserID, item.CabangID, kasir.Mutasi{
+				SourceType: kasir.SourcePaketRefund, SourceID: item.ID, Referensi: item.Kode,
+				JenisPembayaran: req.JenisPembayaran, BankID: req.BankID, Keluar: req.Refund,
+				Keterangan: "Refund batal paket " + item.Kode,
+			}); err != nil {
+				return err
+			}
 		}
-		if err := kasir.Catat(tx, req.UserID, item.CabangID, kasir.Mutasi{
-			SourceType: kasir.SourcePaketRefund, SourceID: item.ID, Referensi: item.Kode,
-			JenisPembayaran: req.JenisPembayaran, BankID: req.BankID, Keluar: req.Refund,
-			Keterangan: "Refund batal paket " + item.Kode,
-		}); err != nil {
-			return err
+		lines := []finance.Line{
+			finance.Debit(finance.KeyPaketRefund, req.Refund),
+			finance.Kredit(finance.KasKey(tx, req.JenisPembayaran, req.BankID), req.Refund),
+		}
+		if item.PendapatanDitunda {
+			lines = []finance.Line{
+				finance.Debit(finance.KeyPaketTitipan, nilaiSisa),
+				finance.Kredit(finance.KasKey(tx, req.JenisPembayaran, req.BankID), req.Refund),
+				finance.Kredit(finance.KeyPaketHangus, nilaiSisa-req.Refund),
+			}
 		}
 		_, err := finance.Post(tx, s.gen, finance.Entry{
 			Tanggal: tgl, SourceType: finance.SourcePaket, SourceID: item.ID, Referensi: item.Kode,
-			Keterangan: "Refund batal paket " + item.Kode,
-			Lines: []finance.Line{
-				finance.Debit(finance.KeyPaketRefund, req.Refund),
-				finance.Kredit(finance.KasKey(tx, req.JenisPembayaran, req.BankID), req.Refund),
-			},
+			Keterangan: "Batal paket " + item.Kode, Lines: lines,
 		})
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	s.repo.db.Preload("Pasien").Preload("Staff").Preload("Treatment").First(&item, id)
-	return &item, nil
+	return paket.Load(s.repo.db, id)
 }
 
 func (h *Handler) PerawatanReguler(c *gin.Context) {
@@ -612,12 +640,28 @@ func (h *Handler) Deposit(c *gin.Context) {
 }
 
 func (h *Handler) PaketSisa(c *gin.Context) {
-	items, meta, err := h.svc.For(c).ListPaketSisa(pagination.FromContext(c))
+	items, meta, err := h.svc.For(c).ListPaketSisa(pagination.FromContext(c), filter.UintQuery(c, "pasien_id"))
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
 	response.OKWithMeta(c, items, meta, "ok")
+}
+
+// PaketAktif lists the pasien's packages with sessions left, in every branch, for
+// redeeming sessions on a perawatan.
+func (h *Handler) PaketAktif(c *gin.Context) {
+	pasienID := filter.UintQuery(c, "pasien_id")
+	if pasienID == 0 {
+		response.BadRequest(c, "pasien_id wajib diisi", nil)
+		return
+	}
+	items, err := paket.Aktif(h.svc.repo.db, pasienID)
+	if err != nil {
+		response.Internal(c, err.Error())
+		return
+	}
+	response.OK(c, items, "ok")
 }
 
 func (h *Handler) BatalPaket(c *gin.Context) {
@@ -648,6 +692,9 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, gen *generator.Service) {
 		g.GET("/deposit/summary", h.DepositSummary)
 		g.POST("/deposit", h.Deposit)
 		g.GET("/paket/sisa", h.PaketSisa)
+		g.GET("/paket/aktif", h.PaketAktif)
 		g.POST("/paket/:id/batal", h.BatalPaket)
+		g.GET("/penjualan/:id/batal", h.DampakVoid)
+		g.POST("/penjualan/:id/batal", h.VoidPenjualan)
 	}
 }

@@ -10,10 +10,10 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
+	"github.com/scaleup/clinic-v2/api/internal/modules/paket"
 	"github.com/scaleup/clinic-v2/api/internal/modules/penjualan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/perawatan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/promo"
-	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/modules/voucher"
 	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"gorm.io/gorm"
@@ -56,6 +56,17 @@ type TagihanItem struct {
 	Qty      int     `json:"qty"`
 	Harga    float64 `json:"harga"`
 	Subtotal float64 `json:"subtotal"`
+	// PakaiPaket: a session redeemed from a package, billed Rp 0. PaketKode / PaketSisa
+	// name the package and the item's sessions left before this payment (PaketBaru when
+	// it is the package bought in this same bill).
+	PakaiPaket bool   `json:"pakai_paket"`
+	PaketKode  string `json:"paket_kode,omitempty"`
+	PaketSisa  *int   `json:"paket_sisa,omitempty"`
+	PaketBaru  bool   `json:"paket_baru,omitempty"`
+	// BeliPaket: the line buys a package; its price is held as paket.titipan until used.
+	BeliPaket bool `json:"beli_paket"`
+
+	paketItemID uint
 }
 
 type Tagihan struct {
@@ -200,12 +211,20 @@ func (s *Service) hitungTagihan(tx *gorm.DB, req TagihanRequest, lock bool) (*Ta
 		for _, it := range t.Items {
 			t.Subtotal += it.Subtotal
 		}
+		if err := cekPaketTagihan(tx, pw, t.Items, lock); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("source_type tidak dikenal: %s", req.SourceType)
 	}
 
 	t.Subtotal = roundRp(t.Subtotal)
-	if t.Subtotal <= 0 {
+	adaPaket := false
+	for _, it := range t.Items {
+		adaPaket = adaPaket || it.PakaiPaket
+	}
+	// A visit fully covered by package sessions is a Rp 0 bill, still settled at the kasir.
+	if t.Subtotal < 0 || (t.Subtotal == 0 && !adaPaket) {
 		return nil, errors.New("tagihan tidak memiliki item yang dapat ditagihkan")
 	}
 
@@ -256,6 +275,26 @@ func (s *Service) hitungTagihan(tx *gorm.DB, req TagihanRequest, lock bool) (*Ta
 	return t, nil
 }
 
+// hargaTindakan is the unit price billed for a tindakan: its total per unit, else its
+// harga, else the treatment's price. A session redeemed from a package is Rp 0.
+func hargaTindakan(t perawatan.PerawatanTindakan) float64 {
+	if t.PakaiPaket() {
+		return 0
+	}
+	qty := t.Jumlah
+	if qty <= 0 {
+		qty = 1
+	}
+	harga := t.Total / float64(qty)
+	if harga == 0 {
+		harga = t.Harga
+	}
+	if harga == 0 && t.Treatment != nil {
+		harga = t.Treatment.Harga
+	}
+	return harga
+}
+
 // buildPerawatanBill turns tindakan and resep rows into penjualan details plus display items.
 func buildPerawatanBill(pw perawatan.Perawatan, reseps []perawatan.PerawatanResep) ([]penjualan.DetailInput, []TagihanItem) {
 	var details []penjualan.DetailInput
@@ -270,12 +309,20 @@ func buildPerawatanBill(pw perawatan.Perawatan, reseps []perawatan.PerawatanRese
 			nama = t.Treatment.Nama
 		}
 		if t.TreatmentID > 0 {
-			harga := t.Total / float64(qty)
-			if harga == 0 {
-				harga = t.Harga
+			harga := hargaTindakan(t)
+			item := TagihanItem{Nama: nama, Jenis: "treatment", Qty: qty, Harga: harga, Subtotal: harga * float64(qty)}
+			if t.PakaiPaket() {
+				item.PakaiPaket = true
+				if t.PaketItemID != nil && *t.PaketItemID > 0 {
+					item.paketItemID = *t.PaketItemID
+				} else {
+					item.PaketBaru = true
+				}
+			} else if t.Treatment != nil && t.Treatment.IsPaket() {
+				item.BeliPaket = true
 			}
-			details = append(details, penjualan.DetailInput{TreatmentID: t.TreatmentID, JenisPenjualan: "treatment", Qty: qty, HargaJual: harga})
-			items = append(items, TagihanItem{Nama: nama, Jenis: "treatment", Qty: qty, Harga: harga, Subtotal: harga * float64(qty)})
+			details = append(details, penjualan.DetailInput{TreatmentID: t.TreatmentID, JenisPenjualan: "treatment", Qty: qty, HargaJual: harga, PakaiPaket: item.PakaiPaket})
+			items = append(items, item)
 		} else if t.Total > 0 {
 			details = append(details, penjualan.DetailInput{JenisPenjualan: "layanan", Qty: qty, HargaJual: t.Total})
 			items = append(items, TagihanItem{Nama: nama, Jenis: "layanan", Qty: qty, Harga: t.Total, Subtotal: t.Total * float64(qty)})
@@ -351,6 +398,9 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 			}
 		} else if jenis == "" {
 			jenis = "deposit_poin"
+			if t.Total == 0 {
+				jenis = "paket"
+			}
 		}
 		jumlahBayar := req.JumlahBayar
 		if t.SisaBayar == 0 {
@@ -361,7 +411,8 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 		if t.SourceType == "perawatan" {
 			pid := t.SourceID
 			var pw perawatan.Perawatan
-			if err := tx.Preload("Tindakans").First(&pw, pid).Error; err != nil {
+			if err := tx.Preload("Tindakans", func(q *gorm.DB) *gorm.DB { return q.Order("id") }).
+				Preload("Tindakans.Treatment").First(&pw, pid).Error; err != nil {
 				return err
 			}
 			created, err := penjualan.NewService(penjualan.NewRepository(tx), s.gen).In(branch.Ctx{ID: pw.CabangID}).CreateTx(tx, penjualan.UpsertRequest{
@@ -376,7 +427,11 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 			if err := s.finalizePerawatan(tx, &pw, t.reseps); err != nil {
 				return err
 			}
-			if err := s.createPaketRecords(tx, &pw, req.StaffID, tgl); err != nil {
+			dibeli, err := s.createPaketRecords(tx, &pw, pj.ID, req.StaffID, tgl)
+			if err != nil {
+				return err
+			}
+			if err := s.pakaiPaket(tx, &pw, dibeli, &pj, tgl); err != nil {
 				return err
 			}
 		} else if err := tx.First(&pj, t.SourceID).Error; err != nil {
@@ -425,7 +480,7 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 			if err := tx.Create(&DepositTransaksi{
 				Kode: kode, CabangID: pj.CabangID, PasienID: t.PasienID, StaffID: req.StaffID, Tanggal: tgl, Kwitansi: pj.NoInvoice,
 				Jenis: jenisPemakaianDeposit, Jumlah: t.DepositDipakai, JenisPembayaran: "deposit",
-				Keterangan: "Pemakaian deposit untuk " + pj.Kode, IsActive: true,
+				Keterangan: "Pemakaian deposit untuk " + pj.Kode, PenjualanID: &penjualanID, IsActive: true,
 			}).Error; err != nil {
 				return err
 			}
@@ -443,37 +498,142 @@ func (s *Service) Bayar(req BayarRequest) (*penjualan.Penjualan, error) {
 	return &result, nil
 }
 
-func (s *Service) createPaketRecords(tx *gorm.DB, pw *perawatan.Perawatan, staffID uint, tgl time.Time) error {
+// cekPaketTagihan checks the package sessions a perawatan redeems: items the pasien
+// already owns are validated (and locked when paying) and labelled on the bill; a
+// same-visit session must point at a paket tindakan of this perawatan that contains it.
+func cekPaketTagihan(tx *gorm.DB, pw perawatan.Perawatan, items []TagihanItem, lock bool) error {
+	var req []paket.Pakai
+	byID := map[uint]perawatan.PerawatanTindakan{}
 	for _, t := range pw.Tindakans {
-		if t.TreatmentID == 0 {
+		byID[t.ID] = t
+	}
+	for _, t := range pw.Tindakans {
+		qty := t.Jumlah
+		if qty <= 0 {
+			qty = 1
+		}
+		if t.PaketItemID != nil && *t.PaketItemID > 0 {
+			req = append(req, paket.Pakai{ItemID: *t.PaketItemID, TreatmentID: t.TreatmentID, Qty: qty})
 			continue
 		}
-		var tr treatment.Treatment
-		if err := tx.First(&tr, t.TreatmentID).Error; err != nil {
+		if t.PaketBeliTindakanID == nil || *t.PaketBeliTindakanID == 0 {
 			continue
 		}
-		if !strings.Contains(strings.ToLower(tr.Kategori), "paket") {
-			continue
+		src, ok := byID[*t.PaketBeliTindakanID]
+		if !ok || src.Treatment == nil || !src.Treatment.IsPaket() || src.PakaiPaket() {
+			return errors.New("sesi paket di kunjungan ini merujuk ke pembelian paket yang tidak ada")
 		}
-		// Durasi is minutes per visit, not a session count, so it is no fallback here.
-		sesi := tr.SesiPaket
-		if sesi <= 0 {
-			sesi = 1
-		}
-		kode, err := s.gen.GenerateCabang("PKT", pw.CabangID)
+		katalog, err := paket.KatalogItems(tx, *src.Treatment)
 		if err != nil {
 			return err
 		}
-		harga := t.Total
-		if harga == 0 {
-			harga = tr.Harga
+		found := false
+		for _, k := range katalog {
+			found = found || k.TreatmentID == t.TreatmentID
 		}
-		paket := PaketPerawatan{
-			Kode: kode, CabangID: pw.CabangID, PasienID: pw.PasienID, TreatmentID: tr.ID, StaffID: staffID,
-			TanggalBeli: tgl, TotalSesi: sesi, SisaSesi: sesi, HargaTotal: harga,
-			Status: "aktif", IsActive: true,
+		if !found {
+			return fmt.Errorf("treatment tindakan tidak termasuk dalam %s", src.Treatment.Nama)
 		}
-		if err := tx.Create(&paket).Error; err != nil {
+	}
+	info, err := paket.Cek(tx, pw.PasienID, req, lock)
+	if err != nil {
+		return err
+	}
+	for k := range items {
+		if items[k].paketItemID == 0 {
+			continue
+		}
+		if it, ok := info[items[k].paketItemID]; ok {
+			sisa := it.SisaSesi
+			items[k].PaketKode, items[k].PaketSisa = it.PaketKode, &sisa
+		}
+	}
+	return nil
+}
+
+// createPaketRecords creates the packages bought in this perawatan (one per unit of a
+// paket tindakan), priced as billed. It returns them by the tindakan that bought them.
+func (s *Service) createPaketRecords(tx *gorm.DB, pw *perawatan.Perawatan, penjualanID, staffID uint, tgl time.Time) (map[uint]*paket.PaketPerawatan, error) {
+	out := map[uint]*paket.PaketPerawatan{}
+	for _, t := range pw.Tindakans {
+		if t.TreatmentID == 0 || t.Treatment == nil || !t.Treatment.IsPaket() || t.PakaiPaket() {
+			continue
+		}
+		qty := t.Jumlah
+		if qty <= 0 {
+			qty = 1
+		}
+		tid, pid, pjid := t.ID, pw.ID, penjualanID
+		for n := 0; n < qty; n++ {
+			p, err := paket.Beli(tx, s.gen, paket.BeliInput{
+				CabangID: pw.CabangID, PasienID: pw.PasienID, StaffID: staffID,
+				PerawatanID: &pid, TindakanID: &tid, PenjualanID: &pjid, Tanggal: tgl,
+				Treatment: *t.Treatment, Harga: hargaTindakan(t),
+			})
+			if err != nil {
+				return nil, err
+			}
+			if n == 0 {
+				out[t.ID] = p
+			}
+		}
+	}
+	return out, nil
+}
+
+// pakaiPaket redeems the package sessions of a paid perawatan and, for packages whose
+// revenue is deferred, books each one: Debit paket.titipan / Kredit pendapatan.treatment
+// for the session value, even though the bill line is Rp 0.
+func (s *Service) pakaiPaket(tx *gorm.DB, pw *perawatan.Perawatan, dibeli map[uint]*paket.PaketPerawatan, pj *penjualan.Penjualan, tgl time.Time) error {
+	for _, t := range pw.Tindakans {
+		qty := t.Jumlah
+		if qty <= 0 {
+			qty = 1
+		}
+		var itemID uint
+		switch {
+		case t.PaketItemID != nil && *t.PaketItemID > 0:
+			itemID = *t.PaketItemID
+		case t.PaketBeliTindakanID != nil && *t.PaketBeliTindakanID > 0:
+			p := dibeli[*t.PaketBeliTindakanID]
+			if p == nil {
+				return errors.New("paket yang dibeli di kunjungan ini tidak ditemukan")
+			}
+			for _, it := range p.Items {
+				if it.TreatmentID == t.TreatmentID {
+					itemID = it.ID
+					break
+				}
+			}
+			if itemID == 0 {
+				return fmt.Errorf("treatment tindakan tidak termasuk dalam paket %s", p.Kode)
+			}
+		default:
+			continue
+		}
+		tid, pid, pjid := t.ID, pw.ID, pj.ID
+		pm, p, err := paket.PakaiSesi(tx, paket.PakaiInput{
+			ItemID: itemID, Qty: qty, CabangID: pj.CabangID,
+			PerawatanID: &pid, TindakanID: &tid, PenjualanID: &pjid, Tanggal: tgl,
+		})
+		if err != nil {
+			return err
+		}
+		if !p.PendapatanDitunda {
+			continue // sold before deferred revenue: booked as revenue when it was bought
+		}
+		nama := "treatment"
+		if t.Treatment != nil {
+			nama = t.Treatment.Nama
+		}
+		if _, err := finance.Post(tx, s.gen, finance.Entry{
+			Tanggal: tgl, SourceType: finance.SourcePaketPemakaian, SourceID: pm.ID,
+			Referensi: pj.NoInvoice, Keterangan: fmt.Sprintf("Pemakaian %d sesi %s paket %s", qty, nama, p.Kode),
+			Lines: []finance.Line{
+				finance.Debit(finance.KeyPaketTitipan, pm.Nilai),
+				finance.Kredit(finance.KeyPendapatanTreatment, pm.Nilai),
+			},
+		}); err != nil {
 			return err
 		}
 	}
@@ -508,10 +668,13 @@ func (s *Service) jurnalPenjualan(tx *gorm.DB, pj *penjualan.Penjualan, t *Tagih
 	pendapatan := map[string]float64{}
 	for _, it := range t.Items {
 		key := finance.KeyPendapatanBarang
-		switch it.Jenis {
-		case "treatment":
+		switch {
+		case it.BeliPaket:
+			// A package is paid in advance: revenue comes per session redeemed.
+			key = finance.KeyPaketTitipan
+		case it.Jenis == "treatment":
 			key = finance.KeyPendapatanTreatment
-		case "layanan":
+		case it.Jenis == "layanan":
 			key = finance.KeyPendapatanLayanan
 		}
 		pendapatan[key] += it.Subtotal
@@ -522,7 +685,7 @@ func (s *Service) jurnalPenjualan(tx *gorm.DB, pj *penjualan.Penjualan, t *Tagih
 		finance.Debit(finance.KeyPenjualanPoin, t.PotonganPoin),
 		finance.Debit(finance.KeyPenjualanDiskon, t.DiskonPromo+t.DiskonVoucher),
 	}
-	for _, key := range []string{finance.KeyPendapatanTreatment, finance.KeyPendapatanLayanan, finance.KeyPendapatanBarang} {
+	for _, key := range []string{finance.KeyPendapatanTreatment, finance.KeyPendapatanLayanan, finance.KeyPendapatanBarang, finance.KeyPaketTitipan} {
 		lines = append(lines, finance.Kredit(key, pendapatan[key]))
 	}
 

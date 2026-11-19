@@ -19,6 +19,8 @@ const (
 	KeyDepositTitipan       = "deposit.titipan"
 	KeyPendapatanMembership = "pendapatan.membership"
 	KeyPaketRefund          = "paket.refund"
+	KeyPaketTitipan         = "paket.titipan"
+	KeyPaketHangus          = "pendapatan.paket_hangus"
 	KeyPersediaan           = "persediaan"
 	KeyHPP                  = "hpp"
 	KeyPembelianUtang       = "pembelian.utang"
@@ -51,7 +53,9 @@ var MappingKeys = []MappingKey{
 
 	{KeyDepositTitipan, "Titipan Deposit Pasien", "Deposit & Member", "Kewajiban atas saldo deposit pasien", "2-1201"},
 	{KeyPendapatanMembership, "Pendapatan Membership", "Deposit & Member", "Pendaftaran dan perpanjangan member", "4-1301"},
-	{KeyPaketRefund, "Refund Batal Paket", "Deposit & Member", "Debit saat refund paket perawatan", "4-1902"},
+	{KeyPaketRefund, "Refund Batal Paket (paket lama)", "Deposit & Member", "Debit saat refund paket yang dijual sebelum pendapatan ditunda", "4-1902"},
+	{KeyPaketTitipan, "Pendapatan Diterima di Muka – Paket", "Deposit & Member", "Kredit saat paket dibeli, debit per sesi dipakai dan saat dibatalkan", "2-1301"},
+	{KeyPaketHangus, "Pendapatan Paket Hangus", "Deposit & Member", "Kredit sebesar nilai sisa paket yang tidak di-refund saat dibatalkan", "4-1903"},
 
 	{KeyPersediaan, "Persediaan Barang", "Persediaan & Pembelian", "Nilai stok barang", "1-1401"},
 	{KeyHPP, "Harga Pokok Penjualan", "Persediaan & Pembelian", "Debit sebesar harga beli barang terjual", "5-1101"},
@@ -76,6 +80,7 @@ var defaultCOA = []defaultAkun{
 	{"2", "KEWAJIBAN", TipeKewajiban, "", true, ""},
 	{"2-1101", "Utang Usaha", TipeKewajiban, "2", false, ""},
 	{"2-1201", "Utang Deposit Pasien", TipeKewajiban, "2", false, ""},
+	{"2-1301", "Pendapatan Diterima di Muka – Paket", TipeKewajiban, "2", false, ""},
 
 	{"3", "EKUITAS", TipeEkuitas, "", true, ""},
 	{"3-1101", "Modal", TipeEkuitas, "3", false, ""},
@@ -88,6 +93,7 @@ var defaultCOA = []defaultAkun{
 	{"4-1301", "Pendapatan Membership", TipePendapatan, "4", false, ""},
 	{"4-1901", "Diskon Penjualan", TipePendapatan, "4", false, SaldoDebit},
 	{"4-1902", "Refund Paket Perawatan", TipePendapatan, "4", false, SaldoDebit},
+	{"4-1903", "Pendapatan Paket Hangus", TipePendapatan, "4", false, ""},
 	{"4-9101", "Pendapatan Selisih Stok", TipePendapatan, "4", false, ""},
 
 	{"5", "HARGA POKOK PENJUALAN", TipeBeban, "", true, ""},
@@ -100,6 +106,31 @@ var defaultCOA = []defaultAkun{
 	{"6-1901", "Beban Umum", TipeBeban, "6", false, ""},
 	{"6-9101", "Beban Poin Member", TipeBeban, "6", false, ""},
 	{"6-9201", "Beban Selisih Stok", TipeBeban, "6", false, ""},
+}
+
+// createDefaultAkun adds one account of the default chart under its parent, when the
+// parent exists. It returns nil when the kode is not a default account or has no parent.
+func createDefaultAkun(tx *gorm.DB, kode string) (*Akun, error) {
+	for _, d := range defaultCOA {
+		if d.kode != kode || d.header {
+			continue
+		}
+		var parent Akun
+		if err := tx.Where("kode = ?", d.parent).First(&parent).Error; err != nil {
+			return nil, nil
+		}
+		saldo := d.saldo
+		if saldo == "" {
+			saldo = NormalOf(d.tipe)
+		}
+		pid := parent.ID
+		a := Akun{Kode: d.kode, Nama: d.nama, Tipe: d.tipe, SaldoNormal: saldo, ParentID: &pid, IsSystem: true, IsActive: true}
+		if err := tx.Create(&a).Error; err != nil {
+			return nil, err
+		}
+		return &a, nil
+	}
+	return nil, nil
 }
 
 // NormalOf returns the usual balance side for an account type.
@@ -147,7 +178,16 @@ func SeedDefault(db *gorm.DB) error {
 			}
 			var a Akun
 			if err := tx.Where("kode = ?", k.DefaultKode).First(&a).Error; err != nil {
-				continue // default account was removed or renumbered; leave it for the user
+				// A key added after the chart was seeded gets its default account once
+				// (only while the key has no mapping, so a later choice is kept).
+				created, cerr := createDefaultAkun(tx, k.DefaultKode)
+				if cerr != nil {
+					return cerr
+				}
+				if created == nil {
+					continue // default account was removed or renumbered; leave it for the user
+				}
+				a = *created
 			}
 			if err := tx.Create(&AkunMapping{Key: k.Key, AkunID: a.ID}).Error; err != nil {
 				return err

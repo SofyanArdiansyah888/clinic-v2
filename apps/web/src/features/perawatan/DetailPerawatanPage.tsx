@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Calendar,
   FileText,
+  Package,
   Plus,
   Save,
   Sparkles,
@@ -32,6 +33,7 @@ import { savePendingConsents, type PendingConsent, type PerawatanConsent } from 
 import { RupiahInput } from '@/shared/ui/rupiah-input'
 
 type PerawatanTindakanItem = {
+  id?: number
   treatment_id: number
   nama_treatment?: string
   treatment?: { nama?: string }
@@ -45,6 +47,37 @@ type PerawatanTindakanItem = {
   total: number
   status?: string
   catatan?: string
+  /** Redeemed from a package item the pasien already owns (billed Rp 0). */
+  paket_item_id?: number | null
+  /** From the API: the tindakan of this perawatan whose package this session comes from. */
+  paket_beli_tindakan_id?: number | null
+  /** Client-side row identity, so "pakai dari paket ini" survives row edits. */
+  _key?: number
+  /** _key of the paket row in this visit this session is redeemed from. */
+  paket_beli_key?: number | null
+  /** Label of the package item used, for display only. */
+  paket_label?: string
+}
+
+let nextRowKey = 1
+const withKey = (t: PerawatanTindakanItem): PerawatanTindakanItem => ({ ...t, _key: t._key ?? nextRowKey++ })
+const pakaiPaket = (t: PerawatanTindakanItem) => Boolean(t.paket_item_id) || Boolean(t.paket_beli_key)
+const isPaketKategori = (k?: string) => (k ?? '').toLowerCase().includes('paket')
+
+type TreatmentKatalog = TreatmentLite & { items?: Array<{ treatment_id: number; sesi: number }> }
+
+type PaketAktif = {
+  id: number
+  kode: string
+  tanggal_beli: string
+  treatment?: { nama?: string }
+  items: Array<{
+    id: number
+    treatment_id: number
+    total_sesi: number
+    sisa_sesi: number
+    treatment?: { nama?: string }
+  }>
 }
 
 type PerawatanResepItem = {
@@ -90,6 +123,8 @@ type PerawatanDetailResponse = {
 const today = todayISO()
 
 function calculateTindakanTotal(t: PerawatanTindakanItem): number {
+  // A session redeemed from a package is already paid for.
+  if (pakaiPaket(t)) return 0
   const jumlah = Number(t.jumlah) || 0
   const harga = Number(t.harga) || 0
   const diskon = Number(t.diskon) || 0
@@ -183,11 +218,13 @@ export function DetailPerawatanPage() {
       })
 
       if (d.tindakans && d.tindakans.length > 0) {
+        const rows = d.tindakans.map(withKey)
+        const keyById = new Map(rows.map((r) => [r.id, r._key]))
         setTindakans(
-          d.tindakans.map((t) => ({
-            ...t,
-            total: calculateTindakanTotal(t),
-          })),
+          rows.map((t) => {
+            const row = { ...t, paket_beli_key: t.paket_beli_tindakan_id ? keyById.get(t.paket_beli_tindakan_id) ?? null : null }
+            return { ...row, total: calculateTindakanTotal(row) }
+          }),
         )
       }
 
@@ -206,6 +243,77 @@ export function DetailPerawatanPage() {
   const grandTotalTindakan = useMemo(() => {
     return tindakans.reduce((sum, item) => sum + calculateTindakanTotal(item), 0)
   }, [tindakans])
+
+  // Same query as TreatmentSelect (shared cache); paket treatments carry their items.
+  const { data: katalogData } = useQuery({
+    queryKey: ['treatment', 'select'],
+    queryFn: () => apiGet<TreatmentKatalog[]>('/treatment', { per_page: 200, page: 1 }),
+  })
+  const katalog = useMemo(() => new Map((katalogData?.data ?? []).map((t) => [t.id, t])), [katalogData?.data])
+
+  // Packages the pasien owns with sessions left (any branch).
+  const pasienIdNum = Number(form.pasien_id) || 0
+  const { data: paketAktifData } = useQuery({
+    queryKey: ['paket-aktif', pasienIdNum],
+    queryFn: () => apiGet<PaketAktif[]>('/pembayaran/paket/aktif', { pasien_id: pasienIdNum }),
+    enabled: pasienIdNum > 0,
+  })
+  const paketAktif = paketAktifData?.data ?? []
+
+  // Sessions of each package item already put on this perawatan.
+  const dipakai = useMemo(() => {
+    const m = new Map<number, number>()
+    for (const t of tindakans) {
+      if (t.paket_item_id) m.set(t.paket_item_id, (m.get(t.paket_item_id) ?? 0) + (Number(t.jumlah) || 1))
+    }
+    return m
+  }, [tindakans])
+
+  function handlePakaiPaket(p: PaketAktif, it: PaketAktif['items'][number]) {
+    setTindakans((prev) => [
+      ...prev,
+      withKey({
+        treatment_id: it.treatment_id,
+        nama_treatment: it.treatment?.nama,
+        treatment: { nama: it.treatment?.nama },
+        jumlah: 1,
+        beautician_id: null,
+        harga: 0,
+        diskon: 0,
+        rp_percent: 0,
+        total: 0,
+        catatan: '',
+        paket_item_id: it.id,
+        paket_label: `${p.kode} · ${it.treatment?.nama ?? ''}`,
+      }),
+    ])
+    setActiveTab('tindakan')
+  }
+
+  // Paket rows bought in this visit that contain the row's treatment.
+  function paketDiKunjunganIni(row: PerawatanTindakanItem) {
+    return tindakans.filter((src) => {
+      if (src._key === row._key || pakaiPaket(src) || !src.treatment_id) return false
+      const tr = katalog.get(src.treatment_id)
+      if (!tr || !isPaketKategori(tr.kategori)) return false
+      const items = tr.items?.length ? tr.items : [{ treatment_id: tr.id, sesi: 1 }]
+      return items.some((i) => i.treatment_id === row.treatment_id)
+    })
+  }
+
+  function handleToggleBeliPaket(index: number, srcKey: number | null) {
+    setTindakans((prev) => {
+      const updated = [...prev]
+      const cur = { ...updated[index], paket_beli_key: srcKey }
+      if (!srcKey) {
+        const tr = katalog.get(cur.treatment_id)
+        cur.harga = cur.harga || tr?.harga || 0
+      }
+      cur.total = calculateTindakanTotal(cur)
+      updated[index] = cur
+      return updated
+    })
+  }
 
   // Mark antrian as "diproses" when starting SOAP from queue
   useEffect(() => {
@@ -262,18 +370,24 @@ export function DetailPerawatanPage() {
       if (!pasienId) throw new Error('Pasien wajib dipilih')
       if (!staffId) throw new Error('Dokter / Staff wajib dipilih')
 
-      const formattedTindakans = tindakans.map((t) => ({
-        treatment_id: Number(t.treatment_id),
-        tanggal: form.tanggal || today,
-        jumlah: Number(t.jumlah) || 1,
-        beautician_id: t.beautician_id ? Number(t.beautician_id) : null,
-        harga: Number(t.harga) || 0,
-        diskon: Number(t.diskon) || 0,
-        rp_percent: Number(t.rp_percent) || 0,
-        total: calculateTindakanTotal(t),
-        status: t.status || 'draft',
-        catatan: t.catatan || '',
-      }))
+      const formattedTindakans = tindakans.map((t) => {
+        const beliIndex = t.paket_beli_key ? tindakans.findIndex((r) => r._key === t.paket_beli_key) : -1
+        const paket = Boolean(t.paket_item_id) || beliIndex >= 0
+        return {
+          treatment_id: Number(t.treatment_id),
+          tanggal: form.tanggal || today,
+          jumlah: Number(t.jumlah) || 1,
+          beautician_id: t.beautician_id ? Number(t.beautician_id) : null,
+          harga: paket ? 0 : Number(t.harga) || 0,
+          diskon: paket ? 0 : Number(t.diskon) || 0,
+          rp_percent: paket ? 0 : Number(t.rp_percent) || 0,
+          total: paket ? 0 : calculateTindakanTotal(t),
+          status: t.status || 'draft',
+          catatan: t.catatan || '',
+          paket_item_id: t.paket_item_id || null,
+          paket_beli_index: !t.paket_item_id && beliIndex >= 0 ? beliIndex : null,
+        }
+      })
 
       const antrianId = form.antrian_id ? Number(form.antrian_id) : null
 
@@ -325,7 +439,9 @@ export function DetailPerawatanPage() {
       }, 1000)
     },
     onError: (err) => {
-      const message = err instanceof Error ? err.message : 'Gagal menyimpan perawatan'
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        (err instanceof Error ? err.message : 'Gagal menyimpan perawatan')
       setSaveError(message)
       showToast(message, 'error')
     },
@@ -345,7 +461,7 @@ export function DetailPerawatanPage() {
   function handleAddTindakanRow() {
     setTindakans((prev) => [
       ...prev,
-      {
+      withKey({
         treatment_id: 0,
         nama_treatment: '',
         jumlah: 1,
@@ -356,12 +472,22 @@ export function DetailPerawatanPage() {
         rp_percent: 0,
         total: 0,
         catatan: '',
-      },
+      }),
     ])
   }
 
   function handleRemoveTindakanRow(index: number) {
-    setTindakans((prev) => prev.filter((_, i) => i !== index))
+    setTindakans((prev) => {
+      const removed = prev[index]
+      // Sessions redeemed from a paket bought on the removed row go back to normal price.
+      return prev
+        .filter((_, i) => i !== index)
+        .map((t) => {
+          if (!removed || t.paket_beli_key !== removed._key) return t
+          const row = { ...t, paket_beli_key: null, harga: katalog.get(t.treatment_id)?.harga ?? t.harga }
+          return { ...row, total: calculateTindakanTotal(row) }
+        })
+    })
   }
 
   function handleTreatmentSelect(index: number, _val: string, selected?: TreatmentLite) {
@@ -371,12 +497,16 @@ export function DetailPerawatanPage() {
       const cur = updated[index]
       const harga = selected.harga || 0
       const jumlah = cur.jumlah || 1
+      // A different treatment no longer matches the package item it was redeemed from.
       const updatedRow = {
         ...cur,
         treatment_id: selected.id,
         nama_treatment: selected.nama,
         harga,
         jumlah,
+        paket_item_id: null,
+        paket_beli_key: null,
+        paket_label: undefined,
       }
       updatedRow.total = calculateTindakanTotal(updatedRow)
       updated[index] = updatedRow
@@ -718,6 +848,48 @@ export function DetailPerawatanPage() {
               </Button>
             </div>
 
+            {paketAktif.length > 0 ? (
+              <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4" data-testid="pakai-paket-panel">
+                <div className="mb-2 flex items-center gap-2">
+                  <Package className="size-4 text-violet-600" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-violet-800">Pakai Paket</h4>
+                  <span className="text-[11px] text-violet-700">Sesi dari paket tidak ditagih lagi di kasir.</span>
+                </div>
+                <div className="space-y-2">
+                  {paketAktif.map((p) => (
+                    <div key={p.id} className="rounded-xl border border-violet-100 bg-white p-3">
+                      <p className="text-xs font-bold text-slate-800">
+                        {p.treatment?.nama ?? 'Paket'} <span className="font-mono font-normal text-slate-500">{p.kode}</span>
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {p.items.map((it) => {
+                          const tersedia = it.sisa_sesi - (dipakai.get(it.id) ?? 0)
+                          return (
+                            <Button
+                              key={it.id}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={tersedia <= 0}
+                              onClick={() => handlePakaiPaket(p, it)}
+                              data-testid={`pakai-paket-item-${it.id}`}
+                              title={`Tambah 1 sesi ${it.treatment?.nama ?? ''} dari paket ${p.kode}`}
+                            >
+                              <Plus />
+                              {it.treatment?.nama ?? `Treatment #${it.treatment_id}`}
+                              <span className="font-mono text-slate-500">
+                                {tersedia}/{it.total_sesi}
+                              </span>
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {tindakans.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-xs text-slate-500">
                 Belum ada tindakan.
@@ -739,8 +911,11 @@ export function DetailPerawatanPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
-                    {tindakans.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50">
+                    {tindakans.map((item, idx) => {
+                      const sumberPaket = item.paket_item_id ? [] : paketDiKunjunganIni(item)
+                      const sesiPaket = pakaiPaket(item)
+                      return (
+                      <tr key={item._key ?? idx} className="hover:bg-slate-50/50" data-testid={`tindakan-row-${idx}`}>
                         <td className="p-2">
                           <TreatmentSelect
                             id={`tindakan-treatment-${idx}`}
@@ -748,6 +923,26 @@ export function DetailPerawatanPage() {
                             value={item.treatment_id ? String(item.treatment_id) : ''}
                             onChange={(val, selected) => handleTreatmentSelect(idx, val, selected)}
                           />
+                          {item.paket_item_id ? (
+                            <span
+                              className="mt-1 inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700"
+                              data-testid={`tindakan-paket-badge-${idx}`}
+                            >
+                              <Package className="size-3" />
+                              Sesi paket{item.paket_label ? ` · ${item.paket_label}` : ''}
+                            </span>
+                          ) : null}
+                          {sumberPaket.length > 0 ? (
+                            <label className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-violet-700">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(item.paket_beli_key)}
+                                onChange={(e) => handleToggleBeliPaket(idx, e.target.checked ? sumberPaket[0]._key ?? null : null)}
+                                data-testid={`tindakan-pakai-paket-ini-${idx}`}
+                              />
+                              Pakai dari paket ini ({katalog.get(sumberPaket[0].treatment_id)?.nama ?? 'paket'})
+                            </label>
+                          ) : null}
                         </td>
                         <td className="p-2">
                           <input
@@ -770,7 +965,8 @@ export function DetailPerawatanPage() {
                         <td className="p-2">
                           <RupiahInput
                             id={`tindakan-harga-${idx}`}
-                            value={item.harga}
+                            disabled={sesiPaket}
+                            value={sesiPaket ? 0 : item.harga}
                             onValueChange={(v) => handleTindakanFieldChange(idx, 'harga', Number(v))}
                             className="w-full rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-xs"
                           />
@@ -778,6 +974,7 @@ export function DetailPerawatanPage() {
                         <td className="p-2">
                           <input
                             id={`tindakan-diskon-${idx}`}
+                            disabled={sesiPaket}
                             type="number"
                             min={0}
                             max={100}
@@ -789,6 +986,7 @@ export function DetailPerawatanPage() {
                         <td className="p-2">
                           <input
                             id={`tindakan-rp-percent-${idx}`}
+                            disabled={sesiPaket}
                             type="number"
                             min={0}
                             max={100}
@@ -822,7 +1020,8 @@ export function DetailPerawatanPage() {
                           </Button>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
                     <tr>

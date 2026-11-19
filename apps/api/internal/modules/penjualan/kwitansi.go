@@ -26,6 +26,8 @@ type KwitansiItem struct {
 	Qty      int     `json:"qty"`
 	Harga    float64 `json:"harga"`
 	Subtotal float64 `json:"subtotal"`
+	// PakaiPaket marks a session redeemed from a package (Rp 0 on the receipt).
+	PakaiPaket bool `json:"pakai_paket"`
 }
 
 // KwitansiPaket summarises a treatment package bought in this transaction.
@@ -124,6 +126,7 @@ func (s *Service) Kwitansi(id uint) (*Kwitansi, error) {
 		Subtotal: round2(pj.TotalHarga), DiskonPromo: pj.DiskonPromo, DiskonVoucher: pj.DiskonVoucher,
 		PoinDipakai: pj.PoinDipakai, DepositDipakai: pj.DepositDipakai,
 		JumlahBayar: pj.JumlahBayar, Kembalian: pj.Kembalian, Items: []KwitansiItem{}, Paket: []KwitansiPaket{},
+		AlasanBatal: pj.AlasanBatal,
 	}
 	if pj.Pasien != nil {
 		k.PasienNama, k.PasienKode, k.PasienTelp = pj.Pasien.Nama, pj.Pasien.Kode, pj.Pasien.NoTelp
@@ -144,7 +147,7 @@ func (s *Service) Kwitansi(id uint) (*Kwitansi, error) {
 		} else if d.Treatment != nil {
 			nama = d.Treatment.Nama
 		}
-		k.Items = append(k.Items, KwitansiItem{Nama: nama, Jenis: d.JenisPenjualan, Qty: d.Qty, Harga: d.HargaJual, Subtotal: d.Subtotal})
+		k.Items = append(k.Items, KwitansiItem{Nama: nama, Jenis: d.JenisPenjualan, Qty: d.Qty, Harga: d.HargaJual, Subtotal: d.Subtotal, PakaiPaket: d.PakaiPaket})
 	}
 	if pj.PromoID != nil {
 		var p promo.Promo
@@ -171,30 +174,17 @@ func (s *Service) Kwitansi(id uint) (*Kwitansi, error) {
 		return nil, err
 	}
 	k.Klinik = *klinik
+	pengaturan.WithCabang(db, &k.Klinik, pj.CabangID)
 	return k, nil
 }
 
-// paketRingkasan finds packages created when this perawatan was paid: same pasien,
-// bought on the sale date, for a treatment billed on it.
-// TODO(paket): switch to paket_perawatans.penjualan_id once packages record their sale.
+// paketRingkasan lists the packages bought in this sale, with their sessions as they are now.
 func (s *Service) paketRingkasan(pj *Penjualan) ([]KwitansiPaket, error) {
 	out := []KwitansiPaket{}
-	if pj.PerawatanID == nil {
-		return out, nil
-	}
-	var treatmentIDs []uint
-	for _, d := range pj.Details {
-		if d.TreatmentID != nil {
-			treatmentIDs = append(treatmentIDs, *d.TreatmentID)
-		}
-	}
-	if len(treatmentIDs) == 0 {
-		return out, nil
-	}
 	err := s.repo.db.Table("paket_perawatans p").
 		Select("p.kode, t.nama, p.total_sesi, p.sisa_sesi, p.status").
 		Joins("JOIN treatments t ON t.id = p.treatment_id").
-		Where("p.pasien_id = ? AND p.tanggal_beli = ? AND p.treatment_id IN ?", pj.PasienID, pj.Tanggal.Format("2006-01-02"), treatmentIDs).
+		Where("p.penjualan_id = ?", pj.ID).
 		Order("p.id").Scan(&out).Error
 	return out, err
 }

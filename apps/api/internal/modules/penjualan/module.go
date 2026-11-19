@@ -55,6 +55,9 @@ type DetailInput struct {
 	JenisPenjualan string  `json:"jenis_penjualan"`
 	Qty            int     `json:"qty" binding:"required"`
 	HargaJual      float64 `json:"harga_jual"`
+	// PakaiPaket is set by the kasir for a session redeemed from a package: the line
+	// stays at Rp 0 instead of falling back to the treatment price.
+	PakaiPaket bool `json:"-"`
 }
 
 type UpsertRequest struct {
@@ -259,11 +262,14 @@ func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 		}
 
 		harga := d.HargaJual
+		if d.PakaiPaket {
+			harga = 0
+		}
 		subtotal := harga * float64(d.Qty)
 		detailKode := fmt.Sprintf("%s-D%03d", kode, i+1)
 		detail := PenjualanDetail{
 			Kode: detailKode, PenjualanID: item.ID,
-			JenisPenjualan: jenis, Qty: d.Qty, HargaJual: harga, Subtotal: subtotal, IsActive: true,
+			JenisPenjualan: jenis, Qty: d.Qty, HargaJual: harga, Subtotal: subtotal, PakaiPaket: d.PakaiPaket, IsActive: true,
 		}
 
 		if jenis == "treatment" {
@@ -274,7 +280,7 @@ func (s *Service) CreateTx(tx *gorm.DB, req UpsertRequest) (*Penjualan, error) {
 			if err := tx.First(&tr, d.TreatmentID).Error; err != nil {
 				return nil, err
 			}
-			if harga == 0 {
+			if harga == 0 && !d.PakaiPaket {
 				harga = tr.Harga
 				subtotal = harga * float64(d.Qty)
 				detail.HargaJual = harga
@@ -334,7 +340,10 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 	if item.Status == "cancelled" && req.Status != "cancelled" {
 		return nil, errors.New("penjualan yang sudah dibatalkan tidak bisa diaktifkan lagi")
 	}
-	wasPaid := item.Status == "paid"
+	// A paid sale is undone as a whole (stock, journal, deposit, poin, paket, kasir) by the void.
+	if item.Status == "paid" && req.Status != "paid" {
+		return nil, ErrSudahLunas
+	}
 	cancelling := item.Status != "cancelled" && req.Status == "cancelled"
 	item.Status = req.Status
 	if req.JenisPembayaran != "" {
@@ -351,13 +360,7 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 			return err
 		}
 		if cancelling {
-			if err := s.returnStock(tx, item.CabangID, item.ID, item.Kode, "Pembatalan penjualan "+item.Kode); err != nil {
-				return err
-			}
-		}
-		// Taking a paid sale out of paid undoes its journal.
-		if wasPaid && item.Status != "paid" {
-			return finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Pembatalan penjualan "+item.Kode)
+			return KembalikanStok(tx, s.gen, item.CabangID, item.ID, item.Kode, "Pembatalan penjualan "+item.Kode)
 		}
 		return nil
 	})
@@ -369,8 +372,13 @@ func (s *Service) UpdateStatus(id uint, req StatusRequest) (*Penjualan, error) {
 
 var validStatus = map[string]bool{"draft": true, "confirmed": true, "paid": true, "cancelled": true}
 
-// returnStock puts back the barang taken out when the penjualan was created.
-func (s *Service) returnStock(tx *gorm.DB, cabangID, penjualanID uint, kode, ket string) error {
+// ErrSudahLunas: a paid sale can only be cancelled by the void at the kasir, which gives
+// back everything the payment touched.
+var ErrSudahLunas = errors.New("penjualan sudah lunas; batalkan lewat Void (POST /pembayaran/penjualan/:id/batal)")
+
+// KembalikanStok puts back, in the branch that sold them, the barang taken out when the
+// penjualan was created.
+func KembalikanStok(tx *gorm.DB, gen *generator.Service, cabangID, penjualanID uint, kode, ket string) error {
 	var details []PenjualanDetail
 	if err := tx.Where("penjualan_id = ? AND barang_id IS NOT NULL", penjualanID).Find(&details).Error; err != nil {
 		return err
@@ -379,7 +387,7 @@ func (s *Service) returnStock(tx *gorm.DB, cabangID, penjualanID uint, kode, ket
 		if d.BarangID == nil || d.Qty <= 0 {
 			continue
 		}
-		if err := warehouse.ApplyStockMove(tx, s.gen, cabangID, *d.BarangID, d.Qty, "masuk", kode, ket, time.Now()); err != nil {
+		if err := warehouse.ApplyStockMove(tx, gen, cabangID, *d.BarangID, d.Qty, "masuk", kode, ket, time.Now()); err != nil {
 			return err
 		}
 	}
@@ -389,14 +397,21 @@ func (s *Service) returnStock(tx *gorm.DB, cabangID, penjualanID uint, kode, ket
 func (s *Service) Delete(id uint) error {
 	return s.repo.db.Transaction(func(tx *gorm.DB) error {
 		var item Penjualan
-		if err := s.cab.Scope(tx, "cabang_id").First(&item, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, id).Error; err != nil {
 			return err
+		}
+		// Paid or voided sales stay for the books and the receipt; only unpaid ones are deleted.
+		if item.Status == "paid" {
+			return ErrSudahLunas
+		}
+		if item.DibatalkanAt != nil {
+			return errors.New("penjualan yang sudah di-void tidak bisa dihapus")
 		}
 		if err := finance.Reverse(tx, s.gen, finance.SourcePenjualan, item.ID, time.Now(), "Hapus penjualan "+item.Kode); err != nil {
 			return err
 		}
 		if item.Status != "cancelled" {
-			if err := s.returnStock(tx, item.CabangID, item.ID, item.Kode, "Hapus penjualan "+item.Kode); err != nil {
+			if err := KembalikanStok(tx, s.gen, item.CabangID, item.ID, item.Kode, "Hapus penjualan "+item.Kode); err != nil {
 				return err
 			}
 		}

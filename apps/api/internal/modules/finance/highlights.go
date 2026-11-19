@@ -184,7 +184,7 @@ func (s *Service) tren(sampai time.Time) ([]TrenBulan, error) {
 		Select("to_char(j.tanggal, 'YYYY-MM') AS bulan, a.tipe, COALESCE(SUM(d.debit),0) AS debit, COALESCE(SUM(d.kredit),0) AS kredit").
 		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
 		Joins("JOIN akuns a ON a.id = d.akun_id").
-		Where("j.tanggal >= ? AND j.tanggal <= ?", start.Format(dateFmt), sampai.Format(dateFmt)).
+		Where("j.tanggal >= ? AND j.tanggal <= ?"+s.jcf(), start.Format(dateFmt), sampai.Format(dateFmt)).
 		Where("a.tipe IN ?", []string{TipePendapatan, TipeBeban}).
 		Group("1, 2").
 		Scan(&rows).Error

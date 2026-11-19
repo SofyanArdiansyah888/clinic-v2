@@ -12,6 +12,7 @@ import (
 	"github.com/scaleup/clinic-v2/api/internal/modules/kasir"
 	"github.com/scaleup/clinic-v2/api/internal/modules/laporan"
 	"github.com/scaleup/clinic-v2/api/internal/modules/membership"
+	"github.com/scaleup/clinic-v2/api/internal/modules/paket"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembayaran"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pembelian"
@@ -54,7 +55,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&penjualan.Penjualan{},
 		&penjualan.PenjualanDetail{},
 		&pembayaran.DepositTransaksi{},
-		&pembayaran.PaketPerawatan{},
+		&treatment.PaketItem{},
+		&paket.PaketPerawatan{},
+		&paket.Item{},
+		&paket.Pemakaian{},
 		&pembelian.Pembelian{},
 		&pembelian.PembelianDetail{},
 		&pembelian.PembelianPembayaran{},
@@ -98,6 +102,11 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := db.Model(&membership.Membership{}).
 		Where("tipe IN ?", []string{"pendaftaran_member", "perpanjangan_member"}).
 		Update("tipe", pembayaran.DefaultMemberTier).Error; err != nil {
+		return err
+	}
+	// Multi-treatment packages: older paket treatments and bought packages get their
+	// single item (idempotent; only fills what is missing).
+	if err := paket.Backfill(db); err != nil {
 		return err
 	}
 	// Multi-branch: a main branch exists and users/staff without a branch belong to it.

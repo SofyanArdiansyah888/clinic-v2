@@ -3,9 +3,18 @@ package server_test
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/scaleup/clinic-v2/api/internal/modules/paket"
+	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
+	"github.com/scaleup/clinic-v2/api/internal/server"
 )
 
 // Full-flow tests for the parts of the clinic not already covered by
@@ -132,8 +141,15 @@ func TestPenjualanLangsungDibayarLaluDibatalkan(t *testing.T) {
 		t.Errorf("laporan apotek barang terjual = %+v, want 1 row", ap.BarangTerjual)
 	}
 
-	// Cancelling the paid sale reverses the journal and should bring the goods back.
-	e.must("PATCH", fmt.Sprintf("/penjualan/%d/status", pj), map[string]any{"status": "cancelled"}, nil)
+	// A paid sale is not cancelled through the status or delete endpoints, only by the void.
+	if r := e.call("admin", "PATCH", fmt.Sprintf("/penjualan/%d/status", pj), map[string]any{"status": "cancelled"}); r.Code != http.StatusBadRequest || !strings.Contains(r.Message, "/pembayaran/penjualan/:id/batal") {
+		t.Errorf("PATCH cancelled on a paid sale: %d %s, want 400 pointing at the void", r.Code, r.Message)
+	}
+	if r := e.call("admin", "DELETE", fmt.Sprintf("/penjualan/%d", pj), nil); r.Code != http.StatusBadRequest {
+		t.Errorf("DELETE a paid sale: %d %s, want 400", r.Code, r.Message)
+	}
+	// Voiding the paid sale reverses the journal and brings the goods back.
+	e.must("POST", fmt.Sprintf("/pembayaran/penjualan/%d/batal", pj), map[string]any{"alasan": "Salah input"}, nil)
 	e.expectBalanced()
 	e.expectSaldo(map[string]float64{"1-1101": 0, "4-1201": 0})
 	if got := e.stok(f.barang); got != 5 {
@@ -552,12 +568,16 @@ func TestKwitansiPenjualan(t *testing.T) {
 	if r := e.call("staff", "GET", fmt.Sprintf("/penjualan/%d/kwitansi", unpaid), nil); r.Code != http.StatusConflict {
 		t.Errorf("kwitansi cancelled-unpaid = %d, want 409", r.Code)
 	}
-	// A voided paid sale stays printable, with its cancelled status for the DIBATALKAN stamp.
-	e.must("PATCH", fmt.Sprintf("/penjualan/%d/status", pj.ID), map[string]any{"status": "cancelled"}, nil)
+	// A voided paid sale stays printable, with its cancelled status and reason for the DIBATALKAN stamp.
+	e.must("POST", fmt.Sprintf("/pembayaran/penjualan/%d/batal", pj.ID), map[string]any{"alasan": "Pasien batal"}, nil)
+	var kv struct {
+		Status      string `json:"status"`
+		AlasanBatal string `json:"alasan_batal"`
+	}
 	r = e.call("staff", "GET", fmt.Sprintf("/penjualan/%d/kwitansi", pj.ID), nil)
-	_ = json.Unmarshal(r.Data, &k)
-	if r.Code != http.StatusOK || k.Status != "cancelled" {
-		t.Errorf("kwitansi voided = %d status %q, want 200 cancelled", r.Code, k.Status)
+	_ = json.Unmarshal(r.Data, &kv)
+	if r.Code != http.StatusOK || kv.Status != "cancelled" || kv.AlasanBatal != "Pasien batal" {
+		t.Errorf("kwitansi voided = %d %+v, want 200 cancelled with reason", r.Code, kv)
 	}
 	if r := e.call("staff", "GET", "/penjualan/999999/kwitansi", nil); r.Code != http.StatusNotFound {
 		t.Errorf("kwitansi unknown = %d, want 404", r.Code)
@@ -806,5 +826,488 @@ func TestShiftKasir(t *testing.T) {
 	if r := e.call("admin", "POST", fmt.Sprintf("/kasir/shift/%d/tutup", d.Shift.ID), map[string]any{"saldo_akhir_fisik": 100000}); r.Code != http.StatusOK {
 		t.Errorf("admin closes kasir's shift: %d %s", r.Code, r.Message)
 	}
+	e.expectBalanced()
+}
+
+// ── Multi-treatment packages with deferred revenue ──
+
+type paketItemOut struct {
+	ID           uint    `json:"id"`
+	TreatmentID  uint    `json:"treatment_id"`
+	TotalSesi    int     `json:"total_sesi"`
+	SisaSesi     int     `json:"sisa_sesi"`
+	NilaiTotal   float64 `json:"nilai_total"`
+	NilaiPerSesi float64 `json:"nilai_per_sesi"`
+	NilaiSisa    float64 `json:"nilai_sisa"`
+}
+
+type paketOut struct {
+	ID          uint           `json:"id"`
+	Kode        string         `json:"kode"`
+	Status      string         `json:"status"`
+	TotalSesi   int            `json:"total_sesi"`
+	SisaSesi    int            `json:"sisa_sesi"`
+	HargaTotal  float64        `json:"harga_total"`
+	NilaiSisa   float64        `json:"nilai_sisa"`
+	PenjualanID *uint          `json:"penjualan_id"`
+	PerawatanID *uint          `json:"perawatan_id"`
+	Items       []paketItemOut `json:"items"`
+}
+
+func (p paketOut) item(treatmentID uint) paketItemOut {
+	for _, it := range p.Items {
+		if it.TreatmentID == treatmentID {
+			return it
+		}
+	}
+	return paketItemOut{}
+}
+
+// paketGlow creates Peeling (250.000) and "Paket Glow" (1.200.000) = 3x Facial Uji + 2x Peeling.
+func (e *env) paketGlow(f fixtures) (paketTr, peeling uint) {
+	e.t.Helper()
+	var p, pk struct {
+		ID        uint `json:"id"`
+		SesiPaket int  `json:"sesi_paket"`
+		Items     []struct {
+			TreatmentID uint `json:"treatment_id"`
+			Sesi        int  `json:"sesi"`
+		} `json:"items"`
+	}
+	e.must("POST", "/treatment", map[string]any{"nama": "Peeling Uji", "kategori": "Perawatan", "harga": 250000}, &p)
+	e.must("POST", "/treatment", map[string]any{"nama": "Paket Glow", "kategori": "Paket", "harga": 1200000,
+		"items": []map[string]any{{"treatment_id": f.treatment, "sesi": 3}, {"treatment_id": p.ID, "sesi": 2}}}, &pk)
+	if pk.SesiPaket != 5 || len(pk.Items) != 2 {
+		e.t.Fatalf("paket treatment = %+v, want 5 sesi in 2 items", pk)
+	}
+	return pk.ID, p.ID
+}
+
+// beliPaket sells a paket treatment on a perawatan at its price and returns the package.
+func (e *env) beliPaket(f fixtures, paketTr uint, harga float64) paketOut {
+	e.t.Helper()
+	var pw struct{ ID uint }
+	e.must("POST", "/perawatan", map[string]any{
+		"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "status": "bayar",
+		"tindakans": []map[string]any{{"treatment_id": paketTr, "jumlah": 1, "harga": harga, "total": harga, "tanggal": tanggal}},
+	}, &pw)
+	if r := e.call("staff", "POST", "/pembayaran/bayar", map[string]any{"source_type": "perawatan", "source_id": pw.ID, "staff_id": f.staff, "jenis_pembayaran": "tunai", "jumlah_bayar": harga, "tanggal": tanggal}); r.Code != http.StatusOK {
+		e.t.Fatalf("bayar paket: %d %s", r.Code, r.Message)
+	}
+	var list []paketOut
+	e.must("GET", fmt.Sprintf("/pembayaran/paket/aktif?pasien_id=%d", f.pasien), nil, &list)
+	for _, p := range list {
+		if p.PerawatanID != nil && *p.PerawatanID == pw.ID {
+			return p
+		}
+	}
+	e.t.Fatalf("paket bought on perawatan %d not in aktif list %+v", pw.ID, list)
+	return paketOut{}
+}
+
+func (e *env) paketAktif(pasien uint) []paketOut {
+	e.t.Helper()
+	var list []paketOut
+	e.must("GET", fmt.Sprintf("/pembayaran/paket/aktif?pasien_id=%d", pasien), nil, &list)
+	return list
+}
+
+func (e *env) paketByID(pasien, id uint) paketOut {
+	e.t.Helper()
+	for _, p := range e.paketAktif(pasien) {
+		if p.ID == id {
+			return p
+		}
+	}
+	var row struct {
+		Status   string
+		SisaSesi int
+	}
+	if err := e.db.Table("paket_perawatans").Select("status, sisa_sesi").Where("id = ?", id).Scan(&row).Error; err != nil {
+		e.t.Fatal(err)
+	}
+	return paketOut{ID: id, Status: row.Status, SisaSesi: row.SisaSesi}
+}
+
+// pakaiPaket saves a perawatan redeeming qty sessions of a package item. The price sent
+// is the treatment's normal price; it must be forced to 0.
+func (e *env) pakaiPaket(f fixtures, treatmentID, itemID uint, qty int) resp {
+	e.t.Helper()
+	return e.call("admin", "POST", "/perawatan", map[string]any{
+		"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "status": "bayar",
+		"tindakans": []map[string]any{{"treatment_id": treatmentID, "jumlah": qty, "harga": 350000, "total": 350000 * qty, "tanggal": tanggal, "paket_item_id": itemID}},
+	})
+}
+
+func (e *env) bayarNol(pw uint) resp {
+	e.t.Helper()
+	return e.call("staff", "POST", "/pembayaran/bayar", map[string]any{"source_type": "perawatan", "source_id": pw, "staff_id": e.staffID(), "tanggal": tanggal})
+}
+
+func (e *env) staffID() uint {
+	var id uint
+	e.db.Table("staffs").Select("id").Where("kode = ?", "STF-T1").Scan(&id)
+	return id
+}
+
+func idOf(r resp) uint {
+	var out struct{ ID uint }
+	_ = json.Unmarshal(r.Data, &out)
+	return out.ID
+}
+
+func TestPaketMultiTreatmentDipakaiSampaiHabis(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	paketTr, peeling := e.paketGlow(f)
+
+	// The catalog editor's rules: no nested paket, no duplicates, sessions > 0.
+	for name, items := range map[string][]map[string]any{
+		"nested":    {{"treatment_id": paketTr, "sesi": 1}},
+		"duplicate": {{"treatment_id": f.treatment, "sesi": 1}, {"treatment_id": f.treatment, "sesi": 2}},
+		"sesi 0":    {{"treatment_id": f.treatment, "sesi": 0}},
+	} {
+		if r := e.call("admin", "POST", "/treatment", map[string]any{"nama": "Paket Salah", "kategori": "Paket", "harga": 1, "items": items}); r.Code != http.StatusBadRequest {
+			t.Errorf("paket item %s: %d %s, want 400", name, r.Code, r.Message)
+		}
+	}
+
+	pk := e.beliPaket(f, paketTr, 1200000)
+	facial, peel := pk.item(f.treatment), pk.item(peeling)
+	if pk.TotalSesi != 5 || facial.TotalSesi != 3 || peel.TotalSesi != 2 || pk.NilaiSisa != 1200000 {
+		t.Fatalf("paket = %+v", pk)
+	}
+	// Value split by price weight: Facial 350.000 x 3 vs Peeling 250.000 x 2.
+	if math.Abs(facial.NilaiTotal-812903.23) > 0.001 || math.Abs(facial.NilaiTotal+peel.NilaiTotal-1200000) > 0.001 {
+		t.Errorf("item values = facial %v, peeling %v", facial.NilaiTotal, peel.NilaiTotal)
+	}
+	// Bought: the money is a liability, not revenue yet.
+	e.expectSaldo(map[string]float64{"1-1101": 1200000, "2-1301": -1200000, "4-1101": 0})
+
+	// One facial session: Rp 0 bill, titipan -> pendapatan for one session.
+	r := e.pakaiPaket(f, f.treatment, facial.ID, 1)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("perawatan pakai paket: %d %s", r.Code, r.Message)
+	}
+	pw1 := idOf(r)
+	var tg struct {
+		Subtotal  float64 `json:"subtotal"`
+		SisaBayar float64 `json:"sisa_bayar"`
+		Items     []struct {
+			Harga      float64 `json:"harga"`
+			PakaiPaket bool    `json:"pakai_paket"`
+			PaketKode  string  `json:"paket_kode"`
+			PaketSisa  *int    `json:"paket_sisa"`
+		} `json:"items"`
+	}
+	r = e.call("staff", "POST", "/pembayaran/tagihan", map[string]any{"source_type": "perawatan", "source_id": pw1})
+	if r.Code != http.StatusOK {
+		t.Fatalf("tagihan Rp 0: %d %s", r.Code, r.Message)
+	}
+	_ = json.Unmarshal(r.Data, &tg)
+	if tg.Subtotal != 0 || tg.SisaBayar != 0 || len(tg.Items) != 1 || !tg.Items[0].PakaiPaket || tg.Items[0].Harga != 0 ||
+		tg.Items[0].PaketKode != pk.Kode || tg.Items[0].PaketSisa == nil || *tg.Items[0].PaketSisa != 3 {
+		t.Fatalf("tagihan = %+v", tg)
+	}
+	if r := e.bayarNol(pw1); r.Code != http.StatusOK {
+		t.Fatalf("bayar Rp 0: %d %s", r.Code, r.Message)
+	}
+	e.expectSaldo(map[string]float64{"1-1101": 1200000, "2-1301": -(1200000 - facial.NilaiPerSesi), "4-1101": -facial.NilaiPerSesi})
+	var nJurnal int64
+	e.db.Table("jurnals").Where("source_type = ?", "paket_pemakaian").Count(&nJurnal)
+	if nJurnal != 1 {
+		t.Errorf("pemakaian journals = %d, want 1", nJurnal)
+	}
+
+	// Two more facials in one visit, then the peeling sessions.
+	if r := e.pakaiPaket(f, f.treatment, facial.ID, 3); r.Code != http.StatusBadRequest {
+		t.Errorf("3 facial with 2 left: %d %s, want 400", r.Code, r.Message)
+	}
+	if r := e.pakaiPaket(f, peeling, facial.ID, 1); r.Code != http.StatusBadRequest {
+		t.Errorf("peeling from the facial item: %d %s, want 400", r.Code, r.Message)
+	}
+	r = e.pakaiPaket(f, f.treatment, facial.ID, 2)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("2 facial: %d %s", r.Code, r.Message)
+	}
+	if r := e.bayarNol(idOf(r)); r.Code != http.StatusOK {
+		t.Fatalf("bayar 2 facial: %d %s", r.Code, r.Message)
+	}
+	r = e.pakaiPaket(f, peeling, peel.ID, 1)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("peeling: %d %s", r.Code, r.Message)
+	}
+	if r := e.bayarNol(idOf(r)); r.Code != http.StatusOK {
+		t.Fatalf("bayar peeling: %d %s", r.Code, r.Message)
+	}
+
+	// The last peeling is saved on two perawatans; only the first one paid gets it.
+	a, b := e.pakaiPaket(f, peeling, peel.ID, 1), e.pakaiPaket(f, peeling, peel.ID, 1)
+	if a.Code != http.StatusCreated || b.Code != http.StatusCreated {
+		t.Fatalf("saving the last peeling twice: %d / %d", a.Code, b.Code)
+	}
+	if r := e.bayarNol(idOf(a)); r.Code != http.StatusOK {
+		t.Fatalf("bayar last peeling: %d %s", r.Code, r.Message)
+	}
+	// The package is habis now, so the second bill is refused.
+	if r := e.bayarNol(idOf(b)); r.Code != http.StatusBadRequest || !strings.Contains(r.Message, "habis") {
+		t.Errorf("over-use at the kasir: %d %s, want 400", r.Code, r.Message)
+	}
+
+	got := e.paketByID(f.pasien, pk.ID)
+	if got.Status != "habis" || got.SisaSesi != 0 {
+		t.Errorf("paket after all sessions = %s, sisa %d; want habis, 0", got.Status, got.SisaSesi)
+	}
+	if len(e.paketAktif(f.pasien)) != 0 {
+		t.Errorf("paket habis still listed as aktif")
+	}
+	if r := e.pakaiPaket(f, f.treatment, facial.ID, 1); r.Code != http.StatusBadRequest {
+		t.Errorf("using a habis paket: %d, want 400", r.Code)
+	}
+	// Every session moved its share: the liability is gone and revenue is the full price.
+	e.expectSaldo(map[string]float64{"2-1301": 0, "4-1101": -1200000, "1-1101": 1200000})
+	e.expectBalanced()
+	var used []struct {
+		Qty   int
+		Nilai float64
+	}
+	e.db.Table("paket_pemakaians").Where("paket_perawatan_id = ?", pk.ID).Order("id").Scan(&used)
+	if len(used) != 4 {
+		t.Errorf("pemakaian rows = %d, want 4", len(used))
+	}
+}
+
+func TestPaketBayarBersamaanHanyaSatu(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	var tr struct{ ID uint }
+	e.must("POST", "/treatment", map[string]any{"nama": "Paket Facial 1x", "kategori": "Paket", "harga": 300000,
+		"items": []map[string]any{{"treatment_id": f.treatment, "sesi": 1}}}, &tr)
+	pk := e.beliPaket(f, tr.ID, 300000)
+	item := pk.item(f.treatment)
+
+	pws := make([]uint, 4)
+	for i := range pws {
+		r := e.pakaiPaket(f, f.treatment, item.ID, 1)
+		if r.Code != http.StatusCreated {
+			t.Fatalf("perawatan %d: %d %s", i, r.Code, r.Message)
+		}
+		pws[i] = idOf(r)
+	}
+	codes := make([]int, len(pws))
+	var wg sync.WaitGroup
+	for i := range pws {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			codes[i] = e.bayarNol(pws[i]).Code
+		}(i)
+	}
+	wg.Wait()
+	sort.Ints(codes)
+	if fmt.Sprint(codes) != "[200 400 400 400]" {
+		t.Fatalf("concurrent payments of the last session = %v, want one 200", codes)
+	}
+	var n int64
+	e.db.Table("paket_pemakaians").Where("paket_perawatan_id = ?", pk.ID).Count(&n)
+	var sisa int
+	e.db.Table("paket_perawatan_items").Select("sisa_sesi").Where("id = ?", item.ID).Scan(&sisa)
+	if n != 1 || sisa != 0 {
+		t.Errorf("after concurrent payments: %d pemakaian, sisa %d; want 1, 0", n, sisa)
+	}
+	e.expectSaldo(map[string]float64{"2-1301": 0, "4-1101": -300000})
+	e.expectBalanced()
+}
+
+func TestPaketSesiPertamaDiKunjunganYangSama(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	paketTr, peeling := e.paketGlow(f)
+	var lain struct{ ID uint }
+	e.must("POST", "/treatment", map[string]any{"nama": "Laser Uji", "kategori": "Perawatan", "harga": 500000}, &lain)
+
+	body := func(tindakans ...map[string]any) map[string]any {
+		return map[string]any{"pasien_id": f.pasien, "staff_id": f.staff, "tanggal": tanggal, "status": "bayar", "tindakans": tindakans}
+	}
+	beli := map[string]any{"treatment_id": paketTr, "jumlah": 1, "harga": 1200000, "total": 1200000, "tanggal": tanggal}
+	sesi := func(tr uint, idx int) map[string]any {
+		return map[string]any{"treatment_id": tr, "jumlah": 1, "harga": 350000, "total": 350000, "tanggal": tanggal, "paket_beli_index": idx}
+	}
+	if r := e.call("admin", "POST", "/perawatan", body(beli, sesi(lain.ID, 0))); r.Code != http.StatusBadRequest {
+		t.Errorf("same-visit session of a treatment not in the paket: %d, want 400", r.Code)
+	}
+	if r := e.call("admin", "POST", "/perawatan", body(map[string]any{"treatment_id": lain.ID, "jumlah": 1, "total": 500000}, sesi(f.treatment, 0))); r.Code != http.StatusBadRequest {
+		t.Errorf("same-visit session pointing at a non-paket tindakan: %d, want 400", r.Code)
+	}
+	r := e.call("admin", "POST", "/perawatan", body(beli, sesi(f.treatment, 0)))
+	if r.Code != http.StatusCreated {
+		t.Fatalf("perawatan beli + pakai: %d %s", r.Code, r.Message)
+	}
+	var pw struct {
+		ID        uint
+		Tindakans []struct {
+			ID                  uint    `json:"id"`
+			Total               float64 `json:"total"`
+			PaketBeliTindakanID *uint   `json:"paket_beli_tindakan_id"`
+		} `json:"tindakans"`
+	}
+	_ = json.Unmarshal(r.Data, &pw)
+	if len(pw.Tindakans) != 2 || pw.Tindakans[1].PaketBeliTindakanID == nil || *pw.Tindakans[1].PaketBeliTindakanID != pw.Tindakans[0].ID || pw.Tindakans[1].Total != 0 {
+		t.Fatalf("tindakans = %+v", pw.Tindakans)
+	}
+
+	var tg struct {
+		Subtotal float64 `json:"subtotal"`
+		Items    []struct {
+			Subtotal   float64 `json:"subtotal"`
+			BeliPaket  bool    `json:"beli_paket"`
+			PakaiPaket bool    `json:"pakai_paket"`
+			PaketBaru  bool    `json:"paket_baru"`
+		} `json:"items"`
+	}
+	r = e.call("staff", "POST", "/pembayaran/tagihan", map[string]any{"source_type": "perawatan", "source_id": pw.ID})
+	_ = json.Unmarshal(r.Data, &tg)
+	if r.Code != http.StatusOK || tg.Subtotal != 1200000 || len(tg.Items) != 2 || !tg.Items[0].BeliPaket || tg.Items[0].Subtotal != 1200000 ||
+		!tg.Items[1].PakaiPaket || !tg.Items[1].PaketBaru || tg.Items[1].Subtotal != 0 {
+		t.Fatalf("tagihan = %d %+v", r.Code, tg)
+	}
+	r = e.call("staff", "POST", "/pembayaran/bayar", map[string]any{"source_type": "perawatan", "source_id": pw.ID, "staff_id": f.staff, "jenis_pembayaran": "tunai", "jumlah_bayar": 1200000, "tanggal": tanggal})
+	if r.Code != http.StatusOK {
+		t.Fatalf("bayar: %d %s", r.Code, r.Message)
+	}
+	pj := idOf(r)
+
+	list := e.paketAktif(f.pasien)
+	if len(list) != 1 {
+		t.Fatalf("paket aktif = %+v", list)
+	}
+	pk := list[0]
+	facial := pk.item(f.treatment)
+	if pk.SisaSesi != 4 || facial.SisaSesi != 2 || pk.item(peeling).SisaSesi != 2 || pk.PenjualanID == nil || *pk.PenjualanID != pj {
+		t.Fatalf("paket after same-visit session = %+v", pk)
+	}
+	e.expectSaldo(map[string]float64{"1-1101": 1200000, "2-1301": -(1200000 - facial.NilaiPerSesi), "4-1101": -facial.NilaiPerSesi})
+	e.expectBalanced()
+
+	// The receipt lists the package (via penjualan_id) and the Rp 0 session.
+	var k struct {
+		Items []struct {
+			PakaiPaket bool    `json:"pakai_paket"`
+			Subtotal   float64 `json:"subtotal"`
+		} `json:"items"`
+		Paket []struct {
+			Kode     string `json:"kode"`
+			SisaSesi int    `json:"sisa_sesi"`
+		} `json:"paket"`
+	}
+	e.must("GET", fmt.Sprintf("/penjualan/%d/kwitansi", pj), nil, &k)
+	if len(k.Paket) != 1 || k.Paket[0].Kode != pk.Kode || k.Paket[0].SisaSesi != 4 || len(k.Items) != 2 || !k.Items[1].PakaiPaket || k.Items[1].Subtotal != 0 {
+		t.Errorf("kwitansi = %+v", k)
+	}
+}
+
+func TestPaketRefundMaksimumDanHangus(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	paketTr, _ := e.paketGlow(f)
+	pk := e.beliPaket(f, paketTr, 1200000)
+	facial := pk.item(f.treatment)
+	r := e.pakaiPaket(f, f.treatment, facial.ID, 1)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("pakai: %d %s", r.Code, r.Message)
+	}
+	if r := e.bayarNol(idOf(r)); r.Code != http.StatusOK {
+		t.Fatalf("bayar: %d %s", r.Code, r.Message)
+	}
+
+	// ListPaketSisa honours pasien_id and shows the remaining value per item.
+	var other struct{ ID uint }
+	e.must("POST", "/pasien", map[string]any{"nama": "Pasien Lain"}, &other)
+	var sisa []paketOut
+	e.must("GET", fmt.Sprintf("/pembayaran/paket/sisa?pasien_id=%d", other.ID), nil, &sisa)
+	if len(sisa) != 0 {
+		t.Errorf("paket sisa for another pasien = %+v", sisa)
+	}
+	e.must("GET", fmt.Sprintf("/pembayaran/paket/sisa?pasien_id=%d", f.pasien), nil, &sisa)
+	nilaiSisa := math.Round((1200000-facial.NilaiPerSesi)*100) / 100
+	if len(sisa) != 1 || sisa[0].NilaiSisa != nilaiSisa || len(sisa[0].Items) != 2 || sisa[0].item(f.treatment).SisaSesi != 2 {
+		t.Fatalf("paket sisa = %+v, want nilai sisa %v", sisa, nilaiSisa)
+	}
+
+	batal := fmt.Sprintf("/pembayaran/paket/%d/batal", pk.ID)
+	if r := e.call("staff", "POST", batal, map[string]any{"refund": nilaiSisa + 1, "jenis_pembayaran": "tunai"}); r.Code != http.StatusBadRequest {
+		t.Fatalf("refund above the unused value: %d %s, want 400", r.Code, r.Message)
+	}
+	if r := e.call("staff", "POST", batal, map[string]any{"refund": 500000, "jenis_pembayaran": "tunai", "tanggal": tanggal, "keterangan": "pindah kota"}); r.Code != http.StatusOK {
+		t.Fatalf("refund: %d %s", r.Code, r.Message)
+	}
+	// The whole remaining liability leaves titipan: 500.000 back in cash, the rest is hangus.
+	e.expectSaldo(map[string]float64{
+		"2-1301": 0,
+		"1-1101": 1200000 - 500000,
+		"4-1101": -facial.NilaiPerSesi,
+		"4-1903": -(nilaiSisa - 500000),
+		"4-1902": 0,
+	})
+	e.expectBalanced()
+	if r := e.pakaiPaket(f, f.treatment, facial.ID, 1); r.Code != http.StatusBadRequest {
+		t.Errorf("using a cancelled paket: %d, want 400", r.Code)
+	}
+}
+
+func TestPaketBackfillDataLama(t *testing.T) {
+	e := newEnv(t)
+	f := e.fixtures(5)
+	// A paket treatment and a package sold before multi-treatment packages.
+	old := treatment.Treatment{Kode: "TRT-OLD", Nama: "Paket Lama 4x", Kategori: "Paket", Harga: 400000, SesiPaket: 4, IsActive: true}
+	if err := e.db.Create(&old).Error; err != nil {
+		t.Fatal(err)
+	}
+	lama := paket.PaketPerawatan{Kode: "PKT-OLD", CabangID: branch.UtamaID(e.db), PasienID: f.pasien, TreatmentID: old.ID, StaffID: f.staff,
+		TanggalBeli: time.Now(), TotalSesi: 4, SisaSesi: 3, HargaTotal: 400000, Status: "aktif", IsActive: true}
+	if err := e.db.Omit("Items").Create(&lama).Error; err != nil {
+		t.Fatal(err)
+	}
+	// An older database also lacks the new accounts.
+	e.db.Exec("DELETE FROM akun_mappings WHERE key IN ('paket.titipan', 'pendapatan.paket_hangus')")
+	e.db.Exec("DELETE FROM akuns WHERE kode IN ('2-1301', '4-1903')")
+
+	for i := 0; i < 2; i++ { // safe to run again
+		if err := server.AutoMigrate(e.db); err != nil {
+			t.Fatalf("migrate %d: %v", i, err)
+		}
+	}
+	var katalog []treatment.PaketItem
+	e.db.Where("paket_treatment_id = ?", old.ID).Find(&katalog)
+	if len(katalog) != 1 || katalog[0].TreatmentID != old.ID || katalog[0].Sesi != 4 {
+		t.Fatalf("backfilled catalog = %+v, want 1 item of itself x4", katalog)
+	}
+	var items []paket.Item
+	e.db.Where("paket_perawatan_id = ?", lama.ID).Find(&items)
+	if len(items) != 1 || items[0].TreatmentID != old.ID || items[0].TotalSesi != 4 || items[0].SisaSesi != 3 || items[0].NilaiPerSesi != 100000 {
+		t.Fatalf("backfilled items = %+v", items)
+	}
+	var keys int64
+	e.db.Table("akun_mappings").Where("key IN ('paket.titipan', 'pendapatan.paket_hangus')").Count(&keys)
+	if keys != 2 {
+		t.Errorf("new account mappings after migrate = %d, want 2", keys)
+	}
+
+	// Redeeming an old package posts no journal: its revenue was booked when sold.
+	r := e.pakaiPaket(f, old.ID, items[0].ID, 1)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("pakai paket lama: %d %s", r.Code, r.Message)
+	}
+	if r := e.bayarNol(idOf(r)); r.Code != http.StatusOK {
+		t.Fatalf("bayar paket lama: %d %s", r.Code, r.Message)
+	}
+	e.expectSaldo(map[string]float64{"2-1301": 0, "4-1101": 0})
+	// Refund max is the 2 sessions left x 100.000, booked on the old refund account.
+	batal := fmt.Sprintf("/pembayaran/paket/%d/batal", lama.ID)
+	if r := e.call("staff", "POST", batal, map[string]any{"refund": 200001, "jenis_pembayaran": "tunai"}); r.Code != http.StatusBadRequest {
+		t.Fatalf("refund above 2 sessions: %d %s", r.Code, r.Message)
+	}
+	e.must("POST", batal, map[string]any{"refund": 200000, "jenis_pembayaran": "tunai", "tanggal": tanggal}, nil)
+	e.expectSaldo(map[string]float64{"4-1902": 200000, "1-1101": -200000, "2-1301": 0})
 	e.expectBalanced()
 }

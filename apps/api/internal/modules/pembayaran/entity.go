@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/scaleup/clinic-v2/api/internal/modules/bank"
+	"github.com/scaleup/clinic-v2/api/internal/modules/paket"
 	"github.com/scaleup/clinic-v2/api/internal/modules/pasien"
 	"github.com/scaleup/clinic-v2/api/internal/modules/staff"
 	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
@@ -31,30 +32,12 @@ type DepositTransaksi struct {
 	Staff           *staff.Staff         `gorm:"foreignKey:StaffID" json:"staff,omitempty"`
 	Bank            *bank.Bank           `gorm:"foreignKey:BankID" json:"bank,omitempty"`
 	Treatment       *treatment.Treatment `gorm:"foreignKey:TreatmentID" json:"treatment,omitempty"`
+
+	// PenjualanID links deposit used at the kasir to the sale it paid, so a void can give it back.
+	PenjualanID *uint `gorm:"index" json:"penjualan_id"`
 }
 
 func (DepositTransaksi) TableName() string { return "deposit_transaksis" }
 
-type PaketPerawatan struct {
-	ID              uint                 `gorm:"primaryKey" json:"id"`
-	Kode            string               `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	CabangID        uint                 `gorm:"not null;default:0;index" json:"cabang_id"`
-	PasienID        uint                 `gorm:"not null;index" json:"pasien_id"`
-	TreatmentID     uint                 `gorm:"not null;index" json:"treatment_id"`
-	StaffID         uint                 `gorm:"not null;index" json:"staff_id"`
-	TanggalBeli     time.Time            `gorm:"type:date;not null" json:"tanggal_beli"`
-	TotalSesi       int                  `gorm:"not null" json:"total_sesi"`
-	SisaSesi        int                  `gorm:"not null" json:"sisa_sesi"`
-	HargaTotal      float64              `gorm:"type:decimal(12,2);default:0" json:"harga_total"`
-	Status          string               `gorm:"size:50;default:aktif" json:"status"`
-	KeteranganBatal string               `gorm:"type:text" json:"keterangan_batal"`
-	Refund          float64              `gorm:"type:decimal(12,2);default:0" json:"refund"`
-	IsActive        bool                 `gorm:"default:true" json:"is_active"`
-	CreatedAt       time.Time            `json:"created_at"`
-	UpdatedAt       time.Time            `json:"updated_at"`
-	Pasien          *pasien.Pasien       `gorm:"foreignKey:PasienID" json:"pasien,omitempty"`
-	Staff           *staff.Staff         `gorm:"foreignKey:StaffID" json:"staff,omitempty"`
-	Treatment       *treatment.Treatment `gorm:"foreignKey:TreatmentID" json:"treatment,omitempty"`
-}
-
-func (PaketPerawatan) TableName() string { return "paket_perawatans" }
+// PaketPerawatan moved to the paket module; the alias keeps older callers compiling.
+type PaketPerawatan = paket.PaketPerawatan

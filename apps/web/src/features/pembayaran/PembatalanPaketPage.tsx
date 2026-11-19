@@ -28,6 +28,17 @@ type PaketRow = {
   pasien?: { id: number; nama?: string }
   staff?: { id: number; nama?: string }
   treatment?: { id: number; nama?: string }
+  /** Value of the unused sessions: the most that can be refunded. */
+  nilai_sisa?: number
+  items?: Array<{
+    id: number
+    treatment_id: number
+    total_sesi: number
+    sisa_sesi: number
+    nilai_per_sesi: number
+    nilai_sisa: number
+    treatment?: { nama?: string }
+  }>
 }
 
 export function PembatalanPaketPage() {
@@ -123,7 +134,8 @@ export function PembatalanPaketPage() {
                   <th className="px-4 py-3">Dokter</th>
                   <th className="px-4 py-3">Paket</th>
                   <th className="px-4 py-3">Sisa Sesi</th>
-                  <th className="px-4 py-3">Nilai</th>
+                  <th className="px-4 py-3">Harga</th>
+                  <th className="px-4 py-3">Refund Maks.</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
                 </tr>
@@ -137,8 +149,20 @@ export function PembatalanPaketPage() {
                     <td className="px-4 py-3 text-xs text-slate-700">{row.treatment?.nama || row.kode}</td>
                     <td className="px-4 py-3 text-xs font-bold text-rose-600">
                       {row.sisa_sesi} / {row.total_sesi}
+                      {row.items && row.items.length > 1 ? (
+                        <ul className="mt-1 space-y-0.5 text-[11px] font-medium text-slate-500">
+                          {row.items.map((it) => (
+                            <li key={it.id}>
+                              {it.treatment?.nama ?? `#${it.treatment_id}`}: {it.sisa_sesi}/{it.total_sesi}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs font-bold">{formatCurrency(row.harga_total ?? 0)}</td>
+                    <td className="px-4 py-3 text-xs font-bold text-emerald-700" data-testid={`refund-maks-${row.id}`}>
+                      {formatCurrency(row.nilai_sisa ?? 0)}
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.status} />
                     </td>
@@ -177,6 +201,34 @@ export function PembatalanPaketPage() {
             <p className="text-xs text-slate-500">
               Sisa <strong className="text-slate-900">{cancelTarget?.sisa_sesi}</strong> dari{' '}
               <strong className="text-slate-900">{cancelTarget?.total_sesi}</strong> sesi akan dibatalkan.
+            </p>
+            {cancelTarget?.items?.length ? (
+              <table className="w-full text-left text-[11px]">
+                <thead className="text-slate-500">
+                  <tr>
+                    <th className="py-1">Treatment</th>
+                    <th className="py-1 text-center">Sisa</th>
+                    <th className="py-1 text-right">Nilai/sesi</th>
+                    <th className="py-1 text-right">Nilai sisa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {cancelTarget.items.map((it) => (
+                    <tr key={it.id}>
+                      <td className="py-1">{it.treatment?.nama ?? `#${it.treatment_id}`}</td>
+                      <td className="py-1 text-center">
+                        {it.sisa_sesi}/{it.total_sesi}
+                      </td>
+                      <td className="py-1 text-right">{formatCurrency(it.nilai_per_sesi)}</td>
+                      <td className="py-1 text-right font-semibold">{formatCurrency(it.nilai_sisa)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Refund maksimum <strong data-testid="refund-maks">{formatCurrency(cancelTarget?.nilai_sisa ?? 0)}</strong>. Nilai
+              sisa yang tidak di-refund dicatat sebagai pendapatan paket hangus.
             </p>
             <Field label="Refund (Rp)" htmlFor="pembatalanpaketpage-f1">
               <RupiahInput id="pembatalanpaketpage-f1"

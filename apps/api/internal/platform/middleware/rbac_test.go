@@ -20,6 +20,10 @@ func TestAllowed(t *testing.T) {
 		// Writes follow the role's job; anything unlisted is admin only.
 		{RoleStaff, "POST", "/pembayaran/bayar", true},
 		{RoleApoteker, "POST", "/pembayaran/bayar", false},
+		// Voiding a paid sale is admin only, though staff take payments.
+		{RoleStaff, "POST", "/pembayaran/penjualan/:id/batal", false},
+		{RoleFinance, "POST", "/pembayaran/penjualan/:id/batal", false},
+		{RoleStaff, "GET", "/pembayaran/penjualan/:id/batal", true},
 		{RoleNurse, "PATCH", "/antrian/:id/status", true},
 		{RoleNurse, "PUT", "/antrian/:id", false},
 		{RoleStaff, "POST", "/perawatan", true},

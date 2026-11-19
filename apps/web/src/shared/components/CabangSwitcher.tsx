@@ -46,7 +46,7 @@ export function CabangSwitcher({ collapsed }: { collapsed: boolean }) {
   if (!data || data.cabangs.length === 0) return null
   const aktif = data.cabangs.find((c) => c.id === data.aktif_id)
   const label = data.semua ? 'Semua cabang' : (aktif?.nama ?? 'Pilih cabang')
-  const canSwitch = data.cabangs.length > 1
+  const canSwitch = data.cabangs.length > 1 || data.bisa_semua
 
   function pick(value: string) {
     setOpen(false)
@@ -93,6 +93,26 @@ export function CabangSwitcher({ collapsed }: { collapsed: boolean }) {
             collapsed ? 'left-2 w-60' : 'inset-x-3',
           )}
         >
+          {data.bisa_semua ? (
+            <li className="border-b border-slate-800 pb-1 mb-1">
+              <button
+                type="button"
+                role="option"
+                aria-selected={data.semua}
+                onClick={() => pick('all')}
+                title="Laporan, dashboard dan keuangan digabung untuk semua cabang. Transaksi baru tetap dicatat di satu cabang."
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs',
+                  data.semua ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/70 hover:text-white',
+                )}
+              >
+                <span className="w-9 shrink-0 font-mono text-[10px] font-bold text-rose-300">ALL</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">Semua cabang</span>
+                <span className="text-[10px] text-slate-500">Laporan</span>
+                {data.semua ? <Check className="h-3.5 w-3.5 shrink-0 text-rose-300" /> : null}
+              </button>
+            </li>
+          ) : null}
           {data.cabangs.map((c) => {
             const active = !data.semua && c.id === data.aktif_id
             return (

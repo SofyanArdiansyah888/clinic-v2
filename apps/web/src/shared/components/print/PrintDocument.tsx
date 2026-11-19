@@ -10,6 +10,7 @@ export function PrintHeader({ title, periode }: { title: string; periode: string
     <div className="print-only mb-5">
       <div className="border-b-2 border-slate-900 pb-2">
         <p className="text-lg font-extrabold text-slate-900">{k?.nama || 'Klinik'}</p>
+        {k?.cabang ? <p className="text-[11px] font-semibold text-slate-700">{k.cabang}</p> : null}
         {k?.alamat ? <p className="text-[11px] text-slate-600">{k.alamat}</p> : null}
         {kontak ? <p className="text-[11px] text-slate-600">{kontak}</p> : null}
       </div>
@@ -49,6 +50,7 @@ export function KopSurat({ klinik, compact = false }: { klinik?: Klinik; compact
   return (
     <div className={compact ? 'border-b border-dashed border-slate-500 pb-1.5 text-center' : 'border-b-2 border-slate-900 pb-2'}>
       <p className={compact ? 'text-sm font-extrabold text-slate-900' : 'text-lg font-extrabold text-slate-900'}>{k?.nama || 'Klinik'}</p>
+      {k?.cabang ? <p className="text-[10px] leading-tight font-semibold text-slate-700">{k.cabang}</p> : null}
       {k?.alamat ? <p className="text-[10px] leading-tight text-slate-600">{k.alamat}</p> : null}
       {kontak ? <p className="text-[10px] leading-tight text-slate-600">{kontak}</p> : null}
     </div>

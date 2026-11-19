@@ -2,9 +2,13 @@ package laporan
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
 )
@@ -40,9 +44,41 @@ func parsePeriode(c *gin.Context) (Periode, error) {
 	return Periode{Dari: dari, Sampai: sampai}, nil
 }
 
-type Service struct{ db *gorm.DB }
+type Service struct {
+	db  *gorm.DB
+	cab branch.Ctx
+}
 
-func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+// NewService reads every branch; handlers narrow it to the active branch with For.
+func NewService(db *gorm.DB) *Service { return &Service{db: db, cab: branch.System} }
+
+// For binds the service to the request's active branch.
+func (s *Service) For(c *gin.Context) *Service {
+	cp := *s
+	cp.cab = branch.From(c)
+	return &cp
+}
+
+// cf is the SQL condition limiting a table (by alias, "" for none) to the active branch,
+// starting with AND; empty for all branches. The id is a number, so inlining it is safe.
+func (s *Service) cf(alias string) string {
+	if s.cab.All {
+		return ""
+	}
+	col := "cabang_id"
+	if alias != "" {
+		col = alias + ".cabang_id"
+	}
+	return fmt.Sprintf(" AND %s = %d", col, s.cab.ID)
+}
+
+// resepCf limits reseps to perawatans of the active branch.
+func (s *Service) resepCf() string {
+	if s.cab.All {
+		return ""
+	}
+	return fmt.Sprintf(" AND perawatan_id IN (SELECT id FROM perawatans WHERE cabang_id = %d)", s.cab.ID)
+}
 
 // ── Front office ──
 
@@ -97,24 +133,25 @@ func (s *Service) Fo(p Periode) (*FoLaporan, error) {
 				COALESCE(SUM(`+netExpr+`), 0) AS pendapatan_bersih,
 				COALESCE(SUM(p.poin_dipakai), 0) AS poin_dipakai,
 				COALESCE(SUM(p.deposit_dipakai), 0) AS deposit_dipakai
-			FROM penjualans p WHERE p.status = 'paid' AND p.tanggal BETWEEN ? AND ?`, p.Dari, p.Sampai).Scan(r),
-		s.db.Raw(`SELECT COUNT(*) FROM antrians WHERE tanggal BETWEEN ? AND ?`, p.Dari, p.Sampai).Scan(&r.Kunjungan),
+			FROM penjualans p WHERE p.status = 'paid' AND p.tanggal BETWEEN ? AND ?`+s.cf("p"), p.Dari, p.Sampai).Scan(r),
+		s.db.Raw(`SELECT COUNT(*) FROM antrians WHERE tanggal BETWEEN ? AND ?`+s.cf(""), p.Dari, p.Sampai).Scan(&r.Kunjungan),
+		// Pasien are shared by every branch, so new pasien are counted clinic-wide.
 		// created_at::date uses the DB session time zone (Asia/Jakarta, set in the DSN).
 		s.db.Raw(`SELECT COUNT(*) FROM pasiens WHERE created_at::date BETWEEN ? AND ?`, p.Dari, p.Sampai).Scan(&r.PasienBaru),
-		s.db.Raw(`SELECT COUNT(*) FROM appointments WHERE tanggal BETWEEN ? AND ?`, p.Dari, p.Sampai).Scan(&r.Appointment),
+		s.db.Raw(`SELECT COUNT(*) FROM appointments WHERE tanggal BETWEEN ? AND ?`+s.cf(""), p.Dari, p.Sampai).Scan(&r.Appointment),
 		s.db.Raw(`SELECT COALESCE(SUM(jumlah), 0) FROM deposit_transaksis
-			WHERE jenis = 'pembayaran_deposit' AND is_active AND tanggal BETWEEN ? AND ?`, p.Dari, p.Sampai).Scan(&r.DepositMasuk),
+			WHERE jenis = 'pembayaran_deposit' AND is_active AND tanggal BETWEEN ? AND ?`+s.cf(""), p.Dari, p.Sampai).Scan(&r.DepositMasuk),
 		s.db.Raw(`SELECT COALESCE(NULLIF(p.jenis_pembayaran, ''), '-') AS jenis_pembayaran,
 				COUNT(*) AS transaksi, COALESCE(SUM(`+netExpr+`), 0) AS total
-			FROM penjualans p WHERE p.status = 'paid' AND p.tanggal BETWEEN ? AND ?
+			FROM penjualans p WHERE p.status = 'paid' AND p.tanggal BETWEEN ? AND ?`+s.cf("p")+`
 			GROUP BY 1 ORDER BY total DESC`, p.Dari, p.Sampai).Scan(&out.PerJenisPembayaran),
 		s.db.Raw(`SELECT d::date::text AS tanggal,
-				(SELECT COUNT(*) FROM antrians a WHERE a.tanggal = d::date) AS kunjungan,
-				(SELECT COUNT(*) FROM penjualans p WHERE p.status = 'paid' AND p.tanggal = d::date) AS transaksi,
-				(SELECT COALESCE(SUM(`+netExpr+`), 0) FROM penjualans p WHERE p.status = 'paid' AND p.tanggal = d::date) AS pendapatan
+				(SELECT COUNT(*) FROM antrians a WHERE a.tanggal = d::date`+s.cf("a")+`) AS kunjungan,
+				(SELECT COUNT(*) FROM penjualans p WHERE p.status = 'paid' AND p.tanggal = d::date`+s.cf("p")+`) AS transaksi,
+				(SELECT COALESCE(SUM(`+netExpr+`), 0) FROM penjualans p WHERE p.status = 'paid' AND p.tanggal = d::date`+s.cf("p")+`) AS pendapatan
 			FROM generate_series(?::date, ?::date, interval '1 day') d ORDER BY d`, p.Dari, p.Sampai).Scan(&out.Harian),
 		s.db.Raw(`SELECT COALESCE(NULLIF(status, ''), '-') AS status, COUNT(*) AS jumlah FROM appointments
-			WHERE tanggal BETWEEN ? AND ? GROUP BY 1 ORDER BY jumlah DESC`, p.Dari, p.Sampai).Scan(&out.StatusAppointment),
+			WHERE tanggal BETWEEN ? AND ?`+s.cf("")+` GROUP BY 1 ORDER BY jumlah DESC`, p.Dari, p.Sampai).Scan(&out.StatusAppointment),
 	}
 	return out, firstErr(steps)
 }
@@ -159,27 +196,29 @@ type ApotekLaporan struct {
 func (s *Service) Apotek(p Periode) (*ApotekLaporan, error) {
 	out := &ApotekLaporan{Periode: p}
 	r := &out.Ringkasan
+	stok := barang.StokSQL(s.cab) // the active branch's stock, or the total
+	stokB := strings.ReplaceAll(stok, "barangs.", "b.")
 	steps := []*gorm.DB{
 		s.db.Raw(`SELECT j.item_terjual, j.nilai_penjualan, r.resep_dibayar, r.resep_diserahkan, r.resep_belum_dibayar
 			FROM (
 				SELECT COALESCE(SUM(d.qty), 0) AS item_terjual, COALESCE(SUM(d.subtotal), 0) AS nilai_penjualan
 				FROM penjualan_details d JOIN penjualans p ON p.id = d.penjualan_id
-				WHERE p.status = 'paid' AND d.barang_id IS NOT NULL AND p.tanggal BETWEEN ? AND ?
+				WHERE p.status = 'paid' AND d.barang_id IS NOT NULL AND p.tanggal BETWEEN ? AND ?`+s.cf("p")+`
 			) j, (
 				SELECT
 					COUNT(*) FILTER (WHERE status = 'dibayar') AS resep_dibayar,
 					COUNT(*) FILTER (WHERE status = 'diserahkan') AS resep_diserahkan,
 					COUNT(*) FILTER (WHERE status NOT IN ('dibayar', 'diserahkan', 'batal')) AS resep_belum_dibayar
-				FROM perawatan_resep WHERE tanggal BETWEEN ? AND ?
+				FROM perawatan_resep WHERE tanggal BETWEEN ? AND ?`+s.resepCf()+`
 			) r`, p.Dari, p.Sampai, p.Dari, p.Sampai).Scan(r),
-		s.db.Raw(`SELECT b.id AS barang_id, b.kode, b.nama, b.satuan, SUM(d.qty) AS qty, SUM(d.subtotal) AS nilai, b.stok_aktual AS stok
+		s.db.Raw(`SELECT b.id AS barang_id, b.kode, b.nama, b.satuan, SUM(d.qty) AS qty, SUM(d.subtotal) AS nilai, `+stokB+` AS stok
 			FROM penjualan_details d
 			JOIN penjualans p ON p.id = d.penjualan_id
 			JOIN barangs b ON b.id = d.barang_id
-			WHERE p.status = 'paid' AND p.tanggal BETWEEN ? AND ?
+			WHERE p.status = 'paid' AND p.tanggal BETWEEN ? AND ?`+s.cf("p")+`
 			GROUP BY b.id ORDER BY qty DESC, nilai DESC LIMIT 50`, p.Dari, p.Sampai).Scan(&out.BarangTerjual),
-		s.db.Raw(`SELECT id AS barang_id, kode, nama, satuan, stok_aktual, stok_minimal FROM barangs
-			WHERE is_active AND stok_aktual <= stok_minimal ORDER BY stok_aktual - stok_minimal, nama`).Scan(&out.StokMenipis),
+		s.db.Raw(`SELECT id AS barang_id, kode, nama, satuan, ` + stok + ` AS stok_aktual, stok_minimal FROM barangs
+			WHERE is_active AND ` + stok + ` <= stok_minimal ORDER BY ` + stok + ` - stok_minimal, nama`).Scan(&out.StokMenipis),
 	}
 	r.StokMenipis = int64(len(out.StokMenipis))
 	return out, firstErr(steps)
@@ -227,6 +266,7 @@ const (
 
 func (s *Service) Nurse(p Periode) (*NurseLaporan, error) {
 	out := &NurseLaporan{Periode: p}
+	tindakanSelesai := tindakanSelesai + s.cf("w")
 	steps := []*gorm.DB{
 		s.db.Raw(`SELECT COALESCE(SUM(GREATEST(t.jumlah, 1)), 0) AS tindakan, COALESCE(SUM(t.total), 0) AS nilai,
 				COALESCE(SUM(CASE WHEN t.beautician_id IS NOT NULL THEN tr.komisi_terapis * GREATEST(t.jumlah, 1) ELSE 0 END), 0) AS komisi_terapis,
@@ -288,15 +328,15 @@ func (s *Service) Dm(p Periode) (*DmLaporan, error) {
 		s.db.Raw(`SELECT COUNT(*) AS perawatan, COUNT(*) FILTER (WHERE w.status = 'selesai') AS selesai,
 				COUNT(DISTINCT w.pasien_id) AS pasien, COALESCE(SUM(x.nilai), 0) AS nilai, COALESCE(SUM(x.komisi), 0) AS komisi_dokter
 			FROM perawatans w `+tindakanPerPerawatan+`
-			WHERE w.tanggal BETWEEN ? AND ?`, p.Dari, p.Sampai).Scan(&out.Ringkasan),
+			WHERE w.tanggal BETWEEN ? AND ?`+s.cf("w"), p.Dari, p.Sampai).Scan(&out.Ringkasan),
 		s.db.Raw(`SELECT st.id AS staff_id, st.nama, st.jabatan, COUNT(*) AS perawatan,
 				COUNT(*) FILTER (WHERE w.status = 'selesai') AS selesai, COUNT(DISTINCT w.pasien_id) AS pasien,
 				COALESCE(SUM(x.nilai), 0) AS nilai, COALESCE(SUM(x.komisi), 0) AS komisi
 			FROM perawatans w JOIN staffs st ON st.id = w.staff_id `+tindakanPerPerawatan+`
-			WHERE w.tanggal BETWEEN ? AND ?
+			WHERE w.tanggal BETWEEN ? AND ?`+s.cf("w")+`
 			GROUP BY st.id ORDER BY perawatan DESC`, p.Dari, p.Sampai).Scan(&out.PerDokter),
 		s.db.Raw(`SELECT INITCAP(TRIM(diagnosa)) AS diagnosa, COUNT(*) AS jumlah FROM perawatans
-			WHERE tanggal BETWEEN ? AND ? AND TRIM(COALESCE(diagnosa, '')) <> ''
+			WHERE tanggal BETWEEN ? AND ?`+s.cf("")+` AND TRIM(COALESCE(diagnosa, '')) <> ''
 			GROUP BY 1 ORDER BY jumlah DESC LIMIT 20`, p.Dari, p.Sampai).Scan(&out.Diagnosa),
 	}
 	return out, firstErr(steps)
@@ -313,14 +353,14 @@ func firstErr(steps []*gorm.DB) error {
 
 // ── Handlers ──
 
-func handle[T any](fn func(Periode) (T, error)) gin.HandlerFunc {
+func handle[T any](svc *Service, fn func(*Service, Periode) (T, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p, err := parsePeriode(c)
 		if err != nil {
 			response.BadRequest(c, err.Error(), nil)
 			return
 		}
-		out, err := fn(p)
+		out, err := fn(svc.For(c), p)
 		if err != nil {
 			response.Internal(c, err.Error())
 			return
@@ -333,10 +373,10 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	svc := NewService(db)
 	g := rg.Group("/laporan")
 	{
-		g.GET("/fo", handle(svc.Fo))
-		g.GET("/apotek", handle(svc.Apotek))
-		g.GET("/nurse", handle(svc.Nurse))
-		g.GET("/dm", handle(svc.Dm))
+		g.GET("/fo", handle(svc, (*Service).Fo))
+		g.GET("/apotek", handle(svc, (*Service).Apotek))
+		g.GET("/nurse", handle(svc, (*Service).Nurse))
+		g.GET("/dm", handle(svc, (*Service).Dm))
 
 		ch := &catatanHandler{db: db}
 		g.GET("/catatan", ch.List)

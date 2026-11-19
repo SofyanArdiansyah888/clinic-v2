@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/scaleup/clinic-v2/api/internal/modules/laporan"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/middleware"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
@@ -28,12 +29,14 @@ func NewHandler(db *gorm.DB) *Handler { return &Handler{db: db, laporan: laporan
 func (h *Handler) KPI(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 	var kpi KPI
-	h.db.Table("penjualans").
+	cab := branch.From(c)
+	cab.Scope(h.db.Table("penjualans"), "cabang_id").
 		Where("DATE(tanggal) = ? AND status = ?", today, "paid").
 		Select("COALESCE(SUM(total_harga - diskon_promo - diskon_voucher),0)").Scan(&kpi.RevenueToday)
-	h.db.Table("antrians").Where("DATE(tanggal) = ?", today).Count(&kpi.VisitsToday)
+	cab.Scope(h.db.Table("antrians"), "cabang_id").Where("DATE(tanggal) = ?", today).Count(&kpi.VisitsToday)
+	// Pasien are shared by every branch, so new pasien are counted clinic-wide.
 	h.db.Table("pasiens").Where("DATE(created_at) = ?", today).Count(&kpi.NewPatientsToday)
-	h.db.Table("antrians").Where("DATE(tanggal) = ? AND status = ?", today, "menunggu").Count(&kpi.PendingQueue)
+	cab.Scope(h.db.Table("antrians"), "cabang_id").Where("DATE(tanggal) = ? AND status = ?", today, "menunggu").Count(&kpi.PendingQueue)
 	response.OK(c, kpi, "ok")
 }
 
@@ -83,12 +86,13 @@ func (h *Handler) Tren(c *gin.Context) {
 		Sampai: now.Format("2006-01-02"),
 	}
 
-	fo, err := h.laporan.Fo(p)
+	lap := h.laporan.For(c)
+	fo, err := lap.Fo(p)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
 	}
-	nurse, err := h.laporan.Nurse(p)
+	nurse, err := lap.Nurse(p)
 	if err != nil {
 		response.Internal(c, err.Error())
 		return

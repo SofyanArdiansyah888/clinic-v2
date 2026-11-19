@@ -18,6 +18,9 @@ func (s *Service) mutasi(dari, sampai string) (map[uint]saldoRow, error) {
 		Select("d.akun_id, COALESCE(SUM(d.debit),0) AS debit, COALESCE(SUM(d.kredit),0) AS kredit").
 		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
 		Group("d.akun_id")
+	if c := s.jcf(); c != "" {
+		q = q.Where("TRUE" + c)
+	}
 	if dari != "" {
 		q = q.Where("j.tanggal >= ?", dari)
 	}
@@ -72,7 +75,9 @@ type NeracaSaldo struct {
 	TotalKredit float64          `json:"total_kredit"`
 }
 
+// NeracaSaldo is always combined over every branch: the clinic is one entity.
 func (s *Service) NeracaSaldo(sampai string) (*NeracaSaldo, error) {
+	s = s.gabungan()
 	if sampai == "" {
 		sampai = time.Now().Format("2006-01-02")
 	}
@@ -197,7 +202,9 @@ type Neraca struct {
 
 // Neraca reports balances as of a date. Without period closing, all pendapatan and
 // beban to date are shown as laba berjalan inside ekuitas.
+// Neraca is always combined over every branch: the clinic is one entity.
 func (s *Service) Neraca(per string) (*Neraca, error) {
+	s = s.gabungan()
 	if per == "" {
 		per = time.Now().Format("2006-01-02")
 	}
@@ -309,7 +316,7 @@ func (s *Service) BukuBesar(akunID uint, dari, sampai string) (*BukuBesar, error
 	if err := s.db.Table("jurnal_details d").
 		Select("COALESCE(SUM(d.debit),0) AS debit, COALESCE(SUM(d.kredit),0) AS kredit").
 		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
-		Where("d.akun_id = ? AND j.tanggal < ?", akunID, dari).
+		Where("d.akun_id = ? AND j.tanggal < ?"+s.jcf(), akunID, dari).
 		Scan(&awal).Error; err != nil {
 		return nil, err
 	}
@@ -319,7 +326,7 @@ func (s *Service) BukuBesar(akunID uint, dari, sampai string) (*BukuBesar, error
 	if err := s.db.Table("jurnal_details d").
 		Select("j.id AS jurnal_id, j.kode, j.tanggal, j.referensi, j.source_type, COALESCE(NULLIF(d.keterangan, ''), j.keterangan) AS keterangan, d.debit, d.kredit").
 		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
-		Where("d.akun_id = ? AND j.tanggal BETWEEN ? AND ?", akunID, dari, sampai).
+		Where("d.akun_id = ? AND j.tanggal BETWEEN ? AND ?"+s.jcf(), akunID, dari, sampai).
 		Order("j.tanggal ASC, j.id ASC, d.id ASC").
 		Scan(&rows).Error; err != nil {
 		return nil, err
@@ -375,7 +382,7 @@ func (s *Service) BukuBesarSemua(dari, sampai string) (*BukuBesarSemua, error) {
 	if err := s.db.Table("jurnal_details d").
 		Select("d.akun_id, COALESCE(SUM(d.debit),0) AS debit, COALESCE(SUM(d.kredit),0) AS kredit").
 		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
-		Where("j.tanggal < ?", dari).
+		Where("j.tanggal < ?"+s.jcf(), dari).
 		Group("d.akun_id").
 		Scan(&awal).Error; err != nil {
 		return nil, err
@@ -389,7 +396,7 @@ func (s *Service) BukuBesarSemua(dari, sampai string) (*BukuBesarSemua, error) {
 	if err := s.db.Table("jurnal_details d").
 		Select("d.akun_id, j.id AS jurnal_id, j.kode, j.tanggal, j.referensi, j.source_type, COALESCE(NULLIF(d.keterangan, ''), j.keterangan) AS keterangan, d.debit, d.kredit").
 		Joins("JOIN jurnals j ON j.id = d.jurnal_id").
-		Where("j.tanggal BETWEEN ? AND ?", dari, sampai).
+		Where("j.tanggal BETWEEN ? AND ?"+s.jcf(), dari, sampai).
 		Order("d.akun_id ASC, j.tanggal ASC, j.id ASC, d.id ASC").
 		Scan(&lines).Error; err != nil {
 		return nil, err

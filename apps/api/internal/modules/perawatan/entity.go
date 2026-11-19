@@ -46,23 +46,33 @@ type Perawatan struct {
 func (Perawatan) TableName() string { return "perawatans" }
 
 type PerawatanTindakan struct {
-	ID           uint                 `gorm:"primaryKey" json:"id"`
-	PerawatanID  uint                 `gorm:"not null;index" json:"perawatan_id"`
-	TreatmentID  uint                 `gorm:"not null;index" json:"treatment_id"`
-	Tanggal      time.Time            `gorm:"type:date" json:"tanggal"`
-	Jumlah       int                  `gorm:"default:1" json:"jumlah"`
-	BeauticianID *uint                `gorm:"index" json:"beautician_id"`
-	Harga        float64              `gorm:"type:decimal(12,2);default:0" json:"harga"`
-	Diskon       float64              `gorm:"type:decimal(12,2);default:0" json:"diskon"`
-	RpPercent    float64              `gorm:"type:decimal(12,2);default:0" json:"rp_percent"`
-	Total        float64              `gorm:"type:decimal(12,2);default:0" json:"total"`
-	Status       string               `gorm:"size:50;default:draft" json:"status"`
-	Catatan      string               `gorm:"type:text" json:"catatan"`
-	IsActive     bool                 `gorm:"default:true" json:"is_active"`
-	CreatedAt    time.Time            `json:"created_at"`
-	UpdatedAt    time.Time            `json:"updated_at"`
-	Treatment    *treatment.Treatment `gorm:"foreignKey:TreatmentID" json:"treatment,omitempty"`
-	Beautician   *staff.Staff         `gorm:"foreignKey:BeauticianID" json:"beautician,omitempty"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	PerawatanID  uint      `gorm:"not null;index" json:"perawatan_id"`
+	TreatmentID  uint      `gorm:"not null;index" json:"treatment_id"`
+	Tanggal      time.Time `gorm:"type:date" json:"tanggal"`
+	Jumlah       int       `gorm:"default:1" json:"jumlah"`
+	BeauticianID *uint     `gorm:"index" json:"beautician_id"`
+	Harga        float64   `gorm:"type:decimal(12,2);default:0" json:"harga"`
+	Diskon       float64   `gorm:"type:decimal(12,2);default:0" json:"diskon"`
+	RpPercent    float64   `gorm:"type:decimal(12,2);default:0" json:"rp_percent"`
+	Total        float64   `gorm:"type:decimal(12,2);default:0" json:"total"`
+	Status       string    `gorm:"size:50;default:draft" json:"status"`
+	Catatan      string    `gorm:"type:text" json:"catatan"`
+	// PaketItemID redeems this tindakan from a package the pasien already owns; the
+	// line is billed Rp 0. PaketBeliTindakanID instead redeems it from the package
+	// bought by that other tindakan of the same perawatan (first session same visit).
+	PaketItemID         *uint                `gorm:"index" json:"paket_item_id"`
+	PaketBeliTindakanID *uint                `gorm:"index" json:"paket_beli_tindakan_id"`
+	IsActive            bool                 `gorm:"default:true" json:"is_active"`
+	CreatedAt           time.Time            `json:"created_at"`
+	UpdatedAt           time.Time            `json:"updated_at"`
+	Treatment           *treatment.Treatment `gorm:"foreignKey:TreatmentID" json:"treatment,omitempty"`
+	Beautician          *staff.Staff         `gorm:"foreignKey:BeauticianID" json:"beautician,omitempty"`
+}
+
+// PakaiPaket reports whether the tindakan is redeemed from a package (billed Rp 0).
+func (t PerawatanTindakan) PakaiPaket() bool {
+	return (t.PaketItemID != nil && *t.PaketItemID > 0) || (t.PaketBeliTindakanID != nil && *t.PaketBeliTindakanID > 0)
 }
 
 func (PerawatanTindakan) TableName() string { return "perawatan_tindakan" }

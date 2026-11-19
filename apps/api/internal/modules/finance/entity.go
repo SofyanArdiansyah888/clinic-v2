@@ -18,6 +18,7 @@ const (
 	SourcePenjualan          = "penjualan"
 	SourceDeposit            = "deposit"
 	SourcePaket              = "paket"
+	SourcePaketPemakaian     = "paket_pemakaian"
 	SourcePembelian          = "pembelian"
 	SourcePelunasanPembelian = "pelunasan_pembelian"
 	SourceStokOpname         = "stok_opname"
@@ -58,6 +59,7 @@ func (AkunMapping) TableName() string { return "akun_mappings" }
 type Jurnal struct {
 	ID           uint           `gorm:"primaryKey" json:"id"`
 	Kode         string         `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	CabangID     uint           `gorm:"not null;default:0;index" json:"cabang_id"`
 	Tanggal      time.Time      `gorm:"type:date;not null;index" json:"tanggal"`
 	Keterangan   string         `gorm:"type:text" json:"keterangan"`
 	Referensi    string         `gorm:"size:100;index" json:"referensi"`

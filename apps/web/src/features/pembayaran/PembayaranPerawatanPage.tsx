@@ -18,7 +18,11 @@ type TindakanRow = {
   jumlah?: number
   total?: number
   catatan?: string
+  paket_item_id?: number | null
+  paket_beli_tindakan_id?: number | null
 }
+
+const sesiPaket = (t: TindakanRow) => Boolean(t.paket_item_id) || Boolean(t.paket_beli_tindakan_id)
 
 type QueueRow = {
   id: number
@@ -47,7 +51,7 @@ function tindakanSummary(row: QueueRow): string {
   const items = row.tindakans ?? []
   if (items.length === 0) return row.diagnosa || 'Perawatan'
   return items
-    .map((t) => `${t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`} (${t.jumlah ?? 1}x)`)
+    .map((t) => `${t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`} (${t.jumlah ?? 1}x${sesiPaket(t) ? ', paket' : ''})`)
     .join(', ')
 }
 
@@ -57,7 +61,8 @@ function buildLineItems(row: QueueRow) {
     return items.map((t) => ({
       nama: t.treatment?.nama ?? `Treatment #${t.treatment_id ?? '-'}`,
       qty: t.jumlah ?? 1,
-      subtotal: t.total ?? 0,
+      subtotal: sesiPaket(t) ? 0 : (t.total ?? 0),
+      pakai_paket: sesiPaket(t),
     }))
   }
   return [{ nama: row.diagnosa || 'Tagihan perawatan', qty: 1, subtotal: row.biaya ?? 0 }]
@@ -91,7 +96,8 @@ export function PembayaranPerawatanPage() {
 
   function openPay(row: QueueRow) {
     const total = rowTotal(row)
-    if (total <= 0) {
+    // A visit covered only by package sessions is a Rp 0 bill that still has to be settled.
+    if (total <= 0 && !(row.tindakans ?? []).some(sesiPaket)) {
       showToast('Total tagihan Rp 0 — pastikan perawatan memiliki tindakan/biaya', 'error')
       return
     }

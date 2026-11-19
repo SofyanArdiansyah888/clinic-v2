@@ -60,6 +60,8 @@ var policy = []rule{
 	{write, "/antrian/:id/status", []string{RoleAdmin, RoleStaff, RoleDoctor, RoleNurse}},
 	{write, "/antrian", []string{RoleAdmin, RoleStaff}},
 	{write, "/appointment", []string{RoleAdmin, RoleStaff}},
+	// Voiding a paid sale gives money, stock, deposit and paket back: admin only.
+	{write, "/pembayaran/penjualan/:id/batal", []string{RoleAdmin}},
 	{write, "/pembayaran", []string{RoleAdmin, RoleStaff}},
 	// Closing someone else's shift is refused in the handler unless admin.
 	{write, "/kasir", []string{RoleAdmin, RoleStaff}},

@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Info } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { apiGet } from '@/shared/api/client'
+import { useCabangStore } from '@/shared/branch/store'
+import { useKlinik } from '@/shared/components/print/useKlinik'
 import { cn } from '@/shared/lib/cn'
 import { formatCurrency, formatNumber } from '@/shared/lib/formatters'
 import type { Insight, Tone } from './insights'
@@ -14,14 +14,13 @@ export const SHEET =
 
 export type Kpi = { label: string; value: number; prev?: number; money?: boolean; percent?: boolean; lowerIsBetter?: boolean; note?: string }
 
+/** Clinic name with the branch the edition covers (or "Semua Cabang"). */
 export function useKlinikNama() {
-  return (
-    useQuery({
-      queryKey: ['pengaturan', 'klinik'],
-      queryFn: () => apiGet<{ nama?: string }>('/pengaturan/klinik'),
-      staleTime: 10 * 60_000,
-    }).data?.data?.nama || 'Klinik'
-  )
+  const k = useKlinik().data?.data
+  const semua = useCabangStore((s) => s.cabang) === 'all'
+  const nama = k?.nama || 'Klinik'
+  const cabang = semua ? 'Semua Cabang' : k?.cabang
+  return cabang ? `${nama} · ${cabang}` : nama
 }
 
 export function SheetFooter({ page, left }: { page: number | string; left: string }) {

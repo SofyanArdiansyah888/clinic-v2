@@ -23,7 +23,7 @@ export function NeracaSaldoPage() {
   return (
     <ReportShell<NeracaSaldo>
       title="Neraca Saldo"
-      description="Saldo setiap akun per tanggal"
+      description="Saldo setiap akun per tanggal · selalu gabungan semua cabang"
       endpoint="/finance/laporan/neraca-saldo"
       magazine={(d) => <NeracaSaldoMagazine d={d} />}
       mode="per"

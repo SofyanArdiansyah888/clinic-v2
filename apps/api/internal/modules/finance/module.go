@@ -118,7 +118,7 @@ func (h *Handler) ListJurnal(c *gin.Context) {
 	if p.SortBy != "id" && p.SortBy != "tanggal" && p.SortBy != "kode" {
 		p.SortBy = "id"
 	}
-	items, meta, err := h.svc.ListJurnal(p, JurnalFilter{
+	items, meta, err := h.svc.For(c).ListJurnal(p, JurnalFilter{
 		Dari: c.Query("dari"), Sampai: c.Query("sampai"),
 		SourceType: c.Query("source_type"), AkunID: uintParam(c.Query("akun_id")),
 	})
@@ -130,7 +130,7 @@ func (h *Handler) ListJurnal(c *gin.Context) {
 }
 
 func (h *Handler) ShowJurnal(c *gin.Context) {
-	item, err := h.svc.GetJurnal(uintParam(c.Param("id")))
+	item, err := h.svc.For(c).GetJurnal(uintParam(c.Param("id")))
 	if err != nil {
 		fail(c, err)
 		return
@@ -144,7 +144,7 @@ func (h *Handler) StoreJurnal(c *gin.Context) {
 		response.BadRequest(c, "validation failed", err.Error())
 		return
 	}
-	item, err := h.svc.CreateManual(req, userID(c))
+	item, err := h.svc.For(c).CreateManual(req, userID(c))
 	if err != nil {
 		fail(c, err)
 		return
@@ -157,7 +157,7 @@ func (h *Handler) ReverseJurnal(c *gin.Context) {
 		Tanggal string `json:"tanggal"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	item, err := h.svc.ReverseManual(uintParam(c.Param("id")), req.Tanggal, userID(c))
+	item, err := h.svc.For(c).ReverseManual(uintParam(c.Param("id")), req.Tanggal, userID(c))
 	if err != nil {
 		fail(c, err)
 		return
@@ -166,7 +166,7 @@ func (h *Handler) ReverseJurnal(c *gin.Context) {
 }
 
 func (h *Handler) BukuBesar(c *gin.Context) {
-	res, err := h.svc.BukuBesar(uintParam(c.Query("akun_id")), c.Query("dari"), c.Query("sampai"))
+	res, err := h.svc.For(c).BukuBesar(uintParam(c.Query("akun_id")), c.Query("dari"), c.Query("sampai"))
 	if err != nil {
 		fail(c, err)
 		return
@@ -175,7 +175,7 @@ func (h *Handler) BukuBesar(c *gin.Context) {
 }
 
 func (h *Handler) BukuBesarSemua(c *gin.Context) {
-	res, err := h.svc.BukuBesarSemua(c.Query("dari"), c.Query("sampai"))
+	res, err := h.svc.For(c).BukuBesarSemua(c.Query("dari"), c.Query("sampai"))
 	if err != nil {
 		fail(c, err)
 		return
@@ -184,7 +184,7 @@ func (h *Handler) BukuBesarSemua(c *gin.Context) {
 }
 
 func (h *Handler) NeracaSaldo(c *gin.Context) {
-	res, err := h.svc.NeracaSaldo(c.Query("sampai"))
+	res, err := h.svc.For(c).NeracaSaldo(c.Query("sampai"))
 	if err != nil {
 		fail(c, err)
 		return
@@ -193,7 +193,7 @@ func (h *Handler) NeracaSaldo(c *gin.Context) {
 }
 
 func (h *Handler) LabaRugi(c *gin.Context) {
-	res, err := h.svc.LabaRugi(c.Query("dari"), c.Query("sampai"))
+	res, err := h.svc.For(c).LabaRugi(c.Query("dari"), c.Query("sampai"))
 	if err != nil {
 		fail(c, err)
 		return
@@ -202,7 +202,7 @@ func (h *Handler) LabaRugi(c *gin.Context) {
 }
 
 func (h *Handler) Neraca(c *gin.Context) {
-	res, err := h.svc.Neraca(c.Query("per"))
+	res, err := h.svc.For(c).Neraca(c.Query("per"))
 	if err != nil {
 		fail(c, err)
 		return
@@ -211,7 +211,7 @@ func (h *Handler) Neraca(c *gin.Context) {
 }
 
 func (h *Handler) Highlights(c *gin.Context) {
-	res, err := h.svc.Highlights(c.Query("dari"), c.Query("sampai"))
+	res, err := h.svc.For(c).Highlights(c.Query("dari"), c.Query("sampai"))
 	if err != nil {
 		fail(c, err)
 		return

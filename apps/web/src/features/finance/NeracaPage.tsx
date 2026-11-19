@@ -10,7 +10,7 @@ export function NeracaPage() {
   return (
     <ReportShell<Neraca>
       title="Neraca"
-      description="Aset, kewajiban, dan ekuitas per tanggal"
+      description="Aset, kewajiban, dan ekuitas per tanggal · selalu gabungan semua cabang"
       endpoint="/finance/laporan/neraca"
       magazine={(d, periode) => <NeracaMagazine d={d} periode={periode} />}
       mode="per"

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/scaleup/clinic-v2/api/internal/modules/barang"
+	"github.com/scaleup/clinic-v2/api/internal/modules/finance"
 	"gorm.io/gorm"
 )
 
@@ -117,6 +118,9 @@ func EnsureDefaults(db *gorm.DB) error {
 		return err
 	}
 	if err := backfillTransaksi(db, utama.ID); err != nil {
+		return err
+	}
+	if err := finance.BackfillCabang(db, utama.ID); err != nil {
 		return err
 	}
 	// Stock from before multi-branch is the main branch's stock.

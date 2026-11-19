@@ -25,6 +25,8 @@ type TreatmentSelectProps = {
   id?: string
   placeholder?: string
   kategoriFilter?: string
+  /** Hide treatments whose kategori contains this text (e.g. 'paket' inside a paket). */
+  excludeKategori?: string
 }
 
 // A paket-only picker should create a paket treatment, so it shows up in the list.
@@ -43,6 +45,7 @@ export function TreatmentSelect({
   id,
   placeholder = 'Cari & pilih treatment...',
   kategoriFilter,
+  excludeKategori,
 }: TreatmentSelectProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['treatment', 'select'],
@@ -65,6 +68,7 @@ export function TreatmentSelect({
           if (!kategoriFilter) return true
           return (t.kategori ?? '').toLowerCase().includes(kategoriFilter.toLowerCase())
         })
+        .filter((t) => !excludeKategori || !(t.kategori ?? '').toLowerCase().includes(excludeKategori.toLowerCase()))
         .map((t) => ({
           value: String(t.id),
           label: t.nama || `Treatment #${t.id}`,
@@ -72,7 +76,7 @@ export function TreatmentSelect({
             [t.kode, t.kategori, formatCurrency(t.harga ?? 0)].filter(Boolean).join(' · ') || undefined,
           keywords: `${t.nama ?? ''} ${t.kode ?? ''} ${t.kategori ?? ''}`,
         })),
-    [data?.data, kategoriFilter],
+    [data?.data, kategoriFilter, excludeKategori],
   )
 
   function handleChange(val: string) {

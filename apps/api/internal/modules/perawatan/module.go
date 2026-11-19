@@ -2,11 +2,14 @@ package perawatan
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/modules/paket"
+	"github.com/scaleup/clinic-v2/api/internal/modules/treatment"
 	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/filter"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
@@ -56,6 +59,11 @@ type TindakanInput struct {
 	Total        float64 `json:"total"`
 	Status       string  `json:"status"`
 	Catatan      string  `json:"catatan"`
+	// PaketItemID redeems the tindakan from a package item the pasien owns (price forced 0).
+	PaketItemID *uint `json:"paket_item_id"`
+	// PaketBeliIndex (0-based, into this request's tindakans) redeems it from the package
+	// bought by that tindakan in the same visit; stored as paket_beli_tindakan_id.
+	PaketBeliIndex *int `json:"paket_beli_index"`
 }
 
 type ResepBarangInput struct {
@@ -205,8 +213,12 @@ func (s *Service) applyFields(item *Perawatan, req UpsertRequest) error {
 
 func (s *Service) syncNested(tx *gorm.DB, perawatanID, cabangID uint, req UpsertRequest) error {
 	if req.Tindakans != nil {
+		if err := cekPaket(tx, req.PasienID, req.Tindakans); err != nil {
+			return ErrPaket{err}
+		}
 		tx.Where("perawatan_id = ?", perawatanID).Delete(&PerawatanTindakan{})
-		for _, t := range req.Tindakans {
+		rows := make([]PerawatanTindakan, len(req.Tindakans))
+		for i, t := range req.Tindakans {
 			tanggal, _ := parseDate(t.Tanggal)
 			status := t.Status
 			if status == "" {
@@ -221,7 +233,24 @@ func (s *Service) syncNested(tx *gorm.DB, perawatanID, cabangID uint, req Upsert
 				Jumlah: jumlah, BeauticianID: t.BeauticianID, Harga: t.Harga, Diskon: t.Diskon,
 				RpPercent: t.RpPercent, Total: t.Total, Status: status, Catatan: t.Catatan, IsActive: true,
 			}
-			if err := tx.Create(&row).Error; err != nil {
+			if (t.PaketItemID != nil && *t.PaketItemID > 0) || t.PaketBeliIndex != nil {
+				// A session redeemed from a package is already paid for.
+				row.Harga, row.Diskon, row.RpPercent, row.Total = 0, 0, 0, 0
+				if t.PaketItemID != nil && *t.PaketItemID > 0 {
+					row.PaketItemID = t.PaketItemID
+				}
+			}
+			if err := tx.Omit("Treatment", "Beautician").Create(&row).Error; err != nil {
+				return err
+			}
+			rows[i] = row
+		}
+		for i, t := range req.Tindakans {
+			if t.PaketBeliIndex == nil {
+				continue
+			}
+			if err := tx.Model(&PerawatanTindakan{}).Where("id = ?", rows[i].ID).
+				Update("paket_beli_tindakan_id", rows[*t.PaketBeliIndex].ID).Error; err != nil {
 				return err
 			}
 		}
@@ -274,6 +303,70 @@ func (s *Service) syncNested(tx *gorm.DB, perawatanID, cabangID uint, req Upsert
 		}
 	}
 	return nil
+}
+
+// ErrPaket is a tindakan's package redemption that cannot be accepted (400).
+type ErrPaket struct{ err error }
+
+func (e ErrPaket) Error() string { return e.err.Error() }
+func (e ErrPaket) Unwrap() error { return e.err }
+
+// cekPaket validates tindakan redeemed from packages before they are saved: a package
+// item must belong to the pasien, be active, match the treatment and have the sessions
+// left (the cashier checks again under lock); a same-visit redemption must point at a
+// paket tindakan of this request whose package contains the treatment.
+func cekPaket(tx *gorm.DB, pasienID uint, tindakans []TindakanInput) error {
+	var pakai []paket.Pakai
+	beli := map[[2]int]int{} // (paket tindakan index, treatment) -> sessions asked
+	for i, t := range tindakans {
+		qty := t.Jumlah
+		if qty <= 0 {
+			qty = 1
+		}
+		hasItem := t.PaketItemID != nil && *t.PaketItemID > 0
+		if hasItem && t.PaketBeliIndex != nil {
+			return fmt.Errorf("tindakan %d: pilih salah satu, paket milik pasien atau paket yang dibeli sekarang", i+1)
+		}
+		if hasItem {
+			pakai = append(pakai, paket.Pakai{ItemID: *t.PaketItemID, TreatmentID: t.TreatmentID, Qty: qty})
+			continue
+		}
+		if t.PaketBeliIndex == nil {
+			continue
+		}
+		j := *t.PaketBeliIndex
+		if j < 0 || j >= len(tindakans) || j == i {
+			return fmt.Errorf("tindakan %d: paket yang dibeli tidak ditemukan", i+1)
+		}
+		src := tindakans[j]
+		if src.PaketItemID != nil || src.PaketBeliIndex != nil {
+			return fmt.Errorf("tindakan %d: tindakan sumber bukan pembelian paket", i+1)
+		}
+		var tr treatment.Treatment
+		if err := tx.First(&tr, src.TreatmentID).Error; err != nil || !tr.IsPaket() {
+			return fmt.Errorf("tindakan %d: tindakan sumber bukan pembelian paket", i+1)
+		}
+		items, err := paket.KatalogItems(tx, tr)
+		if err != nil {
+			return err
+		}
+		sesi := 0
+		for _, it := range items {
+			if it.TreatmentID == t.TreatmentID {
+				sesi = it.Sesi
+			}
+		}
+		if sesi == 0 {
+			return fmt.Errorf("tindakan %d: treatment ini tidak termasuk dalam %s", i+1, tr.Nama)
+		}
+		key := [2]int{j, int(t.TreatmentID)}
+		beli[key] += qty
+		if beli[key] > sesi {
+			return fmt.Errorf("tindakan %d: %s hanya berisi %d sesi treatment ini", i+1, tr.Nama, sesi)
+		}
+	}
+	_, err := paket.Cek(tx, pasienID, pakai, false)
+	return err
 }
 
 func antrianStatusForPerawatan(status string) string {
@@ -412,6 +505,11 @@ func (h *Handler) Store(c *gin.Context) {
 	}
 	item, err := h.svc.For(c).Create(req)
 	if err != nil {
+		var pe ErrPaket
+		if errors.As(err, &pe) {
+			response.BadRequest(c, err.Error(), nil)
+			return
+		}
 		response.Internal(c, err.Error())
 		return
 	}
@@ -427,7 +525,8 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 	item, err := h.svc.For(c).Update(uint(id), req)
 	if err != nil {
-		if errors.Is(err, ErrPerawatanTerkunci) {
+		var pe ErrPaket
+		if errors.Is(err, ErrPerawatanTerkunci) || errors.As(err, &pe) {
 			response.BadRequest(c, err.Error(), nil)
 			return
 		}

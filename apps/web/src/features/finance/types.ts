@@ -70,7 +70,8 @@ export const TIPE_LABEL: Record<TipeAkun, string> = {
 export const SOURCE_LABEL: Record<string, string> = {
   penjualan: 'Penjualan',
   deposit: 'Deposit / Member',
-  paket: 'Refund Paket',
+  paket: 'Batal / Refund Paket',
+  paket_pemakaian: 'Pemakaian Sesi Paket',
   pembelian: 'Pembelian',
   pelunasan_pembelian: 'Bayar Supplier',
   stok_opname: 'Stok Opname',

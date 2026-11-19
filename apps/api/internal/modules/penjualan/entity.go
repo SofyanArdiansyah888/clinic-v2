@@ -42,25 +42,32 @@ type Penjualan struct {
 	Bank            *bank.Bank           `gorm:"foreignKey:BankID" json:"bank,omitempty"`
 	Perawatan       *perawatan.Perawatan `gorm:"foreignKey:PerawatanID" json:"perawatan,omitempty"`
 	Details         []PenjualanDetail    `gorm:"foreignKey:PenjualanID" json:"details,omitempty"`
+
+	// Void of a paid sale (POST /pembayaran/penjualan/:id/batal): why, when and by which account.
+	AlasanBatal    string     `gorm:"type:text" json:"alasan_batal"`
+	DibatalkanAt   *time.Time `json:"dibatalkan_at"`
+	DibatalkanOleh *uint      `gorm:"index" json:"dibatalkan_oleh"`
 }
 
 func (Penjualan) TableName() string { return "penjualans" }
 
 type PenjualanDetail struct {
-	ID             uint                 `gorm:"primaryKey" json:"id"`
-	Kode           string               `gorm:"size:50;uniqueIndex;not null" json:"kode"`
-	PenjualanID    uint                 `gorm:"not null;index" json:"penjualan_id"`
-	BarangID       *uint                `gorm:"index" json:"barang_id"`
-	TreatmentID    *uint                `gorm:"index" json:"treatment_id"`
-	JenisPenjualan string               `gorm:"size:50;default:barang" json:"jenis_penjualan"`
-	Qty            int                  `gorm:"not null" json:"qty"`
-	HargaJual      float64              `gorm:"type:decimal(12,2);not null" json:"harga_jual"`
-	Subtotal       float64              `gorm:"type:decimal(12,2);not null" json:"subtotal"`
-	IsActive       bool                 `gorm:"default:true" json:"is_active"`
-	CreatedAt      time.Time            `json:"created_at"`
-	UpdatedAt      time.Time            `json:"updated_at"`
-	Barang         *barang.Barang       `gorm:"foreignKey:BarangID" json:"barang,omitempty"`
-	Treatment      *treatment.Treatment `gorm:"foreignKey:TreatmentID" json:"treatment,omitempty"`
+	ID             uint    `gorm:"primaryKey" json:"id"`
+	Kode           string  `gorm:"size:50;uniqueIndex;not null" json:"kode"`
+	PenjualanID    uint    `gorm:"not null;index" json:"penjualan_id"`
+	BarangID       *uint   `gorm:"index" json:"barang_id"`
+	TreatmentID    *uint   `gorm:"index" json:"treatment_id"`
+	JenisPenjualan string  `gorm:"size:50;default:barang" json:"jenis_penjualan"`
+	Qty            int     `gorm:"not null" json:"qty"`
+	HargaJual      float64 `gorm:"type:decimal(12,2);not null" json:"harga_jual"`
+	Subtotal       float64 `gorm:"type:decimal(12,2);not null" json:"subtotal"`
+	// PakaiPaket marks a treatment session redeemed from a package (billed Rp 0).
+	PakaiPaket bool                 `gorm:"not null;default:false" json:"pakai_paket"`
+	IsActive   bool                 `gorm:"default:true" json:"is_active"`
+	CreatedAt  time.Time            `json:"created_at"`
+	UpdatedAt  time.Time            `json:"updated_at"`
+	Barang     *barang.Barang       `gorm:"foreignKey:BarangID" json:"barang,omitempty"`
+	Treatment  *treatment.Treatment `gorm:"foreignKey:TreatmentID" json:"treatment,omitempty"`
 }
 
 func (PenjualanDetail) TableName() string { return "penjualan_details" }

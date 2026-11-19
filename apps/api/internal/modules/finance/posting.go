@@ -26,6 +26,7 @@ type Entry struct {
 	Tanggal    time.Time
 	SourceType string
 	SourceID   uint
+	CabangID   uint // 0: the source document's branch (see cabangFor)
 	Referensi  string
 	Keterangan string
 	CreatedBy  *uint
@@ -158,12 +159,13 @@ func Post(tx *gorm.DB, gen *generator.Service, e Entry) (*Jurnal, error) {
 		}
 	}
 
-	kode, err := gen.Generate("JRN")
+	cabangID := cabangFor(tx, e)
+	kode, err := gen.GenerateCabang("JRN", cabangID)
 	if err != nil {
 		return nil, err
 	}
 	j := &Jurnal{
-		Kode: kode, Tanggal: e.Tanggal, Keterangan: e.Keterangan, Referensi: e.Referensi,
+		Kode: kode, CabangID: cabangID, Tanggal: e.Tanggal, Keterangan: e.Keterangan, Referensi: e.Referensi,
 		SourceType: e.SourceType, SourceID: e.SourceID, CreatedBy: e.CreatedBy,
 		TotalDebit: float64(totalD) / 100, TotalKredit: float64(totalK) / 100,
 	}
@@ -215,7 +217,7 @@ func reverseOne(tx *gorm.DB, gen *generator.Service, j *Jurnal, tanggal time.Tim
 		ket = "Pembalik " + j.Kode
 	}
 	rev, err := Post(tx, gen, Entry{
-		Tanggal: tanggal, SourceType: j.SourceType, SourceID: j.SourceID,
+		Tanggal: tanggal, SourceType: j.SourceType, SourceID: j.SourceID, CabangID: j.CabangID,
 		Referensi: j.Referensi, Keterangan: ket, CreatedBy: by, Lines: lines,
 	})
 	if err != nil {

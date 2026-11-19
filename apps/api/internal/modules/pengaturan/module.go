@@ -2,24 +2,28 @@ package pengaturan
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/response"
 	"gorm.io/gorm"
 )
 
 // Klinik is a single-row table holding the clinic identity printed on invoices and receipts.
 type Klinik struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	Nama           string    `gorm:"size:150;not null" json:"nama"`
-	Telepon        string    `gorm:"size:30" json:"telepon"`
-	Email          string    `gorm:"size:150" json:"email"`
-	Alamat         string    `gorm:"type:text" json:"alamat"`
-	Garansi        string    `gorm:"type:text" json:"garansi"`
-	CatatanInvoice string    `gorm:"type:text" json:"catatan_invoice"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	Nama           string `gorm:"size:150;not null" json:"nama"`
+	Telepon        string `gorm:"size:30" json:"telepon"`
+	Email          string `gorm:"size:150" json:"email"`
+	Alamat         string `gorm:"type:text" json:"alamat"`
+	Garansi        string `gorm:"type:text" json:"garansi"`
+	CatatanInvoice string `gorm:"type:text" json:"catatan_invoice"`
+	// Cabang is the branch printed on documents (not stored); see WithCabang.
+	Cabang    string    `gorm:"-" json:"cabang,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (Klinik) TableName() string { return "pengaturan_kliniks" }
@@ -73,6 +77,25 @@ func (s *Service) Update(req UpdateRequest) (*Klinik, error) {
 	return item, nil
 }
 
+// WithCabang adapts the clinic identity for a document of one branch: the branch name is
+// added, and the branch's own address and phone replace the clinic's when they are set.
+func WithCabang(db *gorm.DB, k *Klinik, cabangID uint) {
+	if cabangID == 0 {
+		return
+	}
+	var c struct{ Nama, Alamat, NoTelp string }
+	if db.Table("cabangs").Select("nama, alamat, no_telp").Where("id = ?", cabangID).Scan(&c).Error != nil || c.Nama == "" {
+		return
+	}
+	k.Cabang = c.Nama
+	if strings.TrimSpace(c.Alamat) != "" {
+		k.Alamat = c.Alamat
+	}
+	if strings.TrimSpace(c.NoTelp) != "" {
+		k.Telepon = c.NoTelp
+	}
+}
+
 type Handler struct {
 	svc *Service
 }
@@ -86,6 +109,10 @@ func (h *Handler) Show(c *gin.Context) {
 	if err != nil {
 		response.Internal(c, err.Error())
 		return
+	}
+	// Letterheads ask with ?cabang=aktif; the settings form reads the clinic as stored.
+	if c.Query("cabang") == "aktif" {
+		WithCabang(h.svc.db, item, branch.ID(c))
 	}
 	response.OK(c, item, "ok")
 }

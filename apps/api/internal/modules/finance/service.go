@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/scaleup/clinic-v2/api/internal/platform/branch"
 	"github.com/scaleup/clinic-v2/api/internal/platform/generator"
 	"github.com/scaleup/clinic-v2/api/internal/platform/pagination"
 	"gorm.io/gorm"
@@ -17,9 +18,13 @@ import (
 type Service struct {
 	db  *gorm.DB
 	gen *generator.Service
+	cab branch.Ctx
 }
 
-func NewService(db *gorm.DB, gen *generator.Service) *Service { return &Service{db: db, gen: gen} }
+// NewService reads every branch; handlers narrow it to the active branch with For.
+func NewService(db *gorm.DB, gen *generator.Service) *Service {
+	return &Service{db: db, gen: gen, cab: branch.System}
+}
 
 // ── Akun ──
 
@@ -313,7 +318,7 @@ type JurnalFilter struct {
 }
 
 func (s *Service) ListJurnal(p pagination.Params, f JurnalFilter) ([]Jurnal, pagination.Meta, error) {
-	q := s.db.Model(&Jurnal{}).Preload("Details", func(db *gorm.DB) *gorm.DB {
+	q := s.cab.Scope(s.db.Model(&Jurnal{}), "cabang_id").Preload("Details", func(db *gorm.DB) *gorm.DB {
 		return db.Order("debit DESC, id ASC")
 	}).Preload("Details.Akun")
 	if f.Dari != "" {
@@ -339,7 +344,7 @@ func (s *Service) ListJurnal(p pagination.Params, f JurnalFilter) ([]Jurnal, pag
 
 func (s *Service) GetJurnal(id uint) (*Jurnal, error) {
 	var j Jurnal
-	err := s.db.Preload("Details", func(db *gorm.DB) *gorm.DB {
+	err := s.cab.Scope(s.db, "cabang_id").Preload("Details", func(db *gorm.DB) *gorm.DB {
 		return db.Order("debit DESC, id ASC")
 	}).Preload("Details.Akun").First(&j, id).Error
 	if err != nil {
@@ -385,10 +390,15 @@ func (s *Service) CreateManual(req JurnalRequest, by *uint) (*Jurnal, error) {
 		}
 		lines = append(lines, Line{AkunID: d.AkunID, Debit: d.Debit, Kredit: d.Kredit, Ket: d.Keterangan})
 	}
+	// A manual journal is booked in the active branch.
+	cabangID, err := s.cab.WriteID()
+	if err != nil {
+		return nil, err
+	}
 	var id uint
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		j, err := Post(tx, s.gen, Entry{
-			Tanggal: tgl, SourceType: SourceManual, Referensi: req.Referensi,
+			Tanggal: tgl, SourceType: SourceManual, CabangID: cabangID, Referensi: req.Referensi,
 			Keterangan: req.Keterangan, CreatedBy: by, Lines: lines,
 		})
 		if err != nil {
@@ -417,7 +427,7 @@ func (s *Service) ReverseManual(id uint, tanggal string, by *uint) (*Jurnal, err
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var j Jurnal
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&j, id).Error; err != nil {
+		if err := s.cab.Scope(tx, "cabang_id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&j, id).Error; err != nil {
 			return err
 		}
 		if j.SourceType != SourceManual {

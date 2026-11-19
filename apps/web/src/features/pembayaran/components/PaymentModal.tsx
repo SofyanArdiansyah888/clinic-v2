@@ -19,6 +19,15 @@ export type PaymentLineItem = {
   nama: string
   qty: number
   subtotal: number
+  /** Session redeemed from a package: Rp 0 on this bill. */
+  pakai_paket?: boolean
+  paket_kode?: string
+  /** Sessions left on that package item before this payment. */
+  paket_sisa?: number
+  /** Redeemed from the package bought on this same bill. */
+  paket_baru?: boolean
+  /** The line buys a package. */
+  beli_paket?: boolean
 }
 
 export type PaymentTarget = {
@@ -244,6 +253,23 @@ export function PaymentModal({
                   <li key={idx} className="flex items-center justify-between text-xs">
                     <span className="font-medium text-slate-700">
                       {item.nama} <span className="text-slate-400">×{item.qty}</span>
+                      {item.pakai_paket ? (
+                        <span
+                          className="ml-1.5 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700"
+                          data-testid="tagihan-paket-badge"
+                        >
+                          Paket
+                          {item.paket_baru
+                            ? ' · dibeli sekarang'
+                            : item.paket_kode
+                              ? ` ${item.paket_kode} · sisa ${item.paket_sisa ?? 0} → ${Math.max((item.paket_sisa ?? 0) - item.qty, 0)}`
+                              : ''}
+                        </span>
+                      ) : item.beli_paket ? (
+                        <span className="ml-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                          Beli paket
+                        </span>
+                      ) : null}
                     </span>
                     <span className="font-bold text-slate-900">{formatCurrency(item.subtotal)}</span>
                   </li>

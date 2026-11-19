@@ -99,8 +99,8 @@ func TestJurnalPembayaranKasir(t *testing.T) {
 		t.Fatalf("neraca saldo = %v / %v", ns.TotalDebit, ns.TotalKredit)
 	}
 
-	// Cancelling the paid sale reverses its journal and leaves the deposit entries.
-	e.must("PATCH", fmt.Sprintf("/penjualan/%d/status", pj.ID), map[string]any{"status": "cancelled"}, nil)
+	// Voiding the paid sale reverses its journal; the deposit used is a liability again.
+	e.must("POST", fmt.Sprintf("/pembayaran/penjualan/%d/batal", pj.ID), map[string]any{"alasan": "Uji void"}, nil)
 	e.expectBalanced()
 	e.expectSaldo(map[string]float64{"1-1101": 80000, "2-1201": -50000, "4-1101": 0, "5-1101": 0, "1-1401": 0})
 }
