@@ -74,7 +74,9 @@ export function StokDokumenPage({
   )
   const barangCard = (
     <KpiCard
-      label="Barang Terlibat"
+      label={
+        variant === 'opname' ? `Barang Terlibat · ${formatNumber(s?.item_selisih ?? 0)} berselisih` : 'Barang Terlibat'
+      }
       value={formatNumber(s?.jumlah_barang ?? 0)}
       icon={<Boxes className="h-5 w-5" />}
       iconClass="bg-indigo-50 text-indigo-600"
@@ -114,7 +116,7 @@ export function StokDokumenPage({
                     iconClass="bg-emerald-50 text-emerald-600"
                   />
                   <KpiCard
-                    label={`Selisih Kurang (−) · ${formatNumber(s?.item_selisih ?? 0)} baris`}
+                    label="Selisih Kurang (−)"
                     value={formatNumber(s?.selisih_minus ?? 0)}
                     icon={<TrendingDown className="h-5 w-5" />}
                     iconClass="bg-amber-50 text-amber-600"

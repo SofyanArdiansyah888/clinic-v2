@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Receipt, Search, Users, Wallet } from 'lucide-react'
+import { ArrowDownToLine, CreditCard, Plus, Receipt, Search, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { apiGet } from '@/shared/api/client'
 import { EmptyState } from '@/shared/components/EmptyState'
 import { KpiCard } from '@/shared/components/KpiCard'
-import { FilterBar, FilterField, FilterSelect } from '@/shared/components/ListFilters'
+import { FilterBar, FilterField, FilterSelect, PeriodeFilter } from '@/shared/components/ListFilters'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { Pagination } from '@/shared/components/Pagination'
 import { PasienSelect } from '@/shared/components/PasienSelect'
@@ -14,7 +14,8 @@ import type { PaginationMeta } from '@/shared/types/api'
 import { buttonVariants } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { formatCurrency, formatDate, formatNumber } from '@/shared/lib/formatters'
-import { metodeLabel } from '@/shared/lib/pembayaran'
+import { EMPTY_PERIODE, useListSummary, type Periode } from '@/shared/lib/listFilters'
+import { JENIS_PEMBAYARAN, metodeLabel } from '@/shared/lib/pembayaran'
 
 type DepositRow = {
   id: number
@@ -42,6 +43,15 @@ const JENIS_OPTIONS = [
   ...Object.entries(JENIS_LABELS).map(([value, label]) => ({ value, label })),
 ]
 
+const METODE_OPTIONS = [{ value: '', label: 'Semua metode' }, ...JENIS_PEMBAYARAN]
+
+type Summary = {
+  jumlah: number
+  total_masuk: number
+  total_pemakaian: number
+  transaksi_member: number
+}
+
 // The API caps per_page at 100 (anything above falls back to 20), so the log pages.
 const PER_PAGE = 25
 
@@ -49,7 +59,8 @@ export function DepositPage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [jenis, setJenis] = useState('')
-  const [tanggal, setTanggal] = useState('')
+  const [periode, setPeriode] = useState<Periode>(EMPTY_PERIODE)
+  const [metode, setMetode] = useState('')
   const [pasienId, setPasienId] = useState('')
   const [page, setPage] = useState(1)
 
@@ -62,31 +73,26 @@ export function DepositPage() {
   // Any filter change starts again from the first page.
   useEffect(() => {
     setPage(1)
-  }, [search, jenis, tanggal, pasienId])
+  }, [search, jenis, periode, metode, pasienId])
+
+  const filters = {
+    search: search || undefined,
+    jenis: jenis || undefined,
+    jenis_pembayaran: metode || undefined,
+    dari: periode.dari || undefined,
+    sampai: periode.sampai || undefined,
+    pasien_id: pasienId || undefined,
+  }
+  // Same key prefix as the log so a new transaction refreshes the cards too.
+  const { data: s } = useListSummary<Summary>('/pembayaran/deposit', 'deposit-riwayat', filters)
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['deposit-riwayat', search, jenis, tanggal, pasienId, page],
-    queryFn: () =>
-      apiGet<DepositRow[]>('/pembayaran/deposit', {
-        per_page: PER_PAGE,
-        page,
-        search: search || undefined,
-        jenis: jenis || undefined,
-        tanggal: tanggal || undefined,
-        pasien_id: pasienId || undefined,
-      }),
+    queryKey: ['deposit-riwayat', filters, page],
+    queryFn: () => apiGet<DepositRow[]>('/pembayaran/deposit', { per_page: PER_PAGE, page, ...filters }),
   })
 
   const rows = useMemo(() => data?.data ?? [], [data?.data])
   const meta = data?.meta as PaginationMeta | undefined
-  const multiPage = (meta?.total_pages ?? 1) > 1
-
-  const stats = useMemo(() => {
-    const total = rows.reduce((sum, r) => sum + (r.jumlah ?? 0), 0)
-    const memberCount = rows.filter((r) => ['pendaftaran_member', 'perpanjangan_member'].includes(r.jenis)).length
-    return { total, memberCount }
-  }, [rows])
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -100,37 +106,44 @@ export function DepositPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Transaksi"
-          value={formatNumber(meta?.total ?? rows.length)}
+          value={formatNumber(s?.jumlah ?? 0)}
           icon={<Receipt className="h-5 w-5" />}
           iconClass="bg-rose-50 text-rose-600"
         />
         <KpiCard
-          label={multiPage ? 'Total Nilai (halaman ini)' : 'Total Nilai'}
-          value={formatCurrency(stats.total)}
-          icon={<Wallet className="h-5 w-5" />}
+          label="Uang Masuk"
+          value={formatCurrency(s?.total_masuk ?? 0)}
+          icon={<ArrowDownToLine className="h-5 w-5" />}
           iconClass="bg-emerald-50 text-emerald-600"
         />
         <KpiCard
-          label={multiPage ? 'Transaksi Member (halaman ini)' : 'Transaksi Member'}
-          value={formatNumber(stats.memberCount)}
+          label="Deposit Terpakai"
+          value={formatCurrency(s?.total_pemakaian ?? 0)}
+          icon={<CreditCard className="h-5 w-5" />}
+          iconClass="bg-amber-50 text-amber-600"
+        />
+        <KpiCard
+          label="Transaksi Member"
+          value={formatNumber(s?.transaksi_member ?? 0)}
           icon={<Users className="h-5 w-5" />}
           iconClass="bg-indigo-50 text-indigo-600"
         />
       </div>
 
       <FilterBar
-        canReset={Boolean(searchInput || jenis || tanggal || pasienId)}
+        canReset={Boolean(searchInput || jenis || metode || periode.dari || periode.sampai || pasienId)}
         onReset={() => {
           setSearchInput('')
           setJenis('')
-          setTanggal('')
+          setPeriode(EMPTY_PERIODE)
+          setMetode('')
           setPasienId('')
         }}
       >
-        <FilterField label="Cari" htmlFor="deposit-cari" className="min-w-[200px]">
+        <FilterField label="Cari" htmlFor="deposit-cari" className="min-w-[170px]">
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <Input
@@ -138,18 +151,19 @@ export function DepositPage() {
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Kode / no. kwitansi"
+              placeholder="Pasien / kode"
               className="pl-9"
             />
           </div>
         </FilterField>
-        <FilterField label="Tanggal" htmlFor="deposit-tanggal" className="min-w-[160px] flex-none sm:w-44">
-          <Input id="deposit-tanggal" type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
-        </FilterField>
-        <FilterField label="Jenis" htmlFor="deposit-jenis">
+        <PeriodeFilter idPrefix="deposit-periode" value={periode} onChange={setPeriode} />
+        <FilterField label="Jenis" htmlFor="deposit-jenis" className="min-w-[140px]">
           <FilterSelect id="deposit-jenis" value={jenis} onChange={setJenis} options={JENIS_OPTIONS} />
         </FilterField>
-        <FilterField label="Pasien" htmlFor="deposit-pasien" className="min-w-[220px]">
+        <FilterField label="Metode" htmlFor="deposit-metode" className="min-w-[140px]">
+          <FilterSelect id="deposit-metode" value={metode} onChange={setMetode} options={METODE_OPTIONS} />
+        </FilterField>
+        <FilterField label="Pasien" htmlFor="deposit-pasien" className="min-w-[180px]">
           <PasienSelect id="deposit-pasien" value={pasienId} onChange={setPasienId} placeholder="Semua pasien" />
         </FilterField>
       </FilterBar>

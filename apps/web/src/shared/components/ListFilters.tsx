@@ -71,11 +71,12 @@ export function PeriodeFilter({
   label?: string
 }) {
   return (
-    <FilterField label={label} htmlFor={`${idPrefix}-dari`} className="min-w-[280px] flex-[2]">
+    <FilterField label={label} htmlFor={`${idPrefix}-dari`} className="min-w-[260px] flex-[2]">
       <div className="flex items-center gap-2">
         <Input
           id={`${idPrefix}-dari`}
           type="date"
+          className="min-w-0"
           aria-label="Dari tanggal"
           value={value.dari}
           max={value.sampai || undefined}
@@ -88,6 +89,7 @@ export function PeriodeFilter({
         <Input
           id={`${idPrefix}-sampai`}
           type="date"
+          className="min-w-0"
           aria-label="Sampai tanggal"
           value={value.sampai}
           min={value.dari || undefined}
